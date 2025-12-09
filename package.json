@@ -14,7 +14,6 @@
     "text-to-speech"
   ],
   "homepage": "https://app.cboard.io",
-  "private": false,
   "license": "GPL-3.0-only",
   "dependencies": {
     "@cospired/i18n-iso-languages": "^2.2.0",

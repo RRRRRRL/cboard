@@ -64,10 +64,42 @@ const initialState = {
 
 const getKeysFromApiUserDataResponse = payload => {
   const newUser = {};
-  if (!payload) return newUser;
+  if (!payload) {
+    console.warn('getKeysFromApiUserDataResponse: payload is null/undefined');
+    return newUser;
+  }
+
+  // Debug logging in development
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('getKeysFromApiUserDataResponse: Processing payload', {
+      hasAuthToken: !!payload.authToken,
+      hasId: !!payload.id,
+      hasEmail: !!payload.email,
+      payloadKeys: Object.keys(payload)
+    });
+  }
+
   USER_DATA_PROPERTIES.forEach(prop => {
-    if (payload[prop] !== undefined) newUser[prop] = payload[prop];
+    if (payload[prop] !== undefined) {
+      // Convert id to string if it's the id property (frontend expects string)
+      if (prop === 'id') {
+        newUser[prop] = String(payload[prop]);
+      } else {
+        newUser[prop] = payload[prop];
+      }
+    }
   });
+
+  // Debug logging in development
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('getKeysFromApiUserDataResponse: Result', {
+      hasAuthToken: !!newUser.authToken,
+      hasId: !!newUser.id,
+      hasEmail: !!newUser.email,
+      resultKeys: Object.keys(newUser)
+    });
+  }
+
   return newUser;
 };
 
@@ -154,12 +186,24 @@ function appReducer(state = initialState, action) {
         navigationSettings = { ...navigationSettings, ...navigation };
       }
 
+      const newUserData = getKeysFromApiUserDataResponse(action.payload);
+
+      // Debug logging in development
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('LOGIN_SUCCESS reducer: Setting userData', {
+          userDataKeys: Object.keys(newUserData),
+          hasAuthToken: !!newUserData.authToken,
+          hasId: !!newUserData.id,
+          userData: newUserData
+        });
+      }
+
       return {
         ...state,
         isFirstVisit: false,
         displaySettings,
         navigationSettings,
-        userData: getKeysFromApiUserDataResponse(action.payload)
+        userData: newUserData
       };
     case LOGOUT:
       return {

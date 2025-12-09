@@ -175,15 +175,21 @@ export function login({ email, password, activatedData }, type = 'local') {
       }
 
       const localBoardsIds = [];
-      board.boards.forEach(board => {
-        if (currentCommunicator.boards.indexOf(board.id) >= 0) {
-          localBoardsIds.push(board.id);
-        }
-      });
+      // Ensure currentCommunicator exists and has boards array
+      if (currentCommunicator && currentCommunicator.boards) {
+        board.boards.forEach(board => {
+          if (currentCommunicator.boards.indexOf(board.id) >= 0) {
+            localBoardsIds.push(board.id);
+          }
+        });
+      }
 
-      const apiBoardsIds = currentCommunicator.boards.filter(
-        id => localBoardsIds.indexOf(id) < 0
-      );
+      const apiBoardsIds =
+        currentCommunicator && currentCommunicator.boards
+          ? currentCommunicator.boards.filter(
+              id => localBoardsIds.indexOf(id) < 0
+            )
+          : [];
 
       const apiBoards = await Promise.all(
         apiBoardsIds
@@ -209,6 +215,16 @@ export function login({ email, password, activatedData }, type = 'local') {
           })
         );
       }
+      // Debug logging in development
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('Login successful, dispatching loginSuccess with:', {
+          hasAuthToken: !!loginData.authToken,
+          hasId: !!loginData.id,
+          hasEmail: !!loginData.email,
+          loginDataKeys: Object.keys(loginData)
+        });
+      }
+
       dispatch(loginSuccess(loginData));
       await setAVoice({ loginData, dispatch, getState });
     } catch (e) {

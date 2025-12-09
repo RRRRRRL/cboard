@@ -1,0 +1,233 @@
+.JyutpingKeyboard__dialog {
+  z-index: 1300;
+}
+
+.JyutpingKeyboard__header {
+  padding: 16px 24px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+.JyutpingKeyboard__header-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.JyutpingKeyboard__title {
+  flex: 1;
+  font-size: 1.25rem;
+  font-weight: 500;
+  margin-left: 16px;
+}
+
+.JyutpingKeyboard__close-button {
+  margin-right: 8px;
+}
+
+.JyutpingKeyboard__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.JyutpingKeyboard__content {
+  padding: 24px;
+  min-height: 500px;
+}
+
+.JyutpingKeyboard__tabs {
+  margin-bottom: 16px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+/* Text Editor Styles */
+.JyutpingTextEditor {
+  margin-bottom: 24px;
+}
+
+.JyutpingTextEditor__input-display {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  background-color: #f5f5f5;
+  border-radius: 4px;
+  margin-bottom: 8px;
+  font-size: 0.875rem;
+}
+
+.JyutpingTextEditor__input-label {
+  font-weight: 500;
+  margin-right: 8px;
+  color: #666;
+}
+
+.JyutpingTextEditor__input-text {
+  flex: 1;
+  font-family: monospace;
+  color: #1976d2;
+}
+
+.JyutpingTextEditor__backspace-button {
+  margin-left: 8px;
+}
+
+.JyutpingTextEditor__output {
+  margin-bottom: 8px;
+}
+
+.JyutpingTextEditor__output-input {
+  font-size: 1rem;
+  line-height: 1.5;
+  min-height: 100px;
+}
+
+.JyutpingTextEditor__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* Word Suggestions Styles */
+.WordSuggestions {
+  margin-bottom: 24px;
+  padding: 12px;
+  background-color: #f9f9f9;
+  border-radius: 4px;
+}
+
+.WordSuggestions__loading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+}
+
+.WordSuggestions__loading-text {
+  font-size: 0.875rem;
+  color: #666;
+}
+
+.WordSuggestions__label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin-bottom: 8px;
+  color: #666;
+}
+
+.WordSuggestions__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.WordSuggestions__chip {
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.WordSuggestions__chip:hover {
+  background-color: #e3f2fd;
+  transform: translateY(-2px);
+}
+
+/* Keyboard Layout Styles */
+.JyutpingKeyboardLayout {
+  margin-top: 16px;
+}
+
+.JyutpingKeyboardLayout__keys {
+  margin-bottom: 16px;
+}
+
+.JyutpingKeyboardLayout__row {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.JyutpingKeyboardLayout__key {
+  min-width: 50px;
+  height: 50px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-transform: none;
+  transition: all 0.1s;
+}
+
+.JyutpingKeyboardLayout__key:hover {
+  transform: scale(1.05);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.JyutpingKeyboardLayout__key:active {
+  transform: scale(0.95);
+}
+
+.JyutpingKeyboardLayout__key-spacer {
+  min-width: 50px;
+  height: 50px;
+}
+
+.JyutpingKeyboardLayout__special-keys {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+.JyutpingKeyboardLayout__special-key {
+  min-width: 100px;
+  height: 45px;
+  font-size: 0.875rem;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .JyutpingKeyboard__content {
+    padding: 16px;
+  }
+
+  .JyutpingKeyboardLayout__key {
+    min-width: 40px;
+    height: 40px;
+    font-size: 0.75rem;
+  }
+
+  .JyutpingKeyboardLayout__special-key {
+    min-width: 80px;
+    height: 40px;
+    font-size: 0.75rem;
+  }
+
+  .WordSuggestions__list {
+    gap: 4px;
+  }
+}
+
+/* Dark mode support */
+.is-dark .JyutpingTextEditor__input-display {
+  background-color: #333;
+  color: #fff;
+}
+
+.is-dark .JyutpingTextEditor__input-label {
+  color: #ccc;
+}
+
+.is-dark .JyutpingTextEditor__input-text {
+  color: #64b5f6;
+}
+
+.is-dark .WordSuggestions {
+  background-color: #333;
+}
+
+.is-dark .WordSuggestions__label {
+  color: #ccc;
+}
+
+.is-dark .JyutpingKeyboardLayout__special-keys {
+  border-top-color: rgba(255, 255, 255, 0.12);
+}

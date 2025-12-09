@@ -81,8 +81,8 @@ class CommunicatorDialogBoardItem extends React.Component {
       openEditBoardTitle: false,
       imageBoard: null,
       isSymbolSearchOpen: false,
-      editBoardTitleDialogValue: props.board.name,
-      editBoardDescriptionDialogValue: props.board.description
+      editBoardTitleDialogValue: props.board?.name || '',
+      editBoardDescriptionDialogValue: props.board?.description
         ? props.board.description
         : ''
     };
@@ -360,6 +360,11 @@ class CommunicatorDialogBoardItem extends React.Component {
       activeBoardId,
       addOrRemoveBoard
     } = this.props;
+
+    if (!board) {
+      return null;
+    }
+
     const { reportDialogState } = this.state;
     const title = board.name || board.id;
     const boardUrl =
@@ -439,7 +444,7 @@ class CommunicatorDialogBoardItem extends React.Component {
               </Typography>
               <Typography variant="body1" gutterBottom>
                 <b>{intl.formatMessage(messages.boardInfoTiles)}:</b>{' '}
-                {board.tiles.length}
+                {board.tiles?.length || 0}
               </Typography>
               <Typography variant="body1" gutterBottom>
                 <b>{intl.formatMessage(messages.boardInfoId)}:</b> {board.id}
@@ -676,10 +681,10 @@ class CommunicatorDialogBoardItem extends React.Component {
             <ListItem disableGutters={true}>
               <ListItemText
                 primary={
-                  <div>
+                  <Typography component="span">
                     {title}
                     {selectedTab === TAB_INDEXES.MY_BOARDS && (
-                      <div className="CommunicatorDialog__boards__item__edit-title">
+                      <span className="CommunicatorDialog__boards__item__edit-title">
                         <IconButton
                           aria-label="edit-title"
                           onClick={() => {
@@ -689,20 +694,23 @@ class CommunicatorDialogBoardItem extends React.Component {
                         >
                           <EditIcon fontSize="small" />
                         </IconButton>
-                      </div>
+                      </span>
                     )}
-                  </div>
+                  </Typography>
                 }
                 secondary={
-                  <div className="CommunicatorDialog__boards__item__data__title__secondary">
+                  <Typography
+                    component="span"
+                    className="CommunicatorDialog__boards__item__data__title__secondary"
+                  >
                     {intl.formatMessage(messages.tilesQty, {
-                      qty: board.tiles.length
+                      qty: board.tiles?.length || 0
                     })}
                     <span style={{ marginLeft: '1em' }} />
                     <LanguageIcon fontSize="small" />
                     <span style={{ marginLeft: '0.05em' }} />
                     {getFormattedName(board.locale)}
-                  </div>
+                  </Typography>
                 }
               />
             </ListItem>

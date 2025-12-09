@@ -20,10 +20,16 @@ import configureStore, { getStore } from './store';
 import SubscriptionProvider from './providers/SubscriptionProvider';
 import { PAYPAL_CLIENT_ID } from './constants';
 import { initializeAppInsights } from './appInsights';
+import './utils/debugLogin'; // Load debug utility
 
 initializeAppInsights();
 const { persistor } = configureStore();
 const store = getStore();
+
+// Make store available globally for debugging
+if (typeof window !== 'undefined' && process.env.NODE_ENV !== 'production') {
+  window.__REDUX_STORE__ = store;
+}
 const dndOptions = {
   enableTouchEvents: true,
   enableMouseEvents: true,

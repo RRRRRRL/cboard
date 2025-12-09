@@ -150,11 +150,20 @@ class API {
   }
 
   async login(email, password) {
-    const { data } = await this.axiosInstance.post('/user/login', {
+    const response = await this.axiosInstance.post('/user/login', {
       email,
       password
     });
 
+    // Handle response - backend returns {id, authToken, communicators, boards, settings, ...}
+    const data = response.data;
+
+    // If response has 'user' object (registration format), extract it
+    if (data.user && data.user.authToken) {
+      return data.user;
+    }
+
+    // Otherwise return data directly (login format)
     return data;
   }
 
@@ -330,6 +339,341 @@ class API {
     });
 
     return data;
+  }
+
+  // Sprint 4: Speech settings
+  async getSpeechSettings() {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    const { data } = await this.axiosInstance.get(`/settings/speech`, {
+      headers
+    });
+    return data;
+  }
+
+  async updateSpeechSettings(speechSettings = {}) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    const { data } = await this.axiosInstance.post(
+      `/settings/speech`,
+      speechSettings,
+      {
+        headers
+      }
+    );
+    return data;
+  }
+
+  // Sprint 5: Accessibility/Scanning settings
+  async getAccessibilitySettings() {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    const { data } = await this.axiosInstance.get(`/settings/accessibility`, {
+      headers
+    });
+    return data;
+  }
+
+  async updateAccessibilitySettings(accessibilitySettings = {}) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    const { data } = await this.axiosInstance.post(
+      `/settings/accessibility`,
+      accessibilitySettings,
+      {
+        headers
+      }
+    );
+    return data;
+  }
+
+  // Sprint 5: Scanning endpoints
+  async getScanningState() {
+    const { data } = await this.axiosInstance.get(`/scanning/state`);
+    return data;
+  }
+
+  async startScanning(scanningData = {}) {
+    const { data } = await this.axiosInstance.post(
+      `/scanning/start`,
+      scanningData
+    );
+    return data;
+  }
+
+  async stopScanning(scanningData = {}) {
+    const { data } = await this.axiosInstance.post(
+      `/scanning/stop`,
+      scanningData
+    );
+    return data;
+  }
+
+  async selectScanningItem(selectionData = {}) {
+    const { data } = await this.axiosInstance.post(
+      `/scanning/select`,
+      selectionData
+    );
+    return data;
+  }
+
+  async getScanningNavigation(profileId, pageIndex = null, mode = 'single') {
+    const params = { profile_id: profileId, mode };
+    if (pageIndex !== null) {
+      params.page_index = pageIndex;
+    }
+    const { data } = await this.axiosInstance.get(`/scanning/navigation`, {
+      params
+    });
+    return data;
+  }
+
+  // Sprint 4: TTS endpoints
+  async getTTSVoices(language = 'en') {
+    const { data } = await this.axiosInstance.get(`/tts/voices`, {
+      params: { language }
+    });
+    return data;
+  }
+
+  async speakText(text, options = {}) {
+    const { data } = await this.axiosInstance.post(`/tts/speak`, {
+      text,
+      language: options.language || 'en',
+      voice_id: options.voice_id || 'en-US-Neural-A',
+      rate: options.rate || 1.0,
+      pitch: options.pitch || 1.0
+    });
+    return data;
+  }
+
+  // Sprint 4: Public profiles
+  async getPublicProfiles(language = null, layoutType = null) {
+    const params = {};
+    if (language) params.language = language;
+    if (layoutType) params.layout_type = layoutType;
+    const { data } = await this.axiosInstance.get(`/profiles/public`, {
+      params
+    });
+    return data;
+  }
+
+  // Sprint 6: Device management
+  async getDevicesList() {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    const { data } = await this.axiosInstance.get(`/devices/list`, { headers });
+    return data;
+  }
+
+  async registerSwitchDevice(deviceData = {}) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    const { data } = await this.axiosInstance.post(
+      `/devices/switch/register`,
+      deviceData,
+      {
+        headers
+      }
+    );
+    return data;
+  }
+
+  async activateSwitchDevice(deviceId) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    const { data } = await this.axiosInstance.post(
+      `/devices/switch/activate`,
+      {
+        device_id: deviceId
+      },
+      { headers }
+    );
+    return data;
+  }
+
+  async handleSwitchLongPress(longPressData = {}) {
+    const { data } = await this.axiosInstance.post(
+      `/devices/switch/longpress`,
+      longPressData
+    );
+    return data;
+  }
+
+  async registerEyeTrackingDevice(deviceData = {}) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    const { data } = await this.axiosInstance.post(
+      `/devices/eyetracking/register`,
+      deviceData,
+      {
+        headers
+      }
+    );
+    return data;
+  }
+
+  async calibrateEyeTrackingDevice(deviceId, calibrationData = {}) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    const { data } = await this.axiosInstance.post(
+      `/devices/eyetracking/calibrate`,
+      {
+        device_id: deviceId,
+        ...calibrationData
+      },
+      { headers }
+    );
+    return data;
+  }
+
+  async selectCardViaEyeTracking(selectionData = {}) {
+    const { data } = await this.axiosInstance.post(
+      `/devices/eyetracking/select`,
+      selectionData
+    );
+    return data;
+  }
+
+  // ============================================================================
+  // JYUTPING KEYBOARD API (Sprint 7)
+  // ============================================================================
+
+  async searchJyutping(code) {
+    try {
+      const { data } = await this.axiosInstance.get(`/jyutping/search`, {
+        params: { code }
+      });
+      return data;
+    } catch (err) {
+      console.error('Jyutping search error:', err);
+      throw err;
+    }
+  }
+
+  async getJyutpingSuggestions(input, limit = 10) {
+    try {
+      const { data } = await this.axiosInstance.get(`/jyutping/suggestions`, {
+        params: { input, limit }
+      });
+      return data;
+    } catch (err) {
+      console.error('Jyutping suggestions error:', err);
+      throw err;
+    }
+  }
+
+  async generateJyutpingAudio(audioData) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    try {
+      const { data } = await this.axiosInstance.post(
+        `/jyutping/audio`,
+        audioData,
+        {
+          headers
+        }
+      );
+      return data;
+    } catch (err) {
+      console.error('Jyutping audio error:', err);
+      throw err;
+    }
+  }
+
+  async logJyutpingLearning(learningData) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    try {
+      const { data } = await this.axiosInstance.post(
+        `/jyutping/learning-log`,
+        learningData,
+        {
+          headers
+        }
+      );
+      return data;
+    } catch (err) {
+      console.error('Jyutping learning log error:', err);
+      throw err;
+    }
   }
 
   async updateUser(user) {

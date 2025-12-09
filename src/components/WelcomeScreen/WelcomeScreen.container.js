@@ -15,6 +15,7 @@ import {
 
 import messages from './WelcomeScreen.messages';
 import { finishFirstVisit } from '../App/App.actions';
+import { getUser } from '../App/App.selectors';
 import Login from '../Account/Login';
 import SignUp from '../Account/SignUp';
 import ResetPassword from '../Account/ResetPassword';
@@ -68,7 +69,8 @@ export class WelcomeScreen extends Component {
     heading: PropTypes.string,
     text: PropTypes.string,
     onClose: PropTypes.func,
-    classes: PropTypes.object.isRequired
+    classes: PropTypes.object.isRequired,
+    user: PropTypes.object
   };
 
   handleKeyboardDidShow = event => {
@@ -184,6 +186,18 @@ export class WelcomeScreen extends Component {
   }
 
   componentDidUpdate(prevProps, prevState) {
+    // Close login dialog if user becomes logged in
+    const { user } = this.props;
+    const wasLoggedIn =
+      prevProps.user && Object.keys(prevProps.user).length > 0;
+    const isLoggedIn = user && Object.keys(user).length > 0;
+
+    if (!wasLoggedIn && isLoggedIn && this.state.activeView === 'login') {
+      // User just logged in, close the dialog
+      this.resetActiveView();
+    }
+
+    // Handle keyboard events (existing logic)
     if (!(isAndroid() || isIOS())) return;
     const { isKeyboardOpen: wasKeyboardOpen } = prevState.keyboard;
     const { isKeyboardOpen } = this.state.keyboard;
@@ -327,11 +341,15 @@ export class WelcomeScreen extends Component {
   }
 }
 
+const mapStateToProps = state => ({
+  user: getUser(state)
+});
+
 const mapDispatchToProps = {
   finishFirstVisit
 };
 
 export default connect(
-  null,
+  mapStateToProps,
   mapDispatchToProps
 )(injectIntl(withStyles(styles, { withTheme: true })(WelcomeScreen)));

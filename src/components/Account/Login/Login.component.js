@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { connect } from 'react-redux';
 import { FormattedMessage, injectIntl } from 'react-intl';
 import { Formik } from 'formik';
@@ -32,6 +32,20 @@ export function Login({
 }) {
   const [isLogging, setIsLogging] = useState(false);
   const [loginStatus, setLoginStatus] = useState({});
+  const timeoutRef = useRef(null);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      // Cleanup: cancel any pending timeout
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(
     () => {
@@ -48,9 +62,24 @@ export function Login({
     setLoginStatus({});
     try {
       await login(values);
+      // Login successful - close dialog
+      // The app will automatically recognize the user as logged in via Redux state
+      if (isMountedRef.current) {
+        setIsLogging(false);
+        setLoginStatus({ success: true, message: 'Login successful!' });
+        // Close dialog after a short delay to show success message
+        timeoutRef.current = setTimeout(() => {
+          if (isMountedRef.current && onClose) {
+            onClose();
+          }
+          timeoutRef.current = null;
+        }, 500);
+      }
     } catch (loginStatus) {
-      setLoginStatus(loginStatus);
-      setIsLogging(false);
+      if (isMountedRef.current) {
+        setLoginStatus(loginStatus);
+        setIsLogging(false);
+      }
     }
   };
 

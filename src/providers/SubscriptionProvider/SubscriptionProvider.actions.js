@@ -186,10 +186,11 @@ export function updateIsSubscribed(requestOrigin = 'unkwnown') {
 
         const actualProduct = await getActualProduct(product, transaction);
         isSubscribed =
-          status.toLowerCase() === ACTIVE ||
-          status.toLowerCase() === CANCELED ||
-          status.toLowerCase() === CANCELLED ||
-          status.toLowerCase() === IN_GRACE_PERIOD
+          status &&
+          (status.toLowerCase() === ACTIVE ||
+            status.toLowerCase() === CANCELED ||
+            status.toLowerCase() === CANCELLED ||
+            status.toLowerCase() === IN_GRACE_PERIOD)
             ? true
             : false;
         if (actualProduct && isSubscribed) {
@@ -210,7 +211,7 @@ export function updateIsSubscribed(requestOrigin = 'unkwnown') {
         dispatch(
           updateSubscription({
             ownedProduct,
-            status: status.toLowerCase(),
+            status: status ? status.toLowerCase() : NOT_SUBSCRIBED,
             isSubscribed,
             expiryDate
           })
@@ -351,7 +352,7 @@ export function updatePlans() {
       subscriptions.forEach(subscription => {
         if (subscription.plans)
           subscription.plans.forEach(plan => {
-            if (plan.status.toLowerCase() === 'active') {
+            if (plan.status && plan.status.toLowerCase() === 'active') {
               plan.subscriptionName = subscription.name;
               plan.subscriptionId = subscription.subscriptionId;
               plans.push(plan);

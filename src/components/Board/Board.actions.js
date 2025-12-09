@@ -621,7 +621,8 @@ export function getApiObjects() {
           });
       })
       .catch(err => {
-        console.error(err.message);
+        const errorMessage = err?.message || err?.toString() || 'Unknown error';
+        console.error('getApiObjects error:', errorMessage);
       });
   };
 }

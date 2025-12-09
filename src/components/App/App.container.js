@@ -177,7 +177,7 @@ const mapStateToProps = state => ({
   lang: state.language.lang,
   displaySettings: state.app.displaySettings,
   isDownloadingLang: state.language.downloadingLang.isdownloading,
-  userId: state.app.userData.id
+  userId: state.app.userData.id ? String(state.app.userData.id) : undefined // Ensure userId is always a string
 });
 
 const mapDispatchToProps = {

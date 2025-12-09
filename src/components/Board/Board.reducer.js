@@ -397,16 +397,29 @@ function boardReducer(state = initialState, action) {
     case GET_API_MY_BOARDS_SUCCESS:
       let flag = false;
       const myBoards = [...state.boards];
-      for (let i = 0; i < action.boards.data.length; i++) {
+      // Handle different response formats: {data: [...]} or [...] or {boards: [...]}
+      const boardsArray =
+        action.boards?.data || action.boards?.boards || action.boards || [];
+      if (!Array.isArray(boardsArray)) {
+        console.warn(
+          'GET_API_MY_BOARDS_SUCCESS: Expected array but got:',
+          boardsArray
+        );
+        return {
+          ...state,
+          isFetching: false
+        };
+      }
+      for (let i = 0; i < boardsArray.length; i++) {
         for (let j = 0; j < myBoards.length; j++) {
-          if (myBoards[j].id === action.boards.data[i].id) {
-            myBoards[j] = reconcileBoards(myBoards[j], action.boards.data[i]);
+          if (myBoards[j].id === boardsArray[i].id) {
+            myBoards[j] = reconcileBoards(myBoards[j], boardsArray[i]);
             flag = true;
             break;
           }
         }
         if (!flag) {
-          myBoards.push(action.boards.data[i]);
+          myBoards.push(boardsArray[i]);
         }
         flag = false;
       }

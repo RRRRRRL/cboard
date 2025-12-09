@@ -94,6 +94,9 @@ const mapStateToProps = (
     board =>
       board !== null &&
       board.id !== null &&
+      currentCommunicator &&
+      currentCommunicator.boards &&
+      Array.isArray(currentCommunicator.boards) &&
       currentCommunicator.boards.includes(board.id)
   );
   const currentBoard = boards.find(board => board.id === activeBoardId);

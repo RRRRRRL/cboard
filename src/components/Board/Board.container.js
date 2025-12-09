@@ -55,6 +55,7 @@ import {
 } from '../Communicator/Communicator.actions';
 import { disableTour } from '../App/App.actions';
 import TileEditor from './TileEditor';
+import JyutpingKeyboard from '../JyutpingKeyboard';
 import messages from './Board.messages';
 import Board from './Board.component';
 import API from '../../api';
@@ -194,6 +195,7 @@ export class BoardContainer extends Component {
     isSelectAll: false,
     isSelecting: false,
     isLocked: true,
+    isJyutpingKeyboardOpen: false,
     tileEditorOpen: false,
     isGettingApiObjects: false,
     copyPublicBoard: false,
@@ -1568,6 +1570,9 @@ export class BoardContainer extends Component {
           onBoardTypeChange={this.handleBoardTypeChange}
           editBoardTitle={this.handleEditBoardTitle}
           selectedTileIds={this.state.selectedTileIds}
+          onJyutpingKeyboardClick={() =>
+            this.setState({ isJyutpingKeyboardOpen: true })
+          }
           displaySettings={this.props.displaySettings}
           navigationSettings={this.props.navigationSettings}
           navHistory={this.props.navHistory}
@@ -1683,6 +1688,9 @@ export class BoardContainer extends Component {
             board =>
               board !== null &&
               board.id !== null &&
+              this.props.communicator &&
+              this.props.communicator.boards &&
+              Array.isArray(this.props.communicator.boards) &&
               this.props.communicator.boards.includes(board.id)
           )}
           userData={this.props.userData}
@@ -1690,6 +1698,10 @@ export class BoardContainer extends Component {
           onAddApiBoard={this.handleAddApiBoard}
           isSymbolSearchTourEnabled={this.props.isSymbolSearchTourEnabled}
           disableTour={this.props.disableTour}
+        />
+        <JyutpingKeyboard
+          open={this.state.isJyutpingKeyboardOpen}
+          onClose={() => this.setState({ isJyutpingKeyboardOpen: false })}
         />
       </Fragment>
     );

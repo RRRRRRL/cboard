@@ -422,6 +422,7 @@ export class Board extends Component {
             className="Board__edit-toolbar"
             isSelectAll={isSelectAll}
             isSelecting={isSelecting}
+            onJyutpingKeyboardClick={this.props.onJyutpingKeyboardClick}
             isSaving={isSaving}
             isLoggedIn={isLoggedIn}
             onAddClick={onAddClick}
