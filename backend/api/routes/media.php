@@ -5,12 +5,10 @@
  */
 
 function handleMediaRoutes($method, $pathParts, $data, $authToken) {
-    $db = getDB();
-    if (!$db) {
-        return errorResponse('Database connection failed', 500);
-    }
-    
     $user = requireAuth($authToken);
+    
+    // Get DB connection (will be used later if needed)
+    $db = getDB();
     
     // POST /media (file upload)
     if ($method === 'POST' && count($pathParts) === 1) {
@@ -45,8 +43,8 @@ function handleMediaRoutes($method, $pathParts, $data, $authToken) {
             $fileType = strpos($mimeType, 'image/') === 0 ? 'image' : 
                        (strpos($mimeType, 'audio/') === 0 ? 'audio' : 'other');
             
-            // Generate URL (relative to API base)
-            $fileUrl = '/uploads/user_' . $userId . '/' . $filename;
+            // Generate URL (relative to backend root, without leading slash)
+            $fileUrl = 'uploads/user_' . $userId . '/' . $filename;
             
             // Save to database
             $stmt = $db->prepare("
@@ -261,8 +259,13 @@ function handleMediaRoutes($method, $pathParts, $data, $authToken) {
         }
     }
     
-    // POST /media/text-to-image (placeholder for text-to-image generator)
-    if ($method === 'POST' && count($pathParts) === 2 && $pathParts[1] === 'text-to-image') {
+    // POST /media/text-to-image (text-to-image generator)
+    // Note: $pathParts includes 'media' as first element, so ['media', 'text-to-image']
+    // Also handle if pathParts[0] is 'text-to-image' (in case routing is different)
+    if ($method === 'POST' && (
+        (count($pathParts) === 2 && isset($pathParts[1]) && $pathParts[1] === 'text-to-image') ||
+        (count($pathParts) === 1 && isset($pathParts[0]) && $pathParts[0] === 'text-to-image')
+    )) {
         $text = $data['text'] ?? '';
         $width = isset($data['width']) ? (int)$data['width'] : 400;
         $height = isset($data['height']) ? (int)$data['height'] : 400;
@@ -294,10 +297,102 @@ function handleMediaRoutes($method, $pathParts, $data, $authToken) {
             
             imagefill($image, 0, 0, $bg);
             
-            // Add text (using built-in font, for better fonts use imagettftext)
-            $textX = ($width - strlen($text) * imagefontwidth(5)) / 2;
-            $textY = ($height - imagefontheight(5)) / 2;
-            imagestring($image, 5, (int)$textX, (int)$textY, $text, $txt);
+            // Add text using TrueType font for better size control
+            // Try to use a system font, fallback to built-in font if not available
+            $fontPath = null;
+            $useTTF = false;
+            
+            // Common system font paths (try these in order)
+            // Prioritize fonts that support Chinese characters (Traditional Chinese)
+            $systemFonts = [
+                // Chinese-supporting fonts (Traditional Chinese) - try first
+                '/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc',
+                '/usr/share/fonts/truetype/noto/NotoSansCJKtc-Regular.otf',
+                '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
+                '/usr/share/fonts/truetype/arphic/uming.ttc', // AR PL UMing (Traditional Chinese)
+                '/usr/share/fonts/truetype/arphic/ukai.ttc', // AR PL UKai (Traditional Chinese)
+                '/usr/share/fonts/truetype/wqy/wqy-microhei.ttc', // WenQuanYi Micro Hei
+                '/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc', // WenQuanYi Zen Hei
+                '/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf', // Noto Sans (supports many languages)
+                // Windows Chinese fonts
+                'C:/Windows/Fonts/msjh.ttc', // Microsoft JhengHei (Traditional Chinese)
+                'C:/Windows/Fonts/msjhbd.ttc', // Microsoft JhengHei Bold
+                'C:/Windows/Fonts/mingliu.ttc', // MingLiU (Traditional Chinese)
+                'C:/Windows/Fonts/simsun.ttc', // SimSun (Simplified Chinese, but supports Traditional)
+                // macOS Chinese fonts
+                '/System/Library/Fonts/Supplemental/PingFang.ttc',
+                '/System/Library/Fonts/Supplemental/STHeiti Light.ttc',
+                // Fallback to general fonts (may not support Chinese)
+                '/usr/share/fonts/truetype/ubuntu/Ubuntu-R.ttf',
+                '/usr/share/fonts/truetype/ubuntu/Ubuntu-Regular.ttf',
+                '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+                '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
+                '/System/Library/Fonts/Helvetica.ttc',
+                'C:/Windows/Fonts/arial.ttf',
+                __DIR__ . '/../../fonts/arial.ttf',
+                __DIR__ . '/../../fonts/DejaVuSans.ttf'
+            ];
+            
+            foreach ($systemFonts as $font) {
+                if (file_exists($font)) {
+                    $fontPath = $font;
+                    $useTTF = true;
+                    break;
+                }
+            }
+            
+            if ($useTTF && function_exists('imagettftext')) {
+                // Use TrueType font with actual fontSize
+                // Clamp fontSize to reasonable range for TTF (10-200)
+                $actualFontSize = max(10, min(200, (int)$fontSize));
+                
+                // Calculate text bounding box to center it
+                // Note: For Chinese characters, we need to handle multi-byte strings properly
+                $bbox = imagettfbbox($actualFontSize, 0, $fontPath, $text);
+                if ($bbox && $bbox[0] !== false) {
+                    // Calculate text dimensions
+                    $textWidth = abs($bbox[4] - $bbox[0]);
+                    $textHeight = abs($bbox[5] - $bbox[1]);
+                    
+                    // Calculate baseline offset (negative value indicates distance above baseline)
+                    $baselineOffset = abs($bbox[7] - $bbox[1]);
+                    
+                    // Center the text
+                    // Note: imagettftext Y coordinate is baseline (bottom of text)
+                    $textX = ($width - $textWidth) / 2;
+                    $textY = ($height / 2) + ($textHeight / 2) - $baselineOffset;
+                    
+                    // Add text with TrueType font (supports Unicode including Chinese)
+                    imagettftext($image, $actualFontSize, 0, (int)$textX, (int)$textY, $txt, $fontPath, $text);
+                } else {
+                    // Fallback if bbox calculation fails - estimate position
+                    // For Chinese text, estimate width based on character count
+                    $charCount = mb_strlen($text, 'UTF-8');
+                    $estimatedWidth = $charCount * ($actualFontSize * 0.6); // Approximate width per character
+                    $textX = ($width - $estimatedWidth) / 2;
+                    $textY = $height / 2 + $actualFontSize / 2; // Approximate center
+                    imagettftext($image, $actualFontSize, 0, (int)$textX, (int)$textY, $txt, $fontPath, $text);
+                }
+            } else {
+                // Fallback to built-in font with better scaling
+                // Map fontSize (10-200) to font size 1-5, but use better formula
+                // fontSize 10-50 -> 1, 50-100 -> 2, 100-150 -> 3, 150-180 -> 4, 180-200 -> 5
+                if ($fontSize <= 50) {
+                    $fontSizeMapped = 1;
+                } elseif ($fontSize <= 100) {
+                    $fontSizeMapped = 2;
+                } elseif ($fontSize <= 150) {
+                    $fontSizeMapped = 3;
+                } elseif ($fontSize <= 180) {
+                    $fontSizeMapped = 4;
+                } else {
+                    $fontSizeMapped = 5;
+                }
+                
+                $textX = ($width - strlen($text) * imagefontwidth($fontSizeMapped)) / 2;
+                $textY = ($height - imagefontheight($fontSizeMapped)) / 2;
+                imagestring($image, $fontSizeMapped, (int)$textX, (int)$textY, $text, $txt);
+            }
             
             // Save to user directory
             $uploadDir = __DIR__ . '/../../uploads/user_' . $user['id'] . '/';
@@ -322,25 +417,30 @@ function handleMediaRoutes($method, $pathParts, $data, $authToken) {
             }
             
             $fileSize = filesize($filePath);
-            $fileUrl = '/uploads/user_' . $user['id'] . '/' . $filename;
+            // Return URL without leading slash - frontend will prepend API_URL
+            $fileUrl = 'uploads/user_' . $user['id'] . '/' . $filename;
             
-            // Save to database
-            try {
-                $stmt = $db->prepare("
-                    INSERT INTO media (user_id, filename, original_filename, file_path, file_url, file_type, file_size, mime_type, created_at)
-                    VALUES (?, ?, ?, ?, ?, 'image', ?, 'image/png', NOW())
-                ");
-                $stmt->execute([
-                    $user['id'],
-                    $filename,
-                    'text-to-image.png',
-                    $filePath,
-                    $fileUrl,
-                    $fileSize
-                ]);
-            } catch (Exception $dbError) {
-                // File was created but DB insert failed - still return success with URL
-                error_log("Media DB insert error: " . $dbError->getMessage());
+            // Save to database (optional - continue even if DB fails)
+            if ($db) {
+                try {
+                    $stmt = $db->prepare("
+                        INSERT INTO media (user_id, filename, original_filename, file_path, file_url, file_type, file_size, mime_type, created_at)
+                        VALUES (?, ?, ?, ?, ?, 'image', ?, 'image/png', NOW())
+                    ");
+                    $stmt->execute([
+                        $user['id'],
+                        $filename,
+                        'text-to-image.png',
+                        $filePath,
+                        $fileUrl,
+                        $fileSize
+                    ]);
+                } catch (Exception $dbError) {
+                    // File was created but DB insert failed - still return success with URL
+                    error_log("Media DB insert error: " . $dbError->getMessage());
+                }
+            } else {
+                error_log("Database not available - skipping media table insert");
             }
             
             return successResponse([

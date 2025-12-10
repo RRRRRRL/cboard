@@ -1,0 +1,36 @@
+# Alternative Dockerfile using npm instead of yarn
+# Use this if yarn registry continues to have issues
+# Rename to Dockerfile or use: docker-compose -f docker-compose.yml build --build-arg DOCKERFILE=Dockerfile.npm-alternative
+
+# Stage 1 - the build process
+FROM node:18.18.1 as build-deps
+WORKDIR /usr/src/app
+
+# Configure npm registry
+RUN npm config set registry https://registry.npmjs.org/ && \
+    npm config set fetch-retries 5 && \
+    npm config set fetch-retry-mintimeout 20000 && \
+    npm config set fetch-retry-maxtimeout 120000
+
+# Copy package files
+COPY package.json yarn.lock ./
+
+# Convert yarn.lock to package-lock.json (if needed) or use npm install directly
+# npm can read package.json even if yarn.lock exists
+RUN npm install --legacy-peer-deps || \
+    (echo "First attempt failed, retrying..." && sleep 5 && npm install --legacy-peer-deps) || \
+    (echo "Second attempt failed, retrying..." && sleep 10 && npm install --legacy-peer-deps --prefer-offline)
+
+# Copy source code
+COPY . ./
+
+# Build the application (npm uses the same scripts as yarn)
+RUN NODE_OPTIONS="--max-old-space-size=4192" npm run build
+
+# Stage 2 - the production environment
+FROM nginx:stable-alpine
+COPY ./rootfs/ /
+COPY --from=build-deps /usr/src/app/build /usr/share/nginx/html
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
+

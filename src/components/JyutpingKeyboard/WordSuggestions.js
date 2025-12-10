@@ -5,6 +5,13 @@ import CircularProgress from '@material-ui/core/CircularProgress';
 import './JyutpingKeyboard.css';
 
 const WordSuggestions = ({ suggestions, onSelect, isLoading }) => {
+  // Debug logging
+  console.log('WordSuggestions render:', { 
+    suggestionsCount: suggestions?.length || 0, 
+    isLoading,
+    suggestions: suggestions 
+  });
+
   if (isLoading) {
     return (
       <div className="WordSuggestions WordSuggestions__loading">
@@ -15,6 +22,7 @@ const WordSuggestions = ({ suggestions, onSelect, isLoading }) => {
   }
 
   if (!suggestions || suggestions.length === 0) {
+    // Don't show anything if no suggestions and not loading
     return null;
   }
 

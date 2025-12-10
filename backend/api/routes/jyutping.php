@@ -25,7 +25,8 @@ function handleJyutpingRoutes($method, $pathParts, $data, $authToken) {
             return errorResponse('Jyutping code is required', 400);
         }
         
-        $db = getDB();
+        // Use the DB connection from function start (already checked)
+        // $db is already available from line 14
         
         // Search for exact match first
         $sql = "SELECT * FROM jyutping_dictionary 
@@ -36,36 +37,53 @@ function handleJyutpingRoutes($method, $pathParts, $data, $authToken) {
         $stmt->execute([$code]);
         $exactMatches = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
+        // If we have exact matches, return them immediately
+        if (!empty($exactMatches)) {
+            return successResponse([
+                'code' => $code,
+                'matches' => $exactMatches,
+                'match_type' => 'exact'
+            ]);
+        }
+        
         // If no exact match, try matching without tone number (e.g., "nei" matches "nei5")
-        if (empty($exactMatches)) {
-            // Try matching code without tone (remove last character if it's a digit)
-            $codeWithoutTone = preg_replace('/\d+$/', '', $code);
-            if ($codeWithoutTone !== $code && !empty($codeWithoutTone)) {
+        // This handles cases where user types "nei" to see all "nei1", "nei2", "nei5", etc.
+        // Try matching code without tone (remove trailing digits)
+        $codeWithoutTone = preg_replace('/\d+$/', '', $code);
+        
+        // If code ends with a number, search for all tone variants
+        if ($codeWithoutTone !== $code && !empty($codeWithoutTone)) {
                 $sql = "SELECT * FROM jyutping_dictionary 
                         WHERE jyutping_code LIKE ? 
                         ORDER BY frequency DESC, id ASC 
-                        LIMIT 10";
-                $stmt = $db->prepare($sql);
-                $stmt->execute([$codeWithoutTone . '%']);
-                $toneMatches = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                if (!empty($toneMatches)) {
-                    return successResponse([
-                        'code' => $code,
-                        'matches' => $toneMatches,
-                        'match_type' => 'tone_variant'
-                    ]);
-                }
-            }
-            
-            // If still no match, search for partial match (starts with)
-            $sql = "SELECT * FROM jyutping_dictionary 
-                    WHERE jyutping_code LIKE ? 
-                    ORDER BY frequency DESC, id ASC 
-                    LIMIT 10";
+                        LIMIT 15";
             $stmt = $db->prepare($sql);
-            $stmt->execute([$code . '%']);
-            $partialMatches = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            
+            $stmt->execute([$codeWithoutTone . '%']);
+            $toneMatches = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            if (!empty($toneMatches)) {
+                return successResponse([
+                    'code' => $code,
+                    'matches' => $toneMatches,
+                    'match_type' => 'tone_variant'
+                ]);
+            }
+        }
+        
+        // Search for partial match (starts with) - shows all matches like "nei*"
+        // This handles cases where user types "nei" to see all "nei1", "nei2", "nei5", etc.
+        // This should ALWAYS run if we get here (no exact match)
+        $sql = "SELECT * FROM jyutping_dictionary 
+                WHERE jyutping_code LIKE ? 
+                ORDER BY frequency DESC, id ASC 
+                LIMIT 15";
+        $stmt = $db->prepare($sql);
+        $searchPattern = $code . '%';
+        error_log("Jyutping search: code='$code', pattern='$searchPattern'");
+        $stmt->execute([$searchPattern]);
+        $partialMatches = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        error_log("Jyutping partial matches found: " . count($partialMatches));
+        
+        if (!empty($partialMatches)) {
             return successResponse([
                 'code' => $code,
                 'matches' => $partialMatches,
@@ -73,10 +91,29 @@ function handleJyutpingRoutes($method, $pathParts, $data, $authToken) {
             ]);
         }
         
+        // If still no match, try matching base without tone
+        if (!empty($codeWithoutTone) && $codeWithoutTone !== $code) {
+            $sql = "SELECT * FROM jyutping_dictionary 
+                    WHERE jyutping_code LIKE ? 
+                    ORDER BY frequency DESC, id ASC 
+                    LIMIT 15";
+            $stmt = $db->prepare($sql);
+            $stmt->execute([$codeWithoutTone . '%']);
+            $baseMatches = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            if (!empty($baseMatches)) {
+                return successResponse([
+                    'code' => $code,
+                    'matches' => $baseMatches,
+                    'match_type' => 'base_match'
+                ]);
+            }
+        }
+        
+        // If no matches found at all, return empty result
         return successResponse([
             'code' => $code,
-            'matches' => $exactMatches,
-            'match_type' => 'exact'
+            'matches' => [],
+            'match_type' => 'none'
         ]);
         
     } catch (Exception $e) {
@@ -95,7 +132,15 @@ function handleJyutpingRoutes($method, $pathParts, $data, $authToken) {
             return successResponse(['suggestions' => []]);
         }
         
-        $db = getDB();
+        // Use the DB connection from function start (already checked)
+        // $db is already available from line 14
+        
+        // First check if table exists and has data
+        $checkSql = "SELECT COUNT(*) as count FROM jyutping_dictionary";
+        $checkStmt = $db->prepare($checkSql);
+        $checkStmt->execute();
+        $tableCount = $checkStmt->fetch(PDO::FETCH_ASSOC);
+        error_log("Jyutping dictionary table count: " . ($tableCount['count'] ?? 0));
         
         // Search for suggestions based on input
         // Priority: exact match > starts with > contains > frequency
@@ -119,6 +164,8 @@ function handleJyutpingRoutes($method, $pathParts, $data, $authToken) {
         $exactPattern = $input;
         $startsPattern = $input . '%';
         
+        error_log("Jyutping suggestions search: input='$input', pattern='$searchPattern', limit=$limit");
+        
         $stmt = $db->prepare($sql);
         $stmt->execute([
             $searchPattern,  // jyutping_code LIKE
@@ -132,6 +179,7 @@ function handleJyutpingRoutes($method, $pathParts, $data, $authToken) {
         ]);
         
         $suggestions = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        error_log("Jyutping suggestions found: " . count($suggestions));
         
         return successResponse([
             'input' => $input,
@@ -141,6 +189,7 @@ function handleJyutpingRoutes($method, $pathParts, $data, $authToken) {
         
     } catch (Exception $e) {
         error_log("Jyutping suggestions error: " . $e->getMessage());
+        error_log("Jyutping suggestions error trace: " . $e->getTraceAsString());
         return errorResponse('Failed to get suggestions', 500);
     }
 }

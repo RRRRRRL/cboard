@@ -217,11 +217,18 @@ export class Board extends Component {
             variant={variant}
             onClick={e => {
               e.stopPropagation();
+              // Add visual feedback animation
+              const tileElement = e.currentTarget;
+              tileElement.classList.add('clicked');
+              setTimeout(() => {
+                tileElement.classList.remove('clicked');
+              }, 300);
               this.handleTileClick(tile);
             }}
             onFocus={() => {
               this.handleTileFocus(tile.id);
             }}
+            data-tile-id={tile.id}
           >
             <Symbol
               image={tile.image}

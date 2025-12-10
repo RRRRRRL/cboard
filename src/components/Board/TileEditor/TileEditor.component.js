@@ -33,6 +33,8 @@ import VoiceRecorder from '../../VoiceRecorder';
 import './TileEditor.css';
 import EditIcon from '@material-ui/icons/Edit';
 import ImageEditor from '../ImageEditor';
+import TextToImage from '../TextToImage';
+import TextFieldsIcon from '@material-ui/icons/TextFields';
 
 import API from '../../../api';
 import {
@@ -42,6 +44,7 @@ import {
   writeCvaFile
 } from '../../../cordova-util';
 import { convertImageUrlToCatchable, resolveBoardName } from '../../../helpers';
+import { API_URL } from '../../../constants';
 import PremiumFeature from '../../PremiumFeature';
 import LoadBoardEditor from './LoadBoardEditor/LoadBoardEditor';
 import { Typography } from '@material-ui/core';
@@ -118,7 +121,8 @@ export class TileEditor extends Component {
       linkedBoard: '',
       imageUploadedData: [],
       isEditImageBtnActive: false,
-      isLoading: false
+      isLoading: false,
+      textToImageDialogOpen: false
     };
 
     this.defaultimageUploadedData = {
@@ -184,10 +188,21 @@ export class TileEditor extends Component {
         await Promise.all(
           imageUploadedData.map(async (obj, index) => {
             if (obj.isUploaded) {
-              tilesToAdd[index].image = await this.updateTileImgURL(
-                obj.blob,
-                obj.fileName
-              );
+              // Check if the tile already has a server URL (from text-to-image)
+              // If so, use it directly instead of re-uploading
+              const currentImage = tilesToAdd[index].image;
+              if (currentImage && typeof currentImage === 'string' && 
+                  (currentImage.startsWith('http://') || currentImage.startsWith('https://') || 
+                   currentImage.startsWith('uploads/'))) {
+                // Image is already on server, use the existing URL
+                tilesToAdd[index].image = currentImage;
+              } else {
+                // Upload the blob to server
+                tilesToAdd[index].image = await this.updateTileImgURL(
+                  obj.blob,
+                  obj.fileName
+                );
+              }
             }
           })
         );
@@ -201,10 +216,38 @@ export class TileEditor extends Component {
         this.state.activeStep
       ];
       if (imageUploadedData && imageUploadedData.isUploaded) {
-        tileToAdd.image = await this.updateTileImgURL(
-          imageUploadedData.blob,
-          imageUploadedData.fileName
-        );
+        // Check if the tile already has a server URL (from text-to-image)
+        // If so, use it directly instead of re-uploading
+        let currentImage = tileToAdd.image;
+        if (currentImage && typeof currentImage === 'string') {
+          // Convert relative upload paths to absolute URLs
+          if (currentImage.startsWith('uploads/')) {
+            try {
+              const apiUrlObj = new URL(API_URL);
+              const baseUrl = `${apiUrlObj.protocol}//${apiUrlObj.host}`;
+              currentImage = `${baseUrl}/${currentImage}`;
+            } catch (e) {
+              console.warn('Failed to convert relative upload path:', e);
+            }
+          }
+          
+          if (currentImage.startsWith('http://') || currentImage.startsWith('https://')) {
+            // Image is already on server with full URL, use it directly
+            tileToAdd.image = currentImage;
+          } else {
+            // Upload the blob to server
+            tileToAdd.image = await this.updateTileImgURL(
+              imageUploadedData.blob,
+              imageUploadedData.fileName
+            );
+          }
+        } else {
+          // Upload the blob to server
+          tileToAdd.image = await this.updateTileImgURL(
+            imageUploadedData.blob,
+            imageUploadedData.fileName
+          );
+        }
       }
 
       const selectedBackgroundColor = this.state.selectedBackgroundColor;
@@ -297,6 +340,54 @@ export class TileEditor extends Component {
     this.setState({ isEditImageBtnActive: true });
     const image = URL.createObjectURL(blob);
     this.updateTileProperty('image', image);
+  };
+
+  handleTextToImageOpen = () => {
+    this.setState({ textToImageDialogOpen: true });
+  };
+
+  handleTextToImageClose = () => {
+    this.setState({ textToImageDialogOpen: false });
+  };
+
+  handleTextToImageGenerated = async imageUrl => {
+    // The image is already on the server, so we can use the URL directly
+    // But we need to fetch it as a blob for the upload system to work correctly
+    try {
+      // Debug: log the URL being fetched
+      console.log('TileEditor fetching image URL:', imageUrl);
+      const response = await fetch(imageUrl);
+      
+      // Check if the response is OK
+      if (!response.ok) {
+        throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
+      }
+      
+      const blob = await response.blob();
+      const fileName = `text-image-${Date.now()}.png`;
+      
+      if (!this.state.imageUploadedData.length) {
+        this.createimageUploadedDataArray();
+      }
+      
+      // Store the blob for upload (even though image is already on server)
+      // This ensures the upload system works correctly
+      this.setimageUploadedData(true, fileName, blob, blob);
+      this.setState({ isEditImageBtnActive: true });
+      
+      // Use the server URL directly (not a blob URL) so it persists after page reload
+      // The image is already on the server, so we don't need to create a temporary blob URL
+      this.updateTileProperty('image', imageUrl);
+      
+      console.log('Text-to-image generated successfully:', {
+        serverUrl: imageUrl,
+        fileName
+      });
+    } catch (error) {
+      console.error('Error loading generated image:', error);
+      // Show error to user
+      alert(`Failed to load generated image: ${error.message}`);
+    }
   };
 
   handleLoadingStateChange = isLoading => {
@@ -623,6 +714,15 @@ export class TileEditor extends Component {
                         setIsLoadingImage={this.handleLoadingStateChange}
                       />
                     </div>
+                    <Button
+                      variant="contained"
+                      color="primary"
+                      startIcon={<TextFieldsIcon />}
+                      onClick={this.handleTextToImageOpen}
+                      style={{ marginTop: '8px' }}
+                    >
+                      {intl.formatMessage(messages.textToImage || { id: 'textToImage', defaultMessage: 'Text to Image' })}
+                    </Button>
                   </div>
                   <div className="TileEditor__form-fields">
                     <TextField
@@ -790,6 +890,11 @@ export class TileEditor extends Component {
             isSymbolSearchTourEnabled={this.props.isSymbolSearchTourEnabled}
           />
         </FullScreenDialog>
+        <TextToImage
+          open={this.state.textToImageDialogOpen}
+          onClose={this.handleTextToImageClose}
+          onImageGenerated={this.handleTextToImageGenerated}
+        />
       </div>
     );
   }

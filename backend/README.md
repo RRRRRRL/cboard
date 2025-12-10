@@ -91,10 +91,14 @@ For quick testing, you can use PHP's built-in server:
 
 ```bash
 cd backend
-php -S localhost:8000 -t api api/index.php
+php -S localhost:8000 router.php
 ```
 
-Then access the API at: `http://localhost:8000`
+This router script will:
+- Serve uploaded files from `/uploads/` directly
+- Route API requests to `api/index.php`
+
+Then access the API at: `http://localhost:8000/api`
 
 ## API Structure
 

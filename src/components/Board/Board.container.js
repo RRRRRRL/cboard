@@ -236,6 +236,10 @@ export class BoardContainer extends Component {
       getApiObjects().then(() => this.setState({ isGettingApiObjects: false }));
     }
 
+    // Setup swipe navigation and long-press detection
+    this.setupSwipeDetection();
+    this.setupLongPressDetection();
+
     let boardExists = null;
 
     if (id && board && id === board.id) {
@@ -1706,6 +1710,184 @@ export class BoardContainer extends Component {
       </Fragment>
     );
   }
+
+  componentWillUnmount() {
+    // Cleanup swipe and long-press listeners
+    if (this.swipeCleanup) {
+      this.swipeCleanup();
+    }
+    if (this.longPressCleanup) {
+      this.longPressCleanup();
+    }
+  }
+
+  setupSwipeDetection = () => {
+    const { navigationSettings } = this.props;
+    
+    // Check if swipe navigation is enabled
+    if (!navigationSettings?.swipeEnabled) {
+      return;
+    }
+
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let touchEndX = 0;
+    let touchEndY = 0;
+    let mouseStartX = 0;
+    let mouseStartY = 0;
+    let isMouseDown = false;
+
+    const boardElement = this.boardRef?.current || document.querySelector('.Board');
+    if (!boardElement) return;
+
+    const handleTouchStart = (e) => {
+      touchStartX = e.changedTouches[0].screenX;
+      touchStartY = e.changedTouches[0].screenY;
+    };
+
+    const handleTouchEnd = (e) => {
+      touchEndX = e.changedTouches[0].screenX;
+      touchEndY = e.changedTouches[0].screenY;
+      this.handleSwipe(touchStartX, touchStartY, touchEndX, touchEndY);
+    };
+
+    const handleMouseDown = (e) => {
+      isMouseDown = true;
+      mouseStartX = e.screenX;
+      mouseStartY = e.screenY;
+    };
+
+    const handleMouseUp = (e) => {
+      if (isMouseDown) {
+        touchEndX = e.screenX;
+        touchEndY = e.screenY;
+        this.handleSwipe(mouseStartX, mouseStartY, touchEndX, touchEndY);
+        isMouseDown = false;
+      }
+    };
+
+    boardElement.addEventListener('touchstart', handleTouchStart, { passive: true });
+    boardElement.addEventListener('touchend', handleTouchEnd, { passive: true });
+    boardElement.addEventListener('mousedown', handleMouseDown);
+    boardElement.addEventListener('mouseup', handleMouseUp);
+    boardElement.addEventListener('mouseleave', () => { isMouseDown = false; });
+
+    this.swipeCleanup = () => {
+      boardElement.removeEventListener('touchstart', handleTouchStart);
+      boardElement.removeEventListener('touchend', handleTouchEnd);
+      boardElement.removeEventListener('mousedown', handleMouseDown);
+      boardElement.removeEventListener('mouseup', handleMouseUp);
+      boardElement.removeEventListener('mouseleave', () => { isMouseDown = false; });
+    };
+  };
+
+  handleSwipe = (startX, startY, endX, endY) => {
+    const { navigationSettings } = this.props;
+    
+    if (!navigationSettings?.swipeEnabled) {
+      return;
+    }
+
+    const deltaX = endX - startX;
+    const deltaY = endY - startY;
+    const minSwipeDistance = 50;
+
+    // Horizontal swipe (left/right)
+    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > minSwipeDistance) {
+      if (deltaX > 0) {
+        // Swipe right - go to previous board
+        this.onRequestPreviousBoard();
+      }
+      
+      // Log swipe action
+      this.logSwipeAction(deltaX > 0 ? 'right' : 'left');
+    }
+  };
+
+  logSwipeAction = async (direction) => {
+    try {
+      const profileId = this.props.communicator?.activeCommunicatorId || null;
+      await API.logAction({
+        action_type: 'navigation_swipe',
+        metadata: {
+          direction: direction,
+          profile_id: profileId
+        }
+      });
+    } catch (error) {
+      console.error('Failed to log swipe action:', error);
+    }
+  };
+
+  setupLongPressDetection = () => {
+    let pressStartTime = null;
+    let pressTimer = null;
+    const longPressThreshold = 1500; // 1.5 seconds
+
+    const handlePressStart = (e) => {
+      const tile = e.target.closest('.Tile');
+      if (!tile) return;
+
+      pressStartTime = Date.now();
+      const tileId = tile.dataset.tileId || tile.id;
+      
+      pressTimer = setTimeout(() => {
+        this.handleLongPress(e, tile, tileId);
+      }, longPressThreshold);
+    };
+
+    const handlePressEnd = () => {
+      if (pressTimer) {
+        clearTimeout(pressTimer);
+        pressTimer = null;
+      }
+      pressStartTime = null;
+    };
+
+    document.addEventListener('mousedown', handlePressStart);
+    document.addEventListener('mouseup', handlePressEnd);
+    document.addEventListener('mouseleave', handlePressEnd);
+    document.addEventListener('touchstart', handlePressStart, { passive: true });
+    document.addEventListener('touchend', handlePressEnd, { passive: true });
+    document.addEventListener('touchcancel', handlePressEnd, { passive: true });
+
+    this.longPressCleanup = () => {
+      document.removeEventListener('mousedown', handlePressStart);
+      document.removeEventListener('mouseup', handlePressEnd);
+      document.removeEventListener('mouseleave', handlePressEnd);
+      document.removeEventListener('touchstart', handlePressStart);
+      document.removeEventListener('touchend', handlePressEnd);
+      document.removeEventListener('touchcancel', handlePressEnd);
+    };
+  };
+
+  handleLongPress = async (e, tileElement, tileId) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const tile = this.props.board?.tiles?.find(t => t.id === tileId);
+    if (!tile) return;
+
+    // Activate operation button scanning mode
+    try {
+      const profileId = this.props.communicator?.activeCommunicatorId || null;
+      const response = await API.handleSwitchLongPress({
+        profile_id: profileId,
+        duration: 1.5,
+        action: 'operation_scan',
+        tile_id: tileId
+      });
+
+      if (response.scanning_mode) {
+        this.setState({
+          isOperationScanning: true,
+          operationScanningItems: response.operation_items || []
+        });
+      }
+    } catch (error) {
+      console.error('Long press error:', error);
+    }
+  };
 }
 
 const mapStateToProps = ({

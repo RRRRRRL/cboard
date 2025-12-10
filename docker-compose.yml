@@ -1,0 +1,84 @@
+version: '3.8'
+
+services:
+  # Frontend + Nginx
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cboard-frontend
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./rootfs/etc/nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./rootfs/etc/nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - backend
+    networks:
+      - cboard-network
+    restart: unless-stopped
+
+  # PHP-FPM Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: cboard-backend
+    volumes:
+      - ./backend:/var/www/html
+      - ./backend/uploads:/var/www/html/uploads
+      - ./backups:/var/backups/cboard
+    environment:
+      - DB_HOST=database
+      - DB_PORT=3306
+      - DB_NAME=${DB_NAME:-cboard}
+      - DB_USER=${DB_USER:-cboard_user}
+      - DB_PASS=${DB_PASS:-cboard_pass}
+      - JWT_SECRET=${JWT_SECRET:-change-this-secret-key}
+      - AZURE_TTS_KEY=${AZURE_TTS_KEY:-}
+      - AZURE_TTS_REGION=${AZURE_TTS_REGION:-eastasia}
+    depends_on:
+      - database
+    networks:
+      - cboard-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "php", "-r", "echo 'OK';"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # MySQL Database
+  database:
+    image: mysql:8.0
+    container_name: cboard-database
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-root_password}
+      - MYSQL_DATABASE=${DB_NAME:-cboard}
+      - MYSQL_USER=${DB_USER:-cboard_user}
+      - MYSQL_PASSWORD=${DB_PASS:-cboard_pass}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./backend/database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./backend/database/seed-jyutping-dictionary.sql:/docker-entrypoint-initdb.d/02-seed-jyutping.sql:ro
+    ports:
+      - "3307:3306"  # Changed to 3307 to avoid conflict with local MySQL
+    networks:
+      - cboard-network
+    restart: unless-stopped
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  cboard-network:
+    driver: bridge
+
+volumes:
+  mysql_data:
+    driver: local
+

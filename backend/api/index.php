@@ -35,6 +35,9 @@ require_once __DIR__ . '/helpers.php';
 // Load authentication helpers
 require_once __DIR__ . '/auth.php';
 
+// Load rate limiting middleware
+require_once __DIR__ . '/middleware/rateLimiter.php';
+
 // Load route handlers
 require_once __DIR__ . '/routes/user.php';
 require_once __DIR__ . '/routes/board.php';
@@ -54,10 +57,45 @@ require_once __DIR__ . '/routes/jyutping.php';
 // Get request method and path
 $method = $_SERVER['REQUEST_METHOD'];
 $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+
+// Skip uploads requests - these should be handled by router.php
+// If we reach here, it means router.php didn't catch it (server not started with router)
+if (strpos($path, '/uploads/') === 0 || strpos($path, '/api/uploads/') === 0) {
+    // Try to serve the file directly as fallback
+    $filePath = str_replace('/api/uploads/', '/uploads/', $path);
+    $filePath = __DIR__ . '/..' . $filePath;
+    
+    if (file_exists($filePath)) {
+        $mimeType = mime_content_type($filePath);
+        if (!$mimeType) {
+            $mimeType = 'application/octet-stream';
+        }
+        header('Content-Type: ' . $mimeType);
+        header('Content-Length: ' . filesize($filePath));
+        header('Cache-Control: public, max-age=31536000');
+        header('Access-Control-Allow-Origin: *');
+        readfile($filePath);
+        exit;
+    } else {
+        http_response_code(404);
+        header('Content-Type: application/json');
+        echo json_encode(['success' => false, 'message' => 'File not found', 'path' => $path]);
+        exit;
+    }
+}
+
 $path = str_replace('/api', '', $path); // Remove /api prefix if present
 $path = trim($path, '/');
 $pathParts = array_filter(explode('/', $path)); // Filter empty parts
 $pathParts = array_values($pathParts); // Re-index array
+
+// Apply rate limiting (skip for OPTIONS requests)
+if ($method !== 'OPTIONS') {
+    $endpoint = '/' . implode('/', $pathParts);
+    if (!applyRateLimit($endpoint)) {
+        exit; // Rate limit exceeded, response already sent
+    }
+}
 
 // Get request body
 $input = file_get_contents('php://input');

@@ -15,6 +15,7 @@ import {
 
 import { changeOutput, clickOutput, changeLiveMode } from '../Board.actions';
 import SymbolOutput from './SymbolOutput';
+import API from '../../../api';
 
 function translateOutput(output, intl) {
   const translatedOutput = output.map(value => {
@@ -172,6 +173,9 @@ export class OutputContainer extends Component {
         if (!frame[0]?.sound) {
           const text = frame.reduce(this.outputReducer, '');
           await this.speakOutput(text);
+          
+          // Log sentence playback
+          this.logSentencePlayback(text);
         } else {
           await new Promise(resolve => {
             this.asyncForEach(frame, async ({ sound }, index) => {
@@ -186,6 +190,39 @@ export class OutputContainer extends Component {
       });
     }
   }
+
+  logSentencePlayback = async (sentence) => {
+    try {
+      const profileId = this.props.communicator?.activeCommunicatorId || null;
+      await API.logAction({
+        action_type: 'sentence_play',
+        metadata: {
+          sentence: sentence,
+          profile_id: profileId
+        }
+      });
+    } catch (error) {
+      console.error('Failed to log sentence playback:', error);
+    }
+  };
+
+  logCrossProfileSentence = async (sentence, currentProfileId, previousProfileId) => {
+    if (previousProfileId && previousProfileId !== currentProfileId) {
+      try {
+        await API.logAction({
+          action_type: 'cross_profile_sentence',
+          profile_id: currentProfileId,
+          metadata: {
+            sentence: sentence,
+            previous_profile_id: previousProfileId,
+            current_profile_id: currentProfileId
+          }
+        });
+      } catch (error) {
+        console.error('Failed to log cross-profile sentence:', error);
+      }
+    }
+  };
 
   handleBackspaceClick = () => {
     const { cancelSpeech } = this.props;
@@ -346,12 +383,13 @@ export class OutputContainer extends Component {
   }
 }
 
-const mapStateToProps = ({ board, app }) => {
+const mapStateToProps = ({ board, app, communicator }) => {
   return {
     output: board.output,
     isLiveMode: board.isLiveMode,
     navigationSettings: app.navigationSettings,
-    increaseOutputButtons: app.displaySettings.increaseOutputButtons
+    increaseOutputButtons: app.displaySettings.increaseOutputButtons,
+    communicator: communicator
   };
 };
 

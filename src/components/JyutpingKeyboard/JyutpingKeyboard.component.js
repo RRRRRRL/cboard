@@ -68,85 +68,25 @@ class JyutpingKeyboard extends Component {
     // Play audio for the key
     await this.playKeyAudio(key);
 
-    // Search for matches with debounce
-    this.debouncedSearch(newInput);
-
-    // Auto-select if there's an exact match after a short delay
-    // This provides the <100ms response requirement
-    setTimeout(() => {
-      this.autoSelectIfExactMatch(newInput);
-    }, 150);
+    // Search for matches immediately (no debounce for better UX)
+    // Show all suggestions - let user choose manually
+    await this.searchJyutping(newInput);
   };
 
-  autoSelectIfExactMatch = async code => {
-    // Only auto-select if input hasn't changed
-    if (this.state.jyutpingInput !== code) {
-      return;
-    }
-
-    try {
-      const response = await API.searchJyutping(code);
-      // API returns {code, matches, match_type} format
-      const matches = response.matches || [];
-
-      if (matches && matches.length > 0) {
-        // Find first match with valid hanzi
-        const validMatch = matches.find(
-          m => (m.hanzi && m.hanzi.trim()) || (m.word && m.word.trim())
-        );
-
-        if (validMatch) {
-          const matchCode = validMatch.jyutping_code || '';
-          // Remove trailing digits (tone numbers) for comparison
-          const codeBase = code.replace(/\d+$/, '');
-          const matchCodeBase = matchCode.replace(/\d+$/, '');
-
-          // Auto-select if:
-          // 1. Exact match (e.g., "nei5" === "nei5")
-          // 2. Base match (e.g., "nei" matches "nei5" because both base to "nei")
-          // 3. Code is a prefix of match code (e.g., "nei" is prefix of "nei5")
-          const isExactMatch = matchCode === code;
-          const isBaseMatch =
-            codeBase && matchCodeBase && codeBase === matchCodeBase;
-          const isPrefixMatch = matchCode.startsWith(code) && code.length >= 2; // At least 2 chars to avoid too many false matches
-
-          if (isExactMatch || isBaseMatch || isPrefixMatch) {
-            const hanzi =
-              (validMatch.hanzi && validMatch.hanzi.trim()) ||
-              (validMatch.word && validMatch.word.trim()) ||
-              '';
-            if (hanzi) {
-              // Auto-select the match
-              this.handleSuggestionSelect(validMatch);
-            }
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Auto-select error:', error);
-    }
-  };
-
-  debouncedSearch = input => {
-    if (this.searchTimeout) {
-      clearTimeout(this.searchTimeout);
-    }
-
-    this.searchTimeout = setTimeout(() => {
-      this.searchJyutping(input);
-    }, 100); // 100ms debounce for <100ms response requirement
-  };
 
   searchJyutping = async code => {
     if (!code || code.length === 0) {
-      this.setState({ suggestions: [] });
+      this.setState({ suggestions: [], isSearching: false });
       return;
     }
 
     this.setState({ isSearching: true });
 
     try {
+      // First, try exact/partial match search
       const response = await API.searchJyutping(code);
+      console.log('Jyutping search response:', response);
+      
       // API returns {code, matches, match_type} format
       const matches = response.matches || [];
 
@@ -156,13 +96,20 @@ class JyutpingKeyboard extends Component {
           m => (m.hanzi && m.hanzi.trim()) || (m.word && m.word.trim())
         );
 
+        console.log('Valid matches found:', validMatches.length);
+
+        // Show all matches (up to 15 for better selection)
         this.setState({
-          suggestions: validMatches.slice(0, 10),
+          suggestions: validMatches.slice(0, 15),
           isSearching: false
         });
       } else {
-        // Try suggestions if no exact match
-        const suggestionsResponse = await API.getJyutpingSuggestions(code, 10);
+        // If no matches from search, try suggestions API
+        // This handles cases like typing "nei" to show all "nei*" matches
+        console.log('No matches from search, trying suggestions API...');
+        const suggestionsResponse = await API.getJyutpingSuggestions(code, 15);
+        console.log('Suggestions response:', suggestionsResponse);
+        
         // API returns {input, suggestions, count} format
         const suggestions = suggestionsResponse.suggestions || [];
 
@@ -171,17 +118,25 @@ class JyutpingKeyboard extends Component {
           const validSuggestions = suggestions.filter(
             m => (m.hanzi && m.hanzi.trim()) || (m.word && m.word.trim())
           );
+          console.log('Valid suggestions found:', validSuggestions.length);
+          
           this.setState({
             suggestions: validSuggestions,
             isSearching: false
           });
         } else {
+          console.log('No suggestions found');
           this.setState({ suggestions: [], isSearching: false });
         }
       }
     } catch (error) {
       console.error('Jyutping search error:', error);
-      this.setState({ isSearching: false });
+      console.error('Error details:', error.response?.data || error.message);
+      // Ensure we clear loading state and show empty suggestions on error
+      this.setState({ 
+        suggestions: [], 
+        isSearching: false 
+      });
     }
   };
 
@@ -224,14 +179,16 @@ class JyutpingKeyboard extends Component {
     }
   };
 
-  handleBackspace = () => {
+  handleBackspace = async () => {
     const { jyutpingInput, textOutput } = this.state;
 
     if (jyutpingInput.length > 0) {
       // Remove last character from input
       const newInput = jyutpingInput.slice(0, -1);
       this.setState({ jyutpingInput: newInput });
-      this.debouncedSearch(newInput);
+      
+      // Immediately search for updated suggestions
+      await this.searchJyutping(newInput);
     } else if (textOutput.length > 0) {
       // Remove last character from output
       this.setState({ textOutput: textOutput.slice(0, -1) });
@@ -413,14 +370,12 @@ class JyutpingKeyboard extends Component {
             onTextChange={text => this.setState({ textOutput: text })}
           />
 
-          {/* Word Suggestions */}
-          {suggestions.length > 0 && (
-            <WordSuggestions
-              suggestions={suggestions}
-              onSelect={this.handleSuggestionSelect}
-              isLoading={isSearching}
-            />
-          )}
+          {/* Word Suggestions - Always show (handles empty state internally) */}
+          <WordSuggestions
+            suggestions={suggestions}
+            onSelect={this.handleSuggestionSelect}
+            isLoading={isSearching}
+          />
 
           {/* Layout Tabs */}
           <Tabs
@@ -433,7 +388,7 @@ class JyutpingKeyboard extends Component {
             <Tab label="Jyutping 1" value={LAYOUT_TYPES.JYUTPING_1} />
             <Tab label="Jyutping 2" value={LAYOUT_TYPES.JYUTPING_2} />
             <Tab label="QWERTY" value={LAYOUT_TYPES.QWERTY} />
-            <Tab label="Numeric" value={LAYOUT_TYPES.NUMERIC} />
+            {/* Numeric tab removed - numbers now integrated into other layouts */}
           </Tabs>
 
           {/* Keyboard Layout */}

@@ -6,29 +6,30 @@ import SpaceBarIcon from '@material-ui/icons/SpaceBar';
 import KeyboardReturnIcon from '@material-ui/icons/KeyboardReturn';
 import './JyutpingKeyboard.css';
 
-// Jyutping Layout 1 (Common consonants and vowels)
+// Jyutping Layout 1 (Common consonants and vowels with numbers integrated)
 const JYUTPING_1_LAYOUT = [
   ['b', 'p', 'm', 'f', 'd', 't', 'n', 'l'],
   ['g', 'k', 'ng', 'h', 'gw', 'kw', 'w', ''],
   ['z', 'c', 's', 'j', ''],
   ['aa', 'a', 'e', 'i', 'o', 'u', 'yu', ''],
-  ['1', '2', '3', '4', '5', '6']
+  ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']
 ];
 
-// Jyutping Layout 2 (Alternative arrangement)
+// Jyutping Layout 2 (Alternative arrangement with numbers integrated)
 const JYUTPING_2_LAYOUT = [
   ['aa', 'a', 'e', 'i', 'o', 'u', 'yu', 'oe'],
   ['b', 'p', 'm', 'f', 'd', 't', 'n', 'l'],
   ['g', 'k', 'ng', 'h', 'gw', 'kw', 'w', ''],
   ['z', 'c', 's', 'j', ''],
-  ['1', '2', '3', '4', '5', '6']
+  ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']
 ];
 
-// QWERTY Layout
+// QWERTY Layout with numbers integrated
 const QWERTY_LAYOUT = [
   ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
   ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'],
-  ['z', 'x', 'c', 'v', 'b', 'n', 'm']
+  ['z', 'x', 'c', 'v', 'b', 'n', 'm'],
+  ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']
 ];
 
 // Numeric Layout

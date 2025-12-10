@@ -94,6 +94,8 @@
     "@craco/craco": "^7.1.0",
     "@playwright/test": "1.50.0",
     "@types/mime-types": "^2.1.1",
+    "@types/react": "^17.0.62",
+    "@types/react-dom": "^17.0.20",
     "@wojtekmaj/enzyme-adapter-react-17": "^0.6.0",
     "babel-plugin-transform-import-meta": "^2.2.1",
     "browserstack-node-sdk": "^1.36.5",

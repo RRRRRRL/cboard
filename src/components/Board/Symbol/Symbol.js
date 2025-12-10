@@ -9,6 +9,7 @@ import { LABEL_POSITION_BELOW } from '../../Settings/Display/Display.constants';
 import './Symbol.css';
 import { Typography } from '@material-ui/core';
 import { getArasaacDB } from '../../../idb/arasaac/arasaacdb';
+import { API_URL } from '../../../constants';
 
 const propTypes = {
   /**
@@ -26,7 +27,30 @@ const propTypes = {
 };
 
 function formatSrc(src) {
-  return isCordova() && src?.startsWith('/') ? `.${src}` : src;
+  if (!src) return src;
+  
+  // Handle Cordova paths
+  if (isCordova() && src?.startsWith('/')) {
+    return `.${src}`;
+  }
+  
+  // Convert relative upload paths to absolute URLs
+  // e.g., "uploads/user_1/image.png" -> "http://localhost:8000/uploads/user_1/image.png"
+  if (typeof src === 'string' && src.startsWith('uploads/')) {
+    try {
+      if (API_URL) {
+        // Extract base URL (protocol + host) from API_URL
+        // API_URL is like "http://localhost:8000/api" or "http://localhost:8000/api/"
+        const apiUrlObj = new URL(API_URL);
+        const baseUrl = `${apiUrlObj.protocol}//${apiUrlObj.host}`;
+        return `${baseUrl}/${src}`;
+      }
+    } catch (e) {
+      console.warn('Failed to convert relative upload path to absolute URL:', e);
+    }
+  }
+  
+  return src;
 }
 
 function Symbol(props) {

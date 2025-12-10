@@ -54,24 +54,120 @@ function handleTTSRoutes($method, $pathParts, $data, $authToken) {
         $pitch = max(0.5, min(2.0, $pitch));
         
         try {
-            // TODO: Integrate with actual TTS service (Azure, Google, etc.)
-            // For now, return placeholder response with audio URL
+            // Get Azure TTS credentials from config
+            $azureKey = getenv('AZURE_TTS_KEY') ?: '';
+            $azureRegion = getenv('AZURE_TTS_REGION') ?: 'eastasia';
             
-            // In production, this would:
-            // 1. Call TTS API (Azure Cognitive Services, Google Cloud TTS, etc.)
-            // 2. Generate audio file
-            // 3. Store audio file
-            // 4. Return audio URL
+            if (empty($azureKey)) {
+                // Fallback to browser TTS
+                return successResponse([
+                    'text' => $text,
+                    'language' => $language,
+                    'voice_id' => $voiceId,
+                    'rate' => $rate,
+                    'pitch' => $pitch,
+                    'audio_url' => null,
+                    'method' => 'browser_tts',
+                    'message' => 'Azure TTS not configured, using browser TTS'
+                ]);
+            }
             
-            // Placeholder: Return audio configuration
+            // Map language codes to Azure locale
+            $localeMap = [
+                'en' => 'en-US',
+                'en-US' => 'en-US',
+                'en-GB' => 'en-GB',
+                'en-AU' => 'en-AU',
+                'zh-HK' => 'zh-HK',
+                'zh' => 'zh-HK'
+            ];
+            $locale = $localeMap[$language] ?? 'en-US';
+            
+            // Map voice IDs to Azure voice names
+            $voiceMap = [
+                'en-US-Neural-A' => 'en-US-AriaNeural',
+                'en-US-Neural-B' => 'en-US-GuyNeural',
+                'en-GB-Neural-A' => 'en-GB-SoniaNeural',
+                'en-GB-Neural-B' => 'en-GB-RyanNeural',
+                'en-AU-Neural-A' => 'en-AU-NatashaNeural',
+                'en-AU-Neural-B' => 'en-AU-WilliamNeural',
+                'zh-HK-Standard-A' => 'zh-HK-HiuGaaiNeural',
+                'zh-HK-Standard-B' => 'zh-HK-WanLungNeural',
+                'zh-HK-Standard-C' => 'zh-HK-HiuMaanNeural',
+                'zh-HK-Standard-D' => 'zh-HK-HiuMaanNeural',
+                'zh-HK-Wavenet-A' => 'zh-HK-HiuGaaiNeural',
+                'zh-HK-Wavenet-B' => 'zh-HK-WanLungNeural'
+            ];
+            $azureVoice = $voiceMap[$voiceId] ?? ($locale === 'zh-HK' ? 'zh-HK-HiuGaaiNeural' : 'en-US-AriaNeural');
+            
+            // Generate SSML
+            $ssml = sprintf(
+                '<speak version="1.0" xml:lang="%s"><voice xml:lang="%s" name="%s"><prosody rate="%.1f" pitch="%.1f%%">%s</prosody></voice></speak>',
+                $locale,
+                $locale,
+                $azureVoice,
+                $rate,
+                ($pitch - 1.0) * 100,
+                htmlspecialchars($text, ENT_XML1, 'UTF-8')
+            );
+            
+            // Call Azure TTS API
+            $url = "https://{$azureRegion}.tts.speech.microsoft.com/cognitiveservices/v1";
+            $headers = [
+                'Ocp-Apim-Subscription-Key: ' . $azureKey,
+                'Content-Type: application/ssml+xml',
+                'X-Microsoft-OutputFormat: audio-16khz-128kbitrate-mono-mp3',
+                'User-Agent: Cboard-TTS'
+            ];
+            
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $ssml);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            
+            $audioData = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $curlError = curl_error($ch);
+            curl_close($ch);
+            
+            if ($httpCode !== 200 || empty($audioData)) {
+                error_log("Azure TTS API error: HTTP $httpCode, Error: $curlError");
+                // Fallback to browser TTS
+                return successResponse([
+                    'text' => $text,
+                    'language' => $language,
+                    'voice_id' => $voiceId,
+                    'rate' => $rate,
+                    'pitch' => $pitch,
+                    'audio_url' => null,
+                    'method' => 'browser_tts',
+                    'message' => 'Azure TTS API error, using browser TTS fallback'
+                ]);
+            }
+            
+            // Save audio file
+            $user = verifyAuth($authToken);
+            $userId = $user ? $user['id'] : 0;
+            $filename = 'tts_' . md5($text . $voiceId . time()) . '.mp3';
+            $uploadDir = __DIR__ . '/../../uploads/user_' . $userId;
+            
+            if (!is_dir($uploadDir)) {
+                mkdir($uploadDir, 0755, true);
+            }
+            
+            $filePath = $uploadDir . '/' . $filename;
+            file_put_contents($filePath, $audioData);
+            $fileUrl = '/uploads/user_' . $userId . '/' . $filename;
+            
             return successResponse([
                 'text' => $text,
                 'language' => $language,
                 'voice_id' => $voiceId,
                 'rate' => $rate,
                 'pitch' => $pitch,
-                'audio_url' => null, // Will be populated when TTS service is integrated
-                'message' => 'TTS service integration pending. Use browser SpeechSynthesis API for now.'
+                'audio_url' => $fileUrl,
+                'method' => 'azure_tts'
             ]);
             
         } catch (Exception $e) {

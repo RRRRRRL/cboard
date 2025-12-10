@@ -486,6 +486,29 @@ class API {
     return data;
   }
 
+  // Sprint 4: Action logging
+  async logAction(actionData = {}) {
+    try {
+      // Action logs can be created anonymously (for view-only mode)
+      const authToken = getAuthToken();
+      const headers = {};
+      if (authToken && authToken.length) {
+        headers.Authorization = `Bearer ${authToken}`;
+      }
+      
+      const { data } = await this.axiosInstance.post(
+        `/action-logs`,
+        actionData,
+        { headers }
+      );
+      return data;
+    } catch (err) {
+      console.error('Action log error:', err);
+      // Don't throw - logging failures shouldn't break the app
+      return { success: false, error: err.message };
+    }
+  }
+
   // Sprint 6: Device management
   async getDevicesList() {
     const authToken = getAuthToken();
@@ -787,6 +810,40 @@ class API {
     const response = await this.axiosInstance.post('media', formData, {
       headers
     });
+
+    return response.data.url;
+  }
+
+  async generateTextToImage({
+    text,
+    width = 400,
+    height = 400,
+    backgroundColor = '#FFFFFF',
+    textColor = '#000000',
+    fontSize = 24
+  }) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`,
+      'Content-Type': 'application/json'
+    };
+
+    const response = await this.axiosInstance.post(
+      'media/text-to-image',
+      {
+        text,
+        width,
+        height,
+        background_color: backgroundColor,
+        text_color: textColor,
+        font_size: fontSize
+      },
+      { headers }
+    );
 
     return response.data.url;
   }
