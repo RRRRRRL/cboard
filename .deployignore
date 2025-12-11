@@ -1,0 +1,149 @@
+# Files and directories to exclude from deployment
+
+# IDE and Editor files
+.vscode/
+.idea/
+.vs/
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-project
+*.sublime-workspace
+
+# Visual Studio files and directories
+.vs/
+*.vsdir
+*.vsz
+*.vstemplate
+*.vcxproj
+*.vcxproj.filters
+*.sln
+*.suo
+*.user
+*.userosscache
+*.sdf
+*.opensdf
+*.db
+*.opendb
+*.VC.db
+*.VC.VC.opendb
+bin/
+obj/
+Debug/
+Release/
+x64/
+x86/
+ARM/
+
+# Visual Studio debugger files
+msvsmon.*
+vsdebugeng.*
+DiagnosticsHub.*
+Microsoft.VisualStudio.*
+System.*.dll
+api-ms-win-*
+vcruntime*.dll
+msvcp*.dll
+msvcdis*.dll
+msdia*.dll
+concrt*.dll
+ucrtbase.dll
+dbgshim.dll
+
+# Windows binaries (exclude all)
+*.dll
+*.exe
+*.pdb
+*.ilk
+*.exp
+*.lib
+*.obj
+*.manifest
+
+# VS Code specific
+Welcome.*
+welcome.ico
+VisualStudio.png
+
+# Development files
+.env
+.env.local
+.env.development
+.env.test
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build outputs
+build/
+dist/
+*.map
+
+# Dependencies
+node_modules/
+backend/vendor/
+backend/uploads/
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Documentation (optional - uncomment if you don't want to deploy docs)
+# *.md
+# docs/
+
+# Test files
+tests/
+__tests__/
+*.test.js
+*.test.ts
+*.spec.js
+*.spec.ts
+coverage/
+.nyc_output/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+*.cache
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Deployment scripts (optional - uncomment if you don't want to deploy these)
+# deploy-to-server.ps1
+# deploy-to-server.sh
+# check-deployment-status.ps1
+
+# WSL/Development specific
+nginx-dev.conf
+setup-*.sh
+fix-*.sh
+update-*.sh
+start-*.sh
+test-*.sh
+
+# PowerShell scripts for local development
+setup.ps1
+setup-wsl2-*.ps1
+cleanup-*.ps1
+
+# OpenCC dictionaries (if any)
+opencc-*.txt
+opencc-*.json
+s2t*.json
+
+# Conversion scripts (one-time use)
+convert-*.js
+check-*.js
+find-*.js
+download-*.js
+comprehensive-*.js
+

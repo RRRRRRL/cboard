@@ -1,0 +1,71 @@
+.EyeTracking {
+  padding: 16px;
+}
+
+.EyeTracking__section {
+  margin-bottom: 24px;
+}
+
+.EyeTracking__slider-container {
+  padding: 0 16px;
+  margin-top: 8px;
+}
+
+.EyeTracking__device-info {
+  margin-top: 16px;
+  padding: 16px;
+  background-color: rgba(0, 0, 0, 0.02);
+  border-radius: 4px;
+}
+
+.EyeTracking__calibration-container {
+  margin-top: 24px;
+  padding: 16px;
+  border: 2px dashed rgba(0, 0, 0, 0.12);
+  border-radius: 4px;
+  text-align: center;
+}
+
+.EyeTracking__calibration-point {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background-color: #1976d2;
+  border: 2px solid white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  transform: translate(-50%, -50%);
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.2);
+    opacity: 0.8;
+  }
+}
+
+.EyeTracking__calibration-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.EyeTracking__calibration-instructions {
+  color: white;
+  text-align: center;
+  margin-bottom: 24px;
+  font-size: 18px;
+}
+
