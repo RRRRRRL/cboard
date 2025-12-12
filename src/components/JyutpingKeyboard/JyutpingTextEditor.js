@@ -11,24 +11,37 @@ const JyutpingTextEditor = ({
   textOutput,
   onClear,
   onBackspace,
-  onTextChange
+  onTextChange,
+  validationError
 }) => {
   return (
     <div className="JyutpingTextEditor">
-      {/* Jyutping Input Display */}
-      {jyutpingInput && (
-        <div className="JyutpingTextEditor__input-display">
-          <span className="JyutpingTextEditor__input-label">Jyutping:</span>
-          <span className="JyutpingTextEditor__input-text">
-            {jyutpingInput}
-          </span>
+      {/* Jyutping Input Display - Always show when there's input */}
+      <div className="JyutpingTextEditor__input-display">
+        <span className="JyutpingTextEditor__input-label">Jyutping:</span>
+        <span 
+          className={`JyutpingTextEditor__input-text ${
+            validationError ? 'JyutpingTextEditor__input-text--error' : ''
+          }`}
+        >
+          {jyutpingInput || <span className="JyutpingTextEditor__placeholder">Type Jyutping...</span>}
+        </span>
+        {jyutpingInput && (
           <IconButton
             size="small"
             onClick={onBackspace}
             className="JyutpingTextEditor__backspace-button"
+            title="Delete last character"
           >
             <DeleteIcon fontSize="small" />
           </IconButton>
+        )}
+      </div>
+      
+      {/* Validation Error Display */}
+      {validationError && (
+        <div className="JyutpingTextEditor__error">
+          {validationError}
         </div>
       )}
 
@@ -75,7 +88,8 @@ JyutpingTextEditor.propTypes = {
   textOutput: PropTypes.string,
   onClear: PropTypes.func.isRequired,
   onBackspace: PropTypes.func.isRequired,
-  onTextChange: PropTypes.func
+  onTextChange: PropTypes.func,
+  validationError: PropTypes.string
 };
 
 JyutpingTextEditor.defaultProps = {

@@ -15,6 +15,7 @@ import JyutpingTextEditor from './JyutpingTextEditor';
 import JyutpingKeyboardLayout from './JyutpingKeyboardLayout';
 import WordSuggestions from './WordSuggestions';
 import API from '../../api/api';
+import { validateJyutpingInput } from '../../utils/jyutpingValidation';
 import './JyutpingKeyboard.css';
 
 const LAYOUT_TYPES = {
@@ -42,17 +43,35 @@ class JyutpingKeyboard extends Component {
       jyutpingInput: '',
       textOutput: '',
       suggestions: [],
+      relatedWords: [], // Related word suggestions
       isSearching: false,
-      isPlayingAudio: false
+      isPlayingAudio: false,
+      validationError: null,
+      lastSelectedWord: null, // Track last selected word for related suggestions
+      isMobile: window.innerWidth <= 566
     };
     this.searchTimeout = null;
     this.audioCache = new Map();
+    this.handleResize = this.handleResize.bind(this);
   }
+
+  componentDidMount() {
+    window.addEventListener('resize', this.handleResize);
+    this.handleResize(); // Initial check
+  }
+
+  handleResize = () => {
+    const isMobile = window.innerWidth <= 566;
+    if (this.state.isMobile !== isMobile) {
+      this.setState({ isMobile });
+    }
+  };
 
   componentWillUnmount() {
     if (this.searchTimeout) {
       clearTimeout(this.searchTimeout);
     }
+    window.removeEventListener('resize', this.handleResize);
   }
 
   handleLayoutChange = (event, newValue) => {
@@ -63,7 +82,21 @@ class JyutpingKeyboard extends Component {
     const { jyutpingInput } = this.state;
     const newInput = jyutpingInput + key;
 
-    this.setState({ jyutpingInput: newInput });
+    // Validate input with strict matching rules
+    const validation = validateJyutpingInput(newInput);
+    
+    if (!validation.isValid) {
+      this.setState({ 
+        validationError: validation.error,
+        jyutpingInput: newInput // Still allow typing, but show error
+      });
+      return;
+    }
+
+    this.setState({ 
+      jyutpingInput: newInput,
+      validationError: null
+    });
 
     // Play audio for the key
     await this.playKeyAudio(key);
@@ -159,11 +192,15 @@ class JyutpingKeyboard extends Component {
     this.setState({
       textOutput: newText,
       jyutpingInput: '', // Clear input after selection
-      suggestions: []
+      suggestions: [],
+      lastSelectedWord: { hanzi, jyutping } // Store for related words
     });
 
     // Play audio for the selected character/word
     await this.playCharacterAudio(hanzi, jyutping);
+
+    // Fetch related word suggestions
+    await this.fetchRelatedWords(hanzi, jyutping);
 
     // Log learning (if authenticated)
     try {
@@ -215,38 +252,60 @@ class JyutpingKeyboard extends Component {
   };
 
   playKeyAudio = async key => {
+    // Stop any currently playing audio to avoid overlap
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+
     // Use browser's speech API directly for key audio
     // The backend audio endpoint is for future TTS integration
     if ('speechSynthesis' in window) {
       try {
         const utterance = new SpeechSynthesisUtterance(key);
         utterance.lang = 'zh-HK';
+        utterance.rate = 1.0;
+        utterance.pitch = 1.0;
+        utterance.volume = 0.7; // Slightly quieter for key feedback
+        
+        // Play audio (non-blocking for key presses)
         window.speechSynthesis.speak(utterance);
       } catch (error) {
         console.error('Speech synthesis error:', error);
       }
     }
 
-    // Optionally call backend for logging (non-blocking)
-    try {
-      await API.generateJyutpingAudio({
-        text: key,
-        jyutping: key,
-        type: 'character'
-      });
-    } catch (error) {
+    // Optionally call backend for logging (non-blocking, don't wait)
+    API.generateJyutpingAudio({
+      text: key,
+      jyutping: key,
+      type: 'character'
+    }).catch(() => {
       // Silently fail - audio playback already handled above
-    }
+    });
   };
 
   playCharacterAudio = async (text, jyutping) => {
+    // Stop any currently playing audio
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+
     // Use browser's speech API directly for character/word audio
     // The backend audio endpoint is for future TTS integration
     if ('speechSynthesis' in window) {
       try {
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = 'zh-HK';
-        window.speechSynthesis.speak(utterance);
+        utterance.rate = 0.9; // Slightly slower for clarity
+        utterance.pitch = 1.0;
+        utterance.volume = 1.0;
+        
+        // Wait for audio to finish before resolving
+        await new Promise((resolve, reject) => {
+          utterance.onend = resolve;
+          utterance.onerror = reject;
+          window.speechSynthesis.speak(utterance);
+        });
       } catch (error) {
         console.error('Speech synthesis error:', error);
       }
@@ -261,6 +320,20 @@ class JyutpingKeyboard extends Component {
       });
     } catch (error) {
       // Silently fail - audio playback already handled above
+    }
+  };
+
+  fetchRelatedWords = async (hanzi, jyutping) => {
+    try {
+      const response = await API.getRelatedWords(hanzi, jyutping);
+      if (response && response.related_words) {
+        this.setState({ relatedWords: response.related_words });
+      } else {
+        this.setState({ relatedWords: [] });
+      }
+    } catch (error) {
+      console.error('Error fetching related words:', error);
+      this.setState({ relatedWords: [] });
     }
   };
 
@@ -320,8 +393,10 @@ class JyutpingKeyboard extends Component {
       jyutpingInput,
       textOutput,
       suggestions,
+      relatedWords,
       isSearching,
-      isPlayingAudio
+      isPlayingAudio,
+      validationError
     } = this.state;
 
     return (
@@ -330,6 +405,7 @@ class JyutpingKeyboard extends Component {
         onClose={onClose}
         maxWidth="md"
         fullWidth
+        fullScreen={this.state.isMobile}
         className="JyutpingKeyboard__dialog"
       >
         <DialogTitle className="JyutpingKeyboard__header">
@@ -368,6 +444,7 @@ class JyutpingKeyboard extends Component {
             onClear={this.handleClear}
             onBackspace={this.handleBackspace}
             onTextChange={text => this.setState({ textOutput: text })}
+            validationError={validationError}
           />
 
           {/* Word Suggestions - Always show (handles empty state internally) */}
@@ -375,7 +452,18 @@ class JyutpingKeyboard extends Component {
             suggestions={suggestions}
             onSelect={this.handleSuggestionSelect}
             isLoading={isSearching}
+            title="Suggestions"
           />
+
+          {/* Related Words Suggestions */}
+          {relatedWords && relatedWords.length > 0 && (
+            <WordSuggestions
+              suggestions={relatedWords}
+              onSelect={this.handleSuggestionSelect}
+              isLoading={false}
+              title="Related Words"
+            />
+          )}
 
           {/* Layout Tabs */}
           <Tabs
@@ -388,7 +476,7 @@ class JyutpingKeyboard extends Component {
             <Tab label="Jyutping 1" value={LAYOUT_TYPES.JYUTPING_1} />
             <Tab label="Jyutping 2" value={LAYOUT_TYPES.JYUTPING_2} />
             <Tab label="QWERTY" value={LAYOUT_TYPES.QWERTY} />
-            {/* Numeric tab removed - numbers now integrated into other layouts */}
+            <Tab label="Numeric" value={LAYOUT_TYPES.NUMERIC} />
           </Tabs>
 
           {/* Keyboard Layout */}

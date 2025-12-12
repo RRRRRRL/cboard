@@ -8,30 +8,85 @@ import API from '../../../api';
 
 export class ScanningContainer extends PureComponent {
   static propTypes = {
-    intl: intlShape.isRequired
+    intl: intlShape.isRequired,
+    history: PropTypes.object,
+    scanningSettings: PropTypes.object,
+    updateScannerSettings: PropTypes.func.isRequired
   };
 
-  updateScannerSettings = async (scanningSettings) => {
+  state = {
+    accessibilitySettings: null,
+    loading: true,
+    error: null
+  };
+
+  componentDidMount() {
+    this.loadAccessibilitySettings();
+  }
+
+  loadAccessibilitySettings = async () => {
     try {
-      await API.updateSettings({ scanning: scanningSettings });
-    } catch (e) { }
-    this.props.updateScannerSettings(scanningSettings);
+      const data = await API.getAccessibilitySettings();
+      this.setState({
+        accessibilitySettings: data.accessibility || {},
+        loading: false
+      });
+    } catch (e) {
+      console.error('Failed to load accessibility settings:', e);
+      this.setState({
+        accessibilitySettings: {},
+        loading: false,
+        error: e.message
+      });
+    }
+  };
+
+  updateScannerSettings = async (accessibilitySettings, legacySettings = {}) => {
+    try {
+      // Save to new Sprint 5 API
+      await API.updateAccessibilitySettings(accessibilitySettings);
+      
+      // Also update legacy settings for backward compatibility
+      if (Object.keys(legacySettings).length > 0) {
+        try {
+          await API.updateSettings({ scanning: legacySettings });
+        } catch (e) {
+          console.warn('Failed to update legacy scanning settings:', e);
+        }
+      }
+      
+      // Update Redux store
+      this.props.updateScannerSettings(legacySettings);
+      
+      // Reload settings to get latest from server
+      await this.loadAccessibilitySettings();
+    } catch (e) {
+      console.error('Failed to update accessibility settings:', e);
+      throw e;
+    }
   };
 
   render() {
-    const { history, scanningSettings } = this.props;
+    const { history, scanningSettings, intl } = this.props;
+    const { accessibilitySettings, loading } = this.state;
+
+    if (loading) {
+      return <div>Loading...</div>;
+    }
 
     return (
       <Scanning
         onClose={history.goBack}
         updateScannerSettings={this.updateScannerSettings}
         scanningSettings={scanningSettings}
+        accessibilitySettings={accessibilitySettings}
+        intl={intl}
       />
     );
   }
 }
 
-ScanningContainer.props = {
+ScanningContainer.propTypes = {
   history: PropTypes.object,
   updateScannerSettings: PropTypes.func.isRequired,
   scanningSettings: PropTypes.object.isRequired

@@ -4,6 +4,8 @@
  * Sprint 3: Card CRUD operations
  */
 
+require_once __DIR__ . '/../auth.php';
+
 function handleCardRoutes($method, $pathParts, $data, $authToken) {
     $db = getDB();
     if (!$db) {

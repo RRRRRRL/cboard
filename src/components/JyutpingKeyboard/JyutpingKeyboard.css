@@ -2,6 +2,10 @@
   z-index: 1300;
 }
 
+.JyutpingKeyboard__dialog .MuiDialog-paper {
+  transition: all 0.3s ease;
+}
+
 .JyutpingKeyboard__header {
   padding: 16px 24px;
   border-bottom: 1px solid rgba(0, 0, 0, 0.12);
@@ -52,6 +56,7 @@
   border-radius: 4px;
   margin-bottom: 8px;
   font-size: 0.875rem;
+  min-height: 40px;
 }
 
 .JyutpingTextEditor__input-label {
@@ -64,6 +69,27 @@
   flex: 1;
   font-family: monospace;
   color: #1976d2;
+  min-height: 20px;
+}
+
+.JyutpingTextEditor__input-text--error {
+  color: #d32f2f;
+  font-weight: 500;
+}
+
+.JyutpingTextEditor__placeholder {
+  color: #999;
+  font-style: italic;
+}
+
+.JyutpingTextEditor__error {
+  padding: 8px 12px;
+  background-color: #ffebee;
+  color: #d32f2f;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  margin-top: 4px;
+  border-left: 3px solid #d32f2f;
 }
 
 .JyutpingTextEditor__backspace-button {
@@ -184,26 +210,348 @@
 }
 
 /* Responsive Design */
-@media (max-width: 768px) {
+
+/* Large screens (desktop) - 1200px and above */
+@media (min-width: 1200px) {
+  .JyutpingKeyboard__dialog .MuiDialog-paper {
+    max-width: 900px;
+  }
+}
+
+/* Medium screens (tablet) - 768px to 1199px */
+@media (max-width: 1199px) and (min-width: 768px) {
   .JyutpingKeyboard__content {
-    padding: 16px;
+    padding: 20px;
   }
 
   .JyutpingKeyboardLayout__key {
-    min-width: 40px;
-    height: 40px;
-    font-size: 0.75rem;
+    min-width: 45px;
+    height: 45px;
+    font-size: 0.8rem;
   }
 
   .JyutpingKeyboardLayout__special-key {
-    min-width: 80px;
-    height: 40px;
+    min-width: 90px;
+    height: 42px;
+    font-size: 0.8rem;
+  }
+}
+
+/* Small screens (mobile landscape / small tablet) - 567px to 767px */
+@media (max-width: 767px) and (min-width: 567px) {
+  .JyutpingKeyboard__dialog .MuiDialog-paper {
+    max-width: 95vw;
+    margin: 8px;
+  }
+
+  .JyutpingKeyboard__header {
+    padding: 12px 16px;
+  }
+
+  .JyutpingKeyboard__title {
+    font-size: 1.1rem;
+    margin-left: 8px;
+  }
+
+  .JyutpingKeyboard__content {
+    padding: 16px;
+    min-height: auto;
+  }
+
+  .JyutpingTextEditor__input-display {
+    padding: 6px 10px;
+    font-size: 0.8rem;
+    min-height: 36px;
+  }
+
+  .JyutpingTextEditor__output-input {
+    font-size: 0.9rem;
+    min-height: 80px;
+  }
+
+  .JyutpingKeyboardLayout__key {
+    min-width: 42px;
+    height: 42px;
     font-size: 0.75rem;
+    padding: 4px 8px;
+  }
+
+  .JyutpingKeyboardLayout__row {
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+
+  .JyutpingKeyboardLayout__special-keys {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .JyutpingKeyboardLayout__special-key {
+    min-width: 75px;
+    height: 38px;
+    font-size: 0.7rem;
+    flex: 1 1 auto;
+  }
+
+  .WordSuggestions {
+    padding: 10px;
+    margin-bottom: 16px;
+  }
+
+  .WordSuggestions__list {
+    gap: 6px;
+  }
+
+  .WordSuggestions__chip {
+    font-size: 0.75rem;
+    padding: 4px 8px;
+  }
+}
+
+/* Extra small screens (mobile portrait) - below 567px */
+@media (max-width: 566px) {
+  .JyutpingKeyboard__dialog .MuiDialog-paper {
+    max-width: 100vw;
+    max-height: 100vh;
+    margin: 0;
+    border-radius: 0;
+    height: 100vh;
+  }
+
+  .JyutpingKeyboard__header {
+    padding: 10px 12px;
+    position: sticky;
+    top: 0;
+    background: white;
+    z-index: 10;
+  }
+
+  .JyutpingKeyboard__title {
+    font-size: 1rem;
+    margin-left: 4px;
+  }
+
+  .JyutpingKeyboard__actions {
+    gap: 4px;
+  }
+
+  .JyutpingKeyboard__actions .MuiIconButton-root {
+    padding: 6px;
+  }
+
+  .JyutpingKeyboard__content {
+    padding: 12px;
+    min-height: auto;
+    overflow-y: auto;
+    max-height: calc(100vh - 120px);
+  }
+
+  .JyutpingTextEditor {
+    margin-bottom: 16px;
+  }
+
+  .JyutpingTextEditor__input-display {
+    padding: 6px 8px;
+    font-size: 0.75rem;
+    min-height: 32px;
+  }
+
+  .JyutpingTextEditor__input-label {
+    font-size: 0.7rem;
+    margin-right: 6px;
+  }
+
+  .JyutpingTextEditor__input-text {
+    font-size: 0.75rem;
+  }
+
+  .JyutpingTextEditor__output {
+    margin-bottom: 6px;
+  }
+
+  .JyutpingTextEditor__output-input {
+    font-size: 0.875rem;
+    min-height: 70px;
+  }
+
+  .JyutpingTextEditor__error {
+    padding: 6px 8px;
+    font-size: 0.75rem;
+  }
+
+  .JyutpingKeyboard__tabs {
+    margin-bottom: 12px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .JyutpingKeyboard__tabs .MuiTab-root {
+    min-width: 80px;
+    font-size: 0.75rem;
+    padding: 8px 12px;
+  }
+
+  .JyutpingKeyboardLayout {
+    margin-top: 12px;
+  }
+
+  .JyutpingKeyboardLayout__keys {
+    margin-bottom: 12px;
+  }
+
+  .JyutpingKeyboardLayout__row {
+    gap: 4px;
+    margin-bottom: 4px;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .JyutpingKeyboardLayout__key {
+    min-width: 36px;
+    height: 36px;
+    font-size: 0.7rem;
+    padding: 2px 6px;
+    flex: 0 0 auto;
+  }
+
+  .JyutpingKeyboardLayout__key-spacer {
+    min-width: 36px;
+    height: 36px;
+  }
+
+  .JyutpingKeyboardLayout__special-keys {
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 12px;
+    padding-top: 12px;
+  }
+
+  .JyutpingKeyboardLayout__special-key {
+    min-width: calc(50% - 2px);
+    height: 36px;
+    font-size: 0.7rem;
+    flex: 1 1 calc(50% - 2px);
+  }
+
+  .WordSuggestions {
+    padding: 8px;
+    margin-bottom: 12px;
+  }
+
+  .WordSuggestions__label {
+    font-size: 0.7rem;
+    margin-bottom: 6px;
   }
 
   .WordSuggestions__list {
     gap: 4px;
   }
+
+  .WordSuggestions__chip {
+    font-size: 0.7rem;
+    padding: 3px 6px;
+    height: auto;
+  }
+
+  .WordSuggestions__loading {
+    padding: 8px;
+  }
+
+  .WordSuggestions__loading-text {
+    font-size: 0.75rem;
+  }
+}
+
+/* Very small screens (small phones) - below 360px */
+@media (max-width: 360px) {
+  .JyutpingKeyboardLayout__key {
+    min-width: 32px;
+    height: 32px;
+    font-size: 0.65rem;
+    padding: 2px 4px;
+  }
+
+  .JyutpingKeyboardLayout__key-spacer {
+    min-width: 32px;
+    height: 32px;
+  }
+
+  .JyutpingKeyboardLayout__special-key {
+    min-width: 100%;
+    height: 34px;
+    font-size: 0.65rem;
+  }
+
+  .JyutpingTextEditor__input-display {
+    font-size: 0.7rem;
+    padding: 5px 6px;
+  }
+
+  .JyutpingTextEditor__output-input {
+    font-size: 0.8rem;
+    min-height: 60px;
+  }
+}
+
+/* Landscape orientation on mobile */
+@media (max-width: 767px) and (orientation: landscape) {
+  .JyutpingKeyboard__content {
+    max-height: calc(100vh - 100px);
+    padding: 10px;
+  }
+
+  .JyutpingTextEditor__output-input {
+    min-height: 50px;
+  }
+
+  .JyutpingKeyboardLayout__key {
+    min-width: 38px;
+    height: 38px;
+  }
+
+  .JyutpingKeyboardLayout__special-key {
+    height: 36px;
+  }
+}
+
+/* Touch-friendly improvements for mobile */
+@media (max-width: 767px) {
+  .JyutpingKeyboardLayout__key,
+  .JyutpingKeyboardLayout__special-key {
+    -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+    touch-action: manipulation;
+    user-select: none;
+  }
+
+  .WordSuggestions__chip {
+    -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+    touch-action: manipulation;
+    min-height: 32px;
+  }
+
+  /* Improve scrolling on mobile */
+  .JyutpingKeyboard__content {
+    -webkit-overflow-scrolling: touch;
+    overflow-y: auto;
+  }
+
+  .JyutpingKeyboard__tabs {
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE and Edge */
+  }
+
+  .JyutpingKeyboard__tabs::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, Opera */
+  }
+}
+
+/* Prevent text selection on keyboard keys */
+.JyutpingKeyboardLayout__key,
+.JyutpingKeyboardLayout__special-key {
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
 }
 
 /* Dark mode support */
@@ -230,4 +578,15 @@
 
 .is-dark .JyutpingKeyboardLayout__special-keys {
   border-top-color: rgba(255, 255, 255, 0.12);
+}
+
+/* Dark mode responsive adjustments */
+@media (max-width: 566px) {
+  .is-dark .JyutpingKeyboard__header {
+    background: #1e1e1e;
+  }
+
+  .is-dark .JyutpingKeyboard__content {
+    background: #1e1e1e;
+  }
 }

@@ -4,6 +4,8 @@
  * Sprint 3: Manage card positioning in profiles
  */
 
+require_once __DIR__ . '/../auth.php';
+
 function handleProfileCardRoutes($method, $pathParts, $data, $authToken) {
     $db = getDB();
     if (!$db) {

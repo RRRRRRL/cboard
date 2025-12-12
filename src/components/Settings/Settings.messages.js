@@ -45,6 +45,14 @@ export default defineMessages({
     id: 'cboard.components.Settings.navigation',
     defaultMessage: 'Navigation'
   },
+  eyeTracking: {
+    id: 'cboard.components.Settings.eyeTracking',
+    defaultMessage: 'Eye Tracking'
+  },
+  transfer: {
+    id: 'cboard.components.Settings.transfer',
+    defaultMessage: 'Profile Transfer'
+  },
   system: {
     id: 'cboard.components.Settings.system',
     defaultMessage: 'System'
@@ -218,5 +226,25 @@ export default defineMessages({
   symbols: {
     id: 'cboard.components.Settings.symbols',
     defaultMessage: 'Symbols'
+  },
+  logViewer: {
+    id: 'cboard.components.Settings.logViewer',
+    defaultMessage: 'Action Log Viewer'
+  },
+  adminPanel: {
+    id: 'cboard.components.Settings.adminPanel',
+    defaultMessage: 'Admin Panel'
+  },
+  learningGames: {
+    id: 'cboard.components.Settings.learningGames',
+    defaultMessage: 'Learning Games'
+  },
+  ocrTranslator: {
+    id: 'cboard.components.Settings.ocrTranslator',
+    defaultMessage: 'OCR Translator'
+  },
+  aiFeatures: {
+    id: 'cboard.components.Settings.aiFeatures',
+    defaultMessage: 'AI Features'
   }
 });

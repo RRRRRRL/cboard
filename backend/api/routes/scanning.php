@@ -5,6 +5,8 @@
  * Handles scanning operations, state, and navigation
  */
 
+require_once __DIR__ . '/../auth.php';
+
 function handleScanningRoutes($method, $pathParts, $data, $authToken) {
     $db = getDB();
     if (!$db) {

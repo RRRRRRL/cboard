@@ -4,6 +4,8 @@
  * Sprint 4: Voice settings, speech rate, accessibility settings
  */
 
+require_once __DIR__ . '/../auth.php';
+
 function handleSettingsRoutes($method, $pathParts, $data, $authToken) {
     $db = getDB();
     if (!$db) {

@@ -9,3 +9,16 @@
 .Scanning__ListItemText {
   max-width: 75%;
 }
+
+.Scanning .MuiListItem-root {
+  flex-wrap: wrap;
+}
+
+.Scanning .MuiListItem-root .MuiListItemSecondaryAction-root {
+  position: relative;
+  right: auto;
+  top: auto;
+  transform: none;
+  flex: 0 0 auto;
+  margin-left: auto;
+}

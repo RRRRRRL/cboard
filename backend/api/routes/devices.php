@@ -5,6 +5,8 @@
  * Handles device registration, configuration, and management
  */
 
+require_once __DIR__ . '/../auth.php';
+
 function handleDevicesRoutes($method, $pathParts, $data, $authToken) {
     $db = getDB();
     if (!$db) {

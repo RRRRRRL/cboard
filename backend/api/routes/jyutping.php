@@ -10,6 +10,8 @@
  * - POST /api/jyutping/learning-log - Log learning progress
  */
 
+require_once __DIR__ . '/../auth.php';
+
 function handleJyutpingRoutes($method, $pathParts, $data, $authToken) {
     $db = getDB();
     if (!$db) {
@@ -224,6 +226,110 @@ function handleJyutpingRoutes($method, $pathParts, $data, $authToken) {
         } catch (Exception $e) {
             error_log("Jyutping audio error: " . $e->getMessage());
             return errorResponse('Failed to generate audio', 500);
+        }
+    }
+
+    // GET /jyutping/related?hanzi={hanzi}&jyutping={jyutping}
+    if ($method === 'GET' && isset($pathParts[1]) && $pathParts[1] === 'related') {
+        try {
+            $hanzi = $_GET['hanzi'] ?? '';
+            $jyutping = $_GET['jyutping'] ?? '';
+            
+            if (empty($hanzi) && empty($jyutping)) {
+                return successResponse(['related_words' => []]);
+            }
+            
+            $relatedWords = [];
+            
+            // Strategy 1: Find words with similar Jyutping (same initial or final)
+            if (!empty($jyutping)) {
+                // Extract initial and final from Jyutping
+                $jyutpingBase = preg_replace('/\d+$/', '', $jyutping); // Remove tone
+                
+                // Find words with same initial (first 1-2 characters)
+                $initial = substr($jyutpingBase, 0, 2);
+                if (strlen($initial) === 2 && in_array($initial, ['gw', 'kw', 'ng'])) {
+                    // Two-character initial
+                } else {
+                    $initial = substr($jyutpingBase, 0, 1);
+                }
+                
+                // Find words with same initial
+                $sql = "SELECT * FROM jyutping_dictionary 
+                        WHERE jyutping_code LIKE ? 
+                          AND (hanzi != ? OR hanzi IS NULL)
+                        ORDER BY frequency DESC 
+                        LIMIT 10";
+                $stmt = $db->prepare($sql);
+                $stmt->execute([$initial . '%', $hanzi]);
+                $initialMatches = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                $relatedWords = array_merge($relatedWords, $initialMatches);
+                
+                // Find words with same final (last part of Jyutping)
+                if (strlen($jyutpingBase) > strlen($initial)) {
+                    $final = substr($jyutpingBase, strlen($initial));
+                    $sql = "SELECT * FROM jyutping_dictionary 
+                            WHERE jyutping_code LIKE ? 
+                              AND jyutping_code LIKE ?
+                              AND (hanzi != ? OR hanzi IS NULL)
+                            ORDER BY frequency DESC 
+                            LIMIT 10";
+                    $stmt = $db->prepare($sql);
+                    $stmt->execute(['%' . $final, $initial . '%', $hanzi]);
+                    $finalMatches = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                    $relatedWords = array_merge($relatedWords, $finalMatches);
+                }
+            }
+            
+            // Strategy 2: Find words with similar characters (if hanzi provided)
+            if (!empty($hanzi)) {
+                // Find words that contain any character from the selected word
+                $hanziChars = preg_split('//u', $hanzi, -1, PREG_SPLIT_NO_EMPTY);
+                foreach ($hanziChars as $char) {
+                    $sql = "SELECT * FROM jyutping_dictionary 
+                            WHERE (hanzi LIKE ? OR word LIKE ?)
+                              AND (hanzi != ? OR hanzi IS NULL)
+                            ORDER BY frequency DESC 
+                            LIMIT 5";
+                    $stmt = $db->prepare($sql);
+                    $stmt->execute(['%' . $char . '%', '%' . $char . '%', $hanzi]);
+                    $charMatches = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                    $relatedWords = array_merge($relatedWords, $charMatches);
+                }
+            }
+            
+            // Remove duplicates and limit results
+            $uniqueRelated = [];
+            $seen = [];
+            foreach ($relatedWords as $word) {
+                $key = ($word['hanzi'] ?? '') . '|' . ($word['jyutping_code'] ?? '');
+                if (!isset($seen[$key])) {
+                    $seen[$key] = true;
+                    $uniqueRelated[] = $word;
+                }
+            }
+            
+            // Sort by frequency and limit to 15
+            usort($uniqueRelated, function($a, $b) {
+                $freqA = (int)($a['frequency'] ?? 0);
+                $freqB = (int)($b['frequency'] ?? 0);
+                return $freqB - $freqA;
+            });
+            
+            $uniqueRelated = array_slice($uniqueRelated, 0, 15);
+            
+            error_log("Related words found: " . count($uniqueRelated) . " for hanzi='$hanzi', jyutping='$jyutping'");
+            
+            return successResponse([
+                'hanzi' => $hanzi,
+                'jyutping' => $jyutping,
+                'related_words' => $uniqueRelated,
+                'count' => count($uniqueRelated)
+            ]);
+            
+        } catch (Exception $e) {
+            error_log("Related words error: " . $e->getMessage());
+            return errorResponse('Failed to get related words', 500);
         }
     }
 

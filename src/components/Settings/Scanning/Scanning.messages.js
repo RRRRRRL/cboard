@@ -54,5 +54,81 @@ export default defineMessages({
     id: 'cboard.components.Settings.Scanning.scannerAutomaticStrategy',
     defaultMessage:
       'Scanner will iterate over elements, press any key to select them.'
+  },
+  mode: {
+    id: 'cboard.components.Settings.Scanning.mode',
+    defaultMessage: 'Scanning mode'
+  },
+  modeSecondary: {
+    id: 'cboard.components.Settings.Scanning.modeSecondary',
+    defaultMessage: 'How cards are scanned'
+  },
+  speed: {
+    id: 'cboard.components.Settings.Scanning.speed',
+    defaultMessage: 'Scanning speed'
+  },
+  speedSecondary: {
+    id: 'cboard.components.Settings.Scanning.speedSecondary',
+    defaultMessage: 'Time between highlights (0.5 to 10.0 seconds)'
+  },
+  loop: {
+    id: 'cboard.components.Settings.Scanning.loop',
+    defaultMessage: 'Loop type'
+  },
+  loopSecondary: {
+    id: 'cboard.components.Settings.Scanning.loopSecondary',
+    defaultMessage: 'How many times to scan through items'
+  },
+  loopCount: {
+    id: 'cboard.components.Settings.Scanning.loopCount',
+    defaultMessage: 'Loop count'
+  },
+  loopCountSecondary: {
+    id: 'cboard.components.Settings.Scanning.loopCountSecondary',
+    defaultMessage: 'Number of loops (1-100)'
+  },
+  finite: {
+    id: 'cboard.components.Settings.Scanning.finite',
+    defaultMessage: 'Finite'
+  },
+  infinite: {
+    id: 'cboard.components.Settings.Scanning.infinite',
+    defaultMessage: 'Infinite'
+  },
+  audioGuide: {
+    id: 'cboard.components.Settings.Scanning.audioGuide',
+    defaultMessage: 'Audio guide'
+  },
+  audioGuideSecondary: {
+    id: 'cboard.components.Settings.Scanning.audioGuideSecondary',
+    defaultMessage: 'Audio feedback when item is highlighted'
+  },
+  audioGuideOff: {
+    id: 'cboard.components.Settings.Scanning.audioGuideOff',
+    defaultMessage: 'Off'
+  },
+  audioGuideBeep: {
+    id: 'cboard.components.Settings.Scanning.audioGuideBeep',
+    defaultMessage: 'Beep'
+  },
+  audioGuideCardAudio: {
+    id: 'cboard.components.Settings.Scanning.audioGuideCardAudio',
+    defaultMessage: 'Card audio'
+  },
+  modeSingle: {
+    id: 'cboard.components.Settings.Scanning.modeSingle',
+    defaultMessage: 'Single card'
+  },
+  modeRow: {
+    id: 'cboard.components.Settings.Scanning.modeRow',
+    defaultMessage: 'Row'
+  },
+  modeColumn: {
+    id: 'cboard.components.Settings.Scanning.modeColumn',
+    defaultMessage: 'Column'
+  },
+  modeOperation: {
+    id: 'cboard.components.Settings.Scanning.modeOperation',
+    defaultMessage: 'Operation buttons'
   }
 });

@@ -26,6 +26,7 @@ export class SettingsContainer extends Component {
 const mapStateToProps = state => ({
   isLogged: isLogged(state),
   user: getUser(state),
+  userData: state.app?.userData || null,
   isSettingsTourEnabled: state.app.liveHelp.isSettingsTourEnabled,
   isDownloadingLang: state.language.downloadingLang.isdownloading,
   isInFreeCountry: state.subscription.isInFreeCountry

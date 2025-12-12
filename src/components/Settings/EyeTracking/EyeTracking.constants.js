@@ -2,6 +2,7 @@ export const EYE_TRACKING_DEVICE_TYPES = {
   TOBII: 'tobii',
   EYETRIBE: 'eyetribe',
   PUPIL: 'pupil',
+  CAMERA: 'camera', // WebGazer.js - browser camera-based eye tracking
   CUSTOM: 'custom'
 };
 

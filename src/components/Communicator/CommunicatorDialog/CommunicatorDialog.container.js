@@ -514,10 +514,10 @@ class CommunicatorDialogContainer extends React.Component {
       } catch (err) {}
     }
     for await (const comm of communicators) {
-      if (comm.boards.includes(board.id)) {
+      if (Array.isArray(comm.boards) && comm.boards.includes(board.id)) {
         const filteredCommunicator = {
           ...comm,
-          boards: comm.boards.filter(b => b !== board.id)
+          boards: Array.isArray(comm.boards) ? comm.boards.filter(b => b !== board.id) : []
         };
 
         const upsertedCommunicator = verifyAndUpsertCommunicator(

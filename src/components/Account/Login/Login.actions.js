@@ -1,6 +1,6 @@
 import API from '../../../api';
 import { LOGIN_SUCCESS, LOGOUT } from './Login.constants';
-import { addBoards } from '../../Board/Board.actions';
+import { addBoards, switchBoard } from '../../Board/Board.actions';
 import {
   changeVoice,
   changePitch,
@@ -191,19 +191,70 @@ export function login({ email, password, activatedData }, type = 'local') {
             )
           : [];
 
+      // Also check loginData.boards for board IDs
+      // Extract board IDs from loginData.boards (they have both 'id' and 'board_id' fields)
+      const loginBoardsIds = loginData.boards && Array.isArray(loginData.boards)
+        ? loginData.boards
+            .map(b => {
+              // Try board_id first, then id
+              const boardId = b.board_id || b.id;
+              return boardId;
+            })
+            .filter(id => id && typeof id === 'string' && id.length > 0)
+            .filter(id => localBoardsIds.indexOf(id) < 0 && apiBoardsIds.indexOf(id) < 0)
+        : [];
+
+      const allApiBoardsIds = [...new Set([...apiBoardsIds, ...loginBoardsIds])];
+      
+      console.log('Login - Loading boards:', {
+        currentCommunicator: currentCommunicator ? { id: currentCommunicator.id, boards: currentCommunicator.boards } : null,
+        localBoardsIds,
+        apiBoardsIds,
+        loginBoardsIds,
+        allApiBoardsIds,
+        loginDataBoards: loginData.boards,
+        loginDataBoardsCount: loginData.boards ? loginData.boards.length : 0
+      });
+      
+      if (allApiBoardsIds.length === 0) {
+        console.warn('Login - No boards to load! This might be a problem.');
+      }
+
       const apiBoards = await Promise.all(
-        apiBoardsIds
+        allApiBoardsIds
           .map(async id => {
             let board = null;
             try {
+              console.log('Login - Fetching board:', id);
               board = await API.getBoard(id);
-            } catch (e) {}
+              console.log('Login - Board fetched:', { id, name: board?.name, tilesCount: board?.tiles?.length || 0 });
+            } catch (e) {
+              console.error('Login - Error fetching board:', id, e);
+            }
             return board;
           })
           .filter(b => b !== null)
       );
 
+      console.log('Login - Loaded boards:', apiBoards.length, apiBoards.map(b => ({ id: b.id, name: b.name, tilesCount: b.tiles?.length || 0 })));
       dispatch(addBoards(apiBoards));
+      
+      // Dispatch loginSuccess first (but it won't override activeBoardId if we set it next)
+      dispatch(loginSuccess(loginData));
+      
+      // If we have user boards, set the most recently edited one as active
+      // This happens AFTER loginSuccess to ensure it takes precedence
+      if (apiBoards.length > 0) {
+        // Sort by lastEdited (most recent first) and use the first one
+        const sortedBoards = [...apiBoards].sort((a, b) => {
+          const aDate = a.lastEdited ? new Date(a.lastEdited) : new Date(0);
+          const bDate = b.lastEdited ? new Date(b.lastEdited) : new Date(0);
+          return bDate - aDate;
+        });
+        const mostRecentBoard = sortedBoards[0];
+        console.log('Login - Setting active board to most recent user board:', mostRecentBoard.id, 'with', mostRecentBoard.tiles?.length || 0, 'tiles');
+        dispatch(switchBoard(mostRecentBoard.id));
+      }
       if (type === 'local') {
         dispatch(
           disableTour({
@@ -224,8 +275,6 @@ export function login({ email, password, activatedData }, type = 'local') {
           loginDataKeys: Object.keys(loginData)
         });
       }
-
-      dispatch(loginSuccess(loginData));
       await setAVoice({ loginData, dispatch, getState });
     } catch (e) {
       if (e.response != null) {

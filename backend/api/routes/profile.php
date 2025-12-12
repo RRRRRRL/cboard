@@ -6,6 +6,7 @@
  */
 
 require_once __DIR__ . '/../helpers-layout.php';
+require_once __DIR__ . '/../auth.php';
 
 function handleProfileRoutes($method, $pathParts, $data, $authToken) {
     $db = getDB();

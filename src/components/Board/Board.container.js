@@ -73,6 +73,7 @@ import {
 } from '../../constants';
 import LoadingIcon from '../UI/LoadingIcon';
 import { resolveTileLabel } from '../../helpers';
+import { getEyeTrackingInstance } from '../../utils/eyeTrackingIntegration';
 //import { isAndroid } from '../../cordova-util';
 
 const ogv = require('ogv');
@@ -239,6 +240,9 @@ export class BoardContainer extends Component {
     // Setup swipe navigation and long-press detection
     this.setupSwipeDetection();
     this.setupLongPressDetection();
+    
+    // Setup eye tracking if enabled
+    this.setupEyeTracking();
 
     let boardExists = null;
 
@@ -331,9 +335,53 @@ export class BoardContainer extends Component {
   }
 
   componentDidUpdate(prevProps) {
-    const { board } = this.props;
+    const { board, boards, userData, changeBoard } = this.props;
+    
+    // Handle board type change
     if (board && prevProps.board && board.isFixed !== prevProps.board.isFixed) {
       this.setState({ isFixedBoard: board.isFixed });
+    }
+    
+    // If user boards were just loaded and we're on root board, switch to user's most recent board
+    if (userData && userData.email && boards && prevProps.boards) {
+      const prevBoardsCount = prevProps.boards.length;
+      const currentBoardsCount = boards.length;
+      
+      // Check if new boards were added
+      if (currentBoardsCount > prevBoardsCount) {
+        const newBoards = boards.filter(b => {
+          // Check if this is a new user board
+          const wasInPrev = prevProps.boards.some(pb => pb.id === b.id);
+          if (wasInPrev) return false;
+          
+          // Check if it's a user board (has email or long ID)
+          return b.email === userData.email || (b.id && b.id.length > 14);
+        });
+        
+        if (newBoards.length > 0) {
+          // Check if current board is root or default board
+          const currentBoard = board;
+          const isRootBoard = !currentBoard || 
+                             currentBoard.id === 'root' || 
+                             (currentBoard.id && currentBoard.id.length < 14);
+          
+          if (isRootBoard) {
+            // Find most recent user board
+            const sortedBoards = [...newBoards].sort((a, b) => {
+              const aDate = a.lastEdited ? new Date(a.lastEdited) : new Date(0);
+              const bDate = b.lastEdited ? new Date(b.lastEdited) : new Date(0);
+              return bDate - aDate;
+            });
+            const mostRecentBoard = sortedBoards[0];
+            
+            if (mostRecentBoard && mostRecentBoard.id) {
+              console.log('Board component - Switching to newly loaded user board:', mostRecentBoard.id);
+              changeBoard(mostRecentBoard.id);
+              this.props.history.replace(`/board/${mostRecentBoard.id}`);
+            }
+          }
+        }
+      }
     }
   }
 
@@ -1107,8 +1155,23 @@ export class BoardContainer extends Component {
           });
       } else {
         if (!createChildBoard) {
+          // Add debug logging
+          console.log('handleApiUpdates - Saving board:', {
+            boardId: parentBoardData.id,
+            boardName: parentBoardData.name,
+            tilesCount: parentBoardData.tiles?.length || 0,
+            createParentBoard,
+            userEmail: userData.email
+          });
+          
           updateApiObjectsNoChild(parentBoardData, createParentBoard)
             .then(parentBoardId => {
+              console.log('handleApiUpdates - Board saved successfully:', {
+                originalId: parentBoardData.id,
+                newId: parentBoardId,
+                tilesCount: parentBoardData.tiles?.length || 0
+              });
+              
               if (createParentBoard) {
                 replaceBoard(
                   { ...parentBoardData },
@@ -1119,6 +1182,7 @@ export class BoardContainer extends Component {
               this.setState({ isSaving: false });
             })
             .catch(e => {
+              console.error('handleApiUpdates - Error saving board:', e);
               this.setState({ isSaving: false });
             });
         } else {
@@ -1719,6 +1783,11 @@ export class BoardContainer extends Component {
     if (this.longPressCleanup) {
       this.longPressCleanup();
     }
+    
+    // Cleanup eye tracking
+    if (this.eyeTrackingInstance) {
+      this.eyeTrackingInstance.cleanup();
+    }
   }
 
   setupSwipeDetection = () => {
@@ -1819,16 +1888,67 @@ export class BoardContainer extends Component {
     }
   };
 
+  setupEyeTracking = async () => {
+    try {
+      // Cleanup existing instance first
+      if (this.eyeTrackingInstance) {
+        this.eyeTrackingInstance.cleanup();
+        this.eyeTrackingInstance = null;
+      }
+      
+      // Load eye tracking settings
+      const settings = await API.getSettings();
+      const eyeTrackingSettings = settings.eyeTracking || { enabled: false };
+      
+      if (!eyeTrackingSettings.enabled) {
+        console.log('Eye tracking is disabled');
+        return;
+      }
+      
+      console.log('Setting up eye tracking with device type:', eyeTrackingSettings.deviceType);
+      
+      // Get eye tracking instance
+      this.eyeTrackingInstance = getEyeTrackingInstance();
+      
+      // Initialize with settings and callback
+      await this.eyeTrackingInstance.initialize(
+        eyeTrackingSettings,
+        this.handleEyeTrackingDwell.bind(this)
+      );
+      
+      console.log('Eye tracking initialized successfully');
+    } catch (error) {
+      console.error('Failed to setup eye tracking:', error);
+      // Show user-friendly error message
+      if (error.message && error.message.includes('Camera')) {
+        console.warn('Camera access may be required. Please check browser permissions.');
+      }
+    }
+  };
+
+  handleEyeTrackingDwell = ({ tileId, x, y, dwellDuration }) => {
+    // Find the tile by ID
+    const { board } = this.props;
+    if (!board || !board.tiles) {
+      return;
+    }
+    
+    const tile = board.tiles.find(t => t.id === tileId);
+    if (!tile) {
+      return;
+    }
+    
+    // Trigger tile click
+    this.handleTileClick(tile);
+  };
+
   setupLongPressDetection = () => {
-    let pressStartTime = null;
     let pressTimer = null;
     const longPressThreshold = 1500; // 1.5 seconds
 
     const handlePressStart = (e) => {
       const tile = e.target.closest('.Tile');
       if (!tile) return;
-
-      pressStartTime = Date.now();
       const tileId = tile.dataset.tileId || tile.id;
       
       pressTimer = setTimeout(() => {
@@ -1841,7 +1961,6 @@ export class BoardContainer extends Component {
         clearTimeout(pressTimer);
         pressTimer = null;
       }
-      pressStartTime = null;
     };
 
     document.addEventListener('mousedown', handlePressStart);

@@ -61,6 +61,10 @@ export default defineMessages({
     id: 'cboard.components.Settings.EyeTracking.pupil',
     defaultMessage: 'Pupil Labs'
   },
+  camera: {
+    id: 'cboard.components.Settings.EyeTracking.camera',
+    defaultMessage: 'Web Camera (WebGazer)'
+  },
   custom: {
     id: 'cboard.components.Settings.EyeTracking.custom',
     defaultMessage: 'Custom'
@@ -88,6 +92,14 @@ export default defineMessages({
   deviceName: {
     id: 'cboard.components.Settings.EyeTracking.deviceName',
     defaultMessage: 'Device Name'
+  },
+  deviceRegisteredSuccess: {
+    id: 'cboard.components.Settings.EyeTracking.deviceRegisteredSuccess',
+    defaultMessage: 'Device registered successfully'
+  },
+  deviceRegisterFailed: {
+    id: 'cboard.components.Settings.EyeTracking.deviceRegisterFailed',
+    defaultMessage: 'Failed to register device'
   }
 });
 

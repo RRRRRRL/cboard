@@ -849,7 +849,7 @@ class CommunicatorDialogBoardItem extends React.Component {
                 <div>
                   <IconButton
                     disabled={
-                      communicator.boards.includes(board.id) ||
+                      (Array.isArray(communicator.boards) && communicator.boards.includes(board.id)) ||
                       (userData && userData.email === board.email)
                     }
                     onClick={this.handleBoardCopyOpen.bind(this)}
@@ -924,7 +924,7 @@ class CommunicatorDialogBoardItem extends React.Component {
                   <IconButton
                     disabled={communicator.rootBoard === board.id}
                     label={
-                      communicator.boards.includes(board.id)
+                      (Array.isArray(communicator.boards) && communicator.boards.includes(board.id))
                         ? intl.formatMessage(messages.removeBoard)
                         : intl.formatMessage(messages.addBoard)
                     }
@@ -932,7 +932,7 @@ class CommunicatorDialogBoardItem extends React.Component {
                       addOrRemoveBoard(board);
                     }}
                   >
-                    {communicator.boards.includes(board.id) ? (
+                    {(Array.isArray(communicator.boards) && communicator.boards.includes(board.id)) ? (
                       <ClearIcon />
                     ) : (
                       <InputIcon />

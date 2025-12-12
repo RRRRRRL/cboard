@@ -2,47 +2,31 @@ import { defineMessages } from 'react-intl';
 
 export default defineMessages({
   title: {
-    id: 'textToImage.title',
-    defaultMessage: 'Generate Image from Text'
+    id: 'cboard.components.TextToImage.title',
+    defaultMessage: 'Search Image by Keywords'
   },
   textLabel: {
-    id: 'textToImage.textLabel',
-    defaultMessage: 'Text'
+    id: 'cboard.components.TextToImage.textLabel',
+    defaultMessage: 'Keywords'
   },
   textPlaceholder: {
-    id: 'textToImage.textPlaceholder',
-    defaultMessage: 'Enter text to generate image...'
+    id: 'cboard.components.TextToImage.textPlaceholder',
+    defaultMessage: 'Enter keywords (e.g., ocean sunset)...'
   },
-  widthLabel: {
-    id: 'textToImage.widthLabel',
-    defaultMessage: 'Width (px)'
-  },
-  heightLabel: {
-    id: 'textToImage.heightLabel',
-    defaultMessage: 'Height (px)'
-  },
-  fontSizeLabel: {
-    id: 'textToImage.fontSizeLabel',
-    defaultMessage: 'Font Size'
-  },
-  backgroundColorLabel: {
-    id: 'textToImage.backgroundColorLabel',
-    defaultMessage: 'Background Color'
-  },
-  textColorLabel: {
-    id: 'textToImage.textColorLabel',
-    defaultMessage: 'Text Color'
+  helperText: {
+    id: 'cboard.components.TextToImage.helperText',
+    defaultMessage: "Enter keywords to search for an image (e.g., 'ocean sunset')"
   },
   generate: {
-    id: 'textToImage.generate',
+    id: 'cboard.components.TextToImage.generate',
     defaultMessage: 'Generate'
   },
   generating: {
-    id: 'textToImage.generating',
+    id: 'cboard.components.TextToImage.generating',
     defaultMessage: 'Generating...'
   },
   cancel: {
-    id: 'textToImage.cancel',
+    id: 'cboard.components.TextToImage.cancel',
     defaultMessage: 'Cancel'
   }
 });

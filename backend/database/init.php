@@ -72,9 +72,10 @@ function getDB() {
     $conn = $db->getConnection();
     
     if ($conn === null) {
-        // Database not connected - this is OK for placeholder endpoints
-        // Return null instead of throwing error
-        return null;
+        // Database not connected - log error and throw exception
+        $config = require __DIR__ . '/../config/database.php';
+        error_log("Database connection failed. Host: {$config['host']}, Database: {$config['database']}, User: {$config['username']}");
+        throw new Exception("Database connection failed. Please check server configuration.");
     }
     
     return $conn;

@@ -159,23 +159,48 @@ class RateLimiter {
      * @return array [maxRequests, windowSeconds]
      */
     public static function getConfigForEndpoint($endpoint) {
+        $isDev = self::isDevelopment();
+        
         // Stricter limits for authentication endpoints
         if (strpos($endpoint, '/auth') !== false || strpos($endpoint, '/login') !== false) {
-            return [10, 60]; // 10 requests per minute
+            return $isDev ? [30, 60] : [10, 60]; // 30 req/min dev, 10 req/min prod
         }
         
-        // Stricter limits for registration
-        if (strpos($endpoint, '/register') !== false) {
-            return [5, 60]; // 5 requests per minute
+        // Stricter limits for user registration (not device registration)
+        if (strpos($endpoint, '/user/register') !== false || strpos($endpoint, '/register') === 0) {
+            return $isDev ? [20, 60] : [5, 60]; // 20 req/min dev, 5 req/min prod
+        }
+        
+        // Higher limits for device registration (needed for eye tracking setup)
+        if (strpos($endpoint, '/devices') !== false) {
+            return $isDev ? [200, 60] : [100, 60]; // 200 req/min dev, 100 req/min prod
+        }
+        
+        // Higher limits for games (interactive features)
+        if (strpos($endpoint, '/games') !== false) {
+            return $isDev ? [500, 60] : [200, 60]; // 500 req/min dev, 200 req/min prod
+        }
+        
+        // Higher limits for AI endpoints
+        if (strpos($endpoint, '/ai') !== false) {
+            return $isDev ? [300, 60] : [150, 60]; // 300 req/min dev, 150 req/min prod
         }
         
         // Moderate limits for TTS (resource-intensive)
         if (strpos($endpoint, '/tts') !== false) {
-            return [50, 60]; // 50 requests per minute
+            return $isDev ? [200, 60] : [50, 60]; // 200 req/min dev, 50 req/min prod
         }
         
-        // Default limits
-        return [100, 60]; // 100 requests per minute
+        // Default limits (higher for development)
+        return $isDev ? [500, 60] : [100, 60]; // 500 req/min dev, 100 req/min prod
+    }
+    
+    /**
+     * Check if running in development environment
+     */
+    private static function isDevelopment() {
+        $env = getenv('APP_ENV');
+        return $env !== 'production' && $env !== 'prod';
     }
 }
 

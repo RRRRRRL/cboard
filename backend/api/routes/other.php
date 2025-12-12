@@ -3,6 +3,8 @@
  * Other Routes Handlers (Location, Subscriber, Subscription, Analytics, GPT, Language, Login, Account)
  */
 
+require_once __DIR__ . '/../auth.php';
+
 function handleLocationRoutes($method, $pathParts, $data, $authToken) {
     // GET /location
     if ($method === 'GET' && count($pathParts) === 1) {

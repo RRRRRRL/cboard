@@ -9,6 +9,11 @@ require_once __DIR__ . '/../auth.php';
 function handleUserRoutes($method, $pathParts, $data, $authToken) {
     $db = getDB();
     
+    if ($db === null) {
+        error_log("Database connection failed in handleUserRoutes");
+        return errorResponse('Database connection failed. Please check server configuration.', 500);
+    }
+    
     // POST /user (registration)
     if ($method === 'POST' && count($pathParts) === 1) {
         $email = trim($data['email'] ?? '');
@@ -130,6 +135,14 @@ function handleUserRoutes($method, $pathParts, $data, $authToken) {
             ");
             $stmt->execute([$user['id']]);
             $boards = $stmt->fetchAll();
+            
+            // Ensure boards have 'id' field (use board_id as id for frontend compatibility)
+            foreach ($boards as &$board) {
+                $board['id'] = $board['board_id'];
+            }
+            unset($board);
+            
+            error_log("User login - Found " . count($boards) . " boards for user {$user['id']}");
             
             // Get user settings
             $stmt = $db->prepare("SELECT settings_data FROM settings WHERE user_id = ?");

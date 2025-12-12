@@ -51,6 +51,48 @@ function requireAuth($token) {
 }
 
 /**
+ * Require specific role(s)
+ * @param array|string $user User object from requireAuth
+ * @param string|array $requiredRoles Required role(s) - can be 'admin', ['admin', 'teacher'], etc.
+ * @return bool True if user has required role
+ */
+function requireRole($user, $requiredRoles) {
+    if (!$user || !isset($user['role'])) {
+        return false;
+    }
+    
+    $userRole = $user['role'];
+    
+    if (is_array($requiredRoles)) {
+        return in_array($userRole, $requiredRoles);
+    }
+    
+    return $userRole === $requiredRoles;
+}
+
+/**
+ * Require admin role
+ * @param array $user User object from requireAuth
+ * @return void Exits with 403 if not admin
+ */
+function requireAdmin($user) {
+    if (!requireRole($user, 'admin')) {
+        http_response_code(403);
+        echo json_encode(['success' => false, 'message' => 'Admin access required']);
+        exit;
+    }
+}
+
+/**
+ * Check if user is admin
+ * @param array $user User object
+ * @return bool
+ */
+function isAdmin($user) {
+    return requireRole($user, 'admin');
+}
+
+/**
  * Get pagination parameters
  */
 function getPaginationParams() {

@@ -181,6 +181,9 @@ function EyeTracking({
                   <MenuItem value={EYE_TRACKING_DEVICE_TYPES.PUPIL}>
                     <FormattedMessage {...messages.pupil} />
                   </MenuItem>
+                  <MenuItem value={EYE_TRACKING_DEVICE_TYPES.CAMERA}>
+                    <FormattedMessage {...messages.camera} />
+                  </MenuItem>
                   <MenuItem value={EYE_TRACKING_DEVICE_TYPES.CUSTOM}>
                     <FormattedMessage {...messages.custom} />
                   </MenuItem>

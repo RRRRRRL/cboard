@@ -211,7 +211,10 @@ export function verifyAndUpsertCommunicator(
       updatedCommunicatorData.author = userData.name;
       updatedCommunicatorData.email = userData.email;
       updatedCommunicatorData.id = shortid.generate();
-      updatedCommunicatorData.boards = [...communicator.boards];
+      // Ensure boards is an array before spreading
+      updatedCommunicatorData.boards = Array.isArray(communicator.boards)
+        ? [...communicator.boards]
+        : [];
 
       const hasValidDefaultBoardsIncluded = !!communicator.defaultBoardsIncluded
         ?.length;

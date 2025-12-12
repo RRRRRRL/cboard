@@ -69,6 +69,10 @@ export default defineMessages({
     id: 'cboard.components.Board.TileEditor.editImage',
     defaultMessage: 'Edit image'
   },
+  textToImage: {
+    id: 'cboard.components.Board.TileEditor.textToImage',
+    defaultMessage: 'Text to Image'
+  },
   loadFolderBoard: {
     id: 'cboard.components.Board.TileEditor.loadFolderBoard',
     defaultMessage: 'Link to an existing folder'

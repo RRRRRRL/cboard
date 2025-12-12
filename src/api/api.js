@@ -253,16 +253,26 @@ class API {
       throw new Error('Need to be authenticated to perform this request');
     }
 
-    const { email } = getUserData();
     const headers = {
       Authorization: `Bearer ${authToken}`
     };
 
     const query = getQueryParameters({ page, limit, offset, sort, search });
-    const url = `/board/byemail/${email}?${query}`;
+    // Use token-based endpoint instead of email-based (more secure, no email in URL)
+    const url = `/board/my?${query}`;
 
-    const { data } = await this.axiosInstance.get(url, { headers });
-    return data;
+    try {
+      const { data } = await this.axiosInstance.get(url, { headers });
+      return data;
+    } catch (error) {
+      console.error('getMyBoards error:', error);
+      // If it's a network error, provide more helpful message
+      if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
+        console.error('Network error - check API base URL and CORS settings');
+        throw new Error('Cannot connect to server. Please check your connection and API configuration.');
+      }
+      throw error;
+    }
   }
 
   async getCommunicators({
@@ -277,16 +287,26 @@ class API {
       throw new Error('Need to be authenticated to perform this request');
     }
 
-    const { email } = getUserData();
     const headers = {
       Authorization: `Bearer ${authToken}`
     };
 
     const query = getQueryParameters({ page, limit, offset, sort, search });
-    const url = `/communicator/byemail/${email}?${query}`;
+    // Use token-based endpoint instead of email-based (more secure, no email in URL)
+    const url = `/communicator/my?${query}`;
 
-    const { data } = await this.axiosInstance.get(url, { headers });
-    return data;
+    try {
+      const { data } = await this.axiosInstance.get(url, { headers });
+      return data;
+    } catch (error) {
+      console.error('getCommunicators error:', error);
+      // If it's a network error, provide more helpful message
+      if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
+        console.error('Network error - check API base URL and CORS settings');
+        throw new Error('Cannot connect to server. Please check your connection and API configuration.');
+      }
+      throw error;
+    }
   }
 
   async getBoard(id) {
@@ -650,27 +670,28 @@ class API {
   }
 
   async generateJyutpingAudio(audioData) {
+    // Audio endpoint doesn't require authentication for basic playback
+    // Authentication is optional for logging purposes
     const authToken = getAuthToken();
-    if (!(authToken && authToken.length)) {
-      throw new Error('Need to be authenticated to perform this request');
-    }
+    const headers = {};
 
-    const headers = {
-      Authorization: `Bearer ${authToken}`
-    };
+    if (authToken && authToken.length) {
+      headers.Authorization = `Bearer ${authToken}`;
+    }
 
     try {
       const { data } = await this.axiosInstance.post(
         `/jyutping/audio`,
         audioData,
         {
-          headers
+          headers: Object.keys(headers).length > 0 ? headers : undefined
         }
       );
       return data;
     } catch (err) {
-      console.error('Jyutping audio error:', err);
-      throw err;
+      // Silently fail for audio - it's optional logging
+      console.log('Jyutping audio logging failed (non-critical):', err.message);
+      return null;
     }
   }
 
@@ -695,6 +716,18 @@ class API {
       return data;
     } catch (err) {
       console.error('Jyutping learning log error:', err);
+      throw err;
+    }
+  }
+
+  async getRelatedWords(hanzi, jyutping) {
+    try {
+      const { data } = await this.axiosInstance.get(`/jyutping/related`, {
+        params: { hanzi, jyutping }
+      });
+      return data;
+    } catch (err) {
+      console.error('Related words error:', err);
       throw err;
     }
   }
@@ -815,12 +848,8 @@ class API {
   }
 
   async generateTextToImage({
-    text,
-    width = 400,
-    height = 400,
-    backgroundColor = '#FFFFFF',
-    textColor = '#000000',
-    fontSize = 24
+    query,
+    text // Support 'text' for backward compatibility, but prefer 'query'
   }) {
     const authToken = getAuthToken();
     if (!(authToken && authToken.length)) {
@@ -832,15 +861,16 @@ class API {
       'Content-Type': 'application/json'
     };
 
+    // Use 'query' if provided, otherwise fallback to 'text'
+    const searchQuery = query || text;
+    if (!searchQuery) {
+      throw new Error('query is required');
+    }
+
     const response = await this.axiosInstance.post(
       'media/text-to-image',
       {
-        text,
-        width,
-        height,
-        background_color: backgroundColor,
-        text_color: textColor,
-        font_size: fontSize
+        query: searchQuery
       },
       { headers }
     );
@@ -1081,6 +1111,893 @@ class API {
     } catch (error) {
       if (error.message !== 'canceled') console.error(error);
       return { phrase: '' };
+    }
+  }
+
+  // ============================================================================
+  // PROFILE TRANSFER (Sprint 8)
+  // ============================================================================
+
+  /**
+   * Export profile to JSON/OBF format
+   * @param {number} profileId - Profile ID to export
+   * @param {string} format - Export format ('json' or 'obf')
+   * @returns {Promise<Object>} Export data
+   */
+  async exportProfile(profileId, format = 'json') {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`,
+      'Content-Type': 'application/json'
+    };
+
+    try {
+      const response = await this.axiosInstance.post(
+        '/transfer/export',
+        { profile_id: profileId, format },
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Export profile error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Import profile from JSON/OBF format
+   * @param {Object} importData - Profile data to import
+   * @param {string} format - Import format ('json' or 'obf')
+   * @returns {Promise<Object>} Import result
+   */
+  async importProfile(importData, format = 'json') {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`,
+      'Content-Type': 'application/json'
+    };
+
+    try {
+      const response = await this.axiosInstance.post(
+        '/transfer/import',
+        { data: importData, format },
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Import profile error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Generate QR code for profile transfer
+   * @param {number} profileId - Profile ID to transfer
+   * @param {number} expiresIn - Expiration in hours (default 24)
+   * @returns {Promise<Object>} QR code data
+   */
+  async generateQRCode(profileId, expiresIn = 24) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`,
+      'Content-Type': 'application/json'
+    };
+
+    try {
+      const response = await this.axiosInstance.post(
+        '/transfer/qr/generate',
+        { profile_id: profileId, expires_in: expiresIn },
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Generate QR code error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Redeem QR token to import profile
+   * @param {string} token - QR token
+   * @returns {Promise<Object>} Import result
+   */
+  async redeemQRToken(token) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`,
+      'Content-Type': 'application/json'
+    };
+
+    try {
+      const response = await this.axiosInstance.post(
+        '/transfer/qr/redeem',
+        { token },
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Redeem QR token error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Generate cloud code for profile transfer
+   * @param {number} profileId - Profile ID to transfer
+   * @param {number} expiresIn - Expiration in hours (default 168 = 7 days)
+   * @returns {Promise<Object>} Cloud code
+   */
+  async generateCloudCode(profileId, expiresIn = 168) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`,
+      'Content-Type': 'application/json'
+    };
+
+    try {
+      const response = await this.axiosInstance.post(
+        '/transfer/cloud/generate',
+        { profile_id: profileId, expires_in: expiresIn },
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Generate cloud code error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Redeem cloud code to import profile
+   * @param {string} code - Cloud code (e.g., "ABC-123-XYZ")
+   * @returns {Promise<Object>} Import result
+   */
+  async redeemCloudCode(code) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`,
+      'Content-Type': 'application/json'
+    };
+
+    try {
+      const response = await this.axiosInstance.post(
+        '/transfer/cloud/redeem',
+        { code },
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Redeem cloud code error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Generate email ZIP transfer
+   * @param {number} profileId - Profile ID to transfer
+   * @param {string} email - Recipient email
+   * @param {number} expiresIn - Expiration in hours (default 168 = 7 days)
+   * @returns {Promise<Object>} Transfer result
+   */
+  async generateEmailTransfer(profileId, email, expiresIn = 168) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`,
+      'Content-Type': 'application/json'
+    };
+
+    try {
+      const response = await this.axiosInstance.post(
+        '/transfer/email/generate',
+        { profile_id: profileId, email, expires_in: expiresIn },
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Generate email transfer error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Validate transfer token
+   * @param {string} token - Transfer token
+   * @returns {Promise<Object>} Validation result
+   */
+  async validateTransferToken(token) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    try {
+      const response = await this.axiosInstance.get(
+        `/transfer/validate/${token}`,
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Validate transfer token error:', error);
+      throw error;
+    }
+  }
+
+  // ============================================================================
+  // ACTION LOGS (Sprint 12)
+  // ============================================================================
+
+  /**
+   * Get action logs with filters
+   * @param {Object} filters - Filter options (profile_id, action_type, start_date, end_date, limit, offset)
+   * @returns {Promise<Object>} Logs data
+   */
+  async getLogs(filters = {}) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    try {
+      const params = new URLSearchParams();
+      Object.keys(filters).forEach(key => {
+        if (filters[key] !== null && filters[key] !== undefined) {
+          params.append(key, filters[key]);
+        }
+      });
+
+      const response = await this.axiosInstance.get(
+        `/action-logs?${params.toString()}`,
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Get logs error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Export action logs to Excel/CSV
+   * @param {Object} filters - Filter options (profile_id, start_date, end_date)
+   * @returns {Promise<Blob>} Excel/CSV file blob
+   */
+  async exportLogs(filters = {}) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    try {
+      const params = new URLSearchParams();
+      Object.keys(filters).forEach(key => {
+        if (filters[key] !== null && filters[key] !== undefined) {
+          params.append(key, filters[key]);
+        }
+      });
+
+      const response = await this.axiosInstance.get(
+        `/action-logs/export?${params.toString()}`,
+        { headers, responseType: 'blob' }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Export logs error:', error);
+      throw error;
+    }
+  }
+
+  // ============================================================================
+  // AI FUNCTIONALITY (Sprint 9-10)
+  // ============================================================================
+
+  /**
+   * Get AI card suggestions
+   * @param {string} context - Context text
+   * @param {number} profileId - Profile ID
+   * @param {number} limit - Number of suggestions
+   * @returns {Promise<Object>} Suggestions data
+   */
+  async getAISuggestions(context, profileId, limit = 10) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`,
+      'Content-Type': 'application/json'
+    };
+
+    try {
+      const response = await this.axiosInstance.post(
+        '/ai/suggest-cards',
+        { context, profile_id: profileId, limit },
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Get AI suggestions error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get typing predictions
+   * @param {string} input - Current typed text
+   * @param {string} language - Language code
+   * @param {number} limit - Number of predictions
+   * @returns {Promise<Object>} Predictions data
+   */
+  async getTypingPredictions(input, language = 'en', limit = 5) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`,
+      'Content-Type': 'application/json'
+    };
+
+    try {
+      const response = await this.axiosInstance.post(
+        '/ai/typing-prediction',
+        { input, language, limit },
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Get typing predictions error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get Jyutping predictions
+   * @param {string} input - Partial Jyutping input
+   * @param {number} limit - Number of predictions
+   * @returns {Promise<Object>} Predictions data
+   */
+  async getJyutpingPredictions(input, limit = 10) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`,
+      'Content-Type': 'application/json'
+    };
+
+    try {
+      const response = await this.axiosInstance.post(
+        '/ai/jyutping-prediction',
+        { input, limit },
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Get Jyutping predictions error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update adaptive learning data
+   * @param {number} profileId - Profile ID
+   * @param {number} cardId - Card ID
+   * @param {string} difficulty - Difficulty level
+   * @param {string} performance - Performance ('correct', 'incorrect', 'skipped')
+   * @returns {Promise<Object>} Update result
+   */
+  async updateAdaptiveLearning(profileId, cardId, difficulty, performance) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`,
+      'Content-Type': 'application/json'
+    };
+
+    try {
+      const response = await this.axiosInstance.post(
+        '/ai/adaptive-learning',
+        { profile_id: profileId, card_id: cardId, difficulty, performance },
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Update adaptive learning error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get learning statistics
+   * @param {number} profileId - Optional profile ID
+   * @returns {Promise<Object>} Learning stats
+   */
+  async getLearningStats(profileId = null) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    try {
+      const params = profileId ? `?profile_id=${profileId}` : '';
+      const response = await this.axiosInstance.get(
+        `/ai/learning-stats${params}`,
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Get learning stats error:', error);
+      throw error;
+    }
+  }
+
+  // ============================================================================
+  // LEARNING GAMES (Sprint 11)
+  // ============================================================================
+
+  /**
+   * Get spelling game questions
+   * @param {string} difficulty - Difficulty level ('easy', 'medium', 'hard')
+   * @param {number} limit - Number of questions
+   * @returns {Promise<Object>} Game questions
+   */
+  async getSpellingGame(difficulty = 'medium', limit = 10) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    try {
+      const response = await this.axiosInstance.get(
+        `/games/spelling?difficulty=${difficulty}&limit=${limit}`,
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Get spelling game error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get matching game
+   * @param {string} type - Game type ('word-picture' or 'jyutping-picture')
+   * @param {number} limit - Number of pairs
+   * @returns {Promise<Object>} Game data
+   */
+  async getMatchingGame(type = 'word-picture', limit = 8) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    try {
+      const response = await this.axiosInstance.get(
+        `/games/matching?type=${type}&limit=${limit}`,
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Get matching game error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Submit game result
+   * @param {string} gameType - Game type
+   * @param {number} score - Score achieved
+   * @param {number} totalQuestions - Total questions
+   * @param {number} timeSpent - Time spent in seconds
+   * @param {string} difficulty - Difficulty level
+   * @returns {Promise<Object>} Submit result
+   */
+  async submitGameResult(gameType, score, totalQuestions, timeSpent, difficulty = 'medium') {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`,
+      'Content-Type': 'application/json'
+    };
+
+    try {
+      const response = await this.axiosInstance.post(
+        '/games/submit',
+        { game_type: gameType, score, total_questions: totalQuestions, time_spent: timeSpent, difficulty },
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Submit game result error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get game history
+   * @param {string} gameType - Optional game type filter
+   * @param {number} limit - Number of records
+   * @returns {Promise<Object>} Game history
+   */
+  async getGameHistory(gameType = null, limit = 20) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    try {
+      const params = gameType ? `?game_type=${gameType}&limit=${limit}` : `?limit=${limit}`;
+      const response = await this.axiosInstance.get(
+        `/games/history${params}`,
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Get game history error:', error);
+      throw error;
+    }
+  }
+
+  // ============================================================================
+  // OCR TRANSLATOR (Sprint 11)
+  // ============================================================================
+
+  /**
+   * Recognize text from image using OCR
+   * @param {string} imageData - Base64 encoded image or image URL
+   * @param {string} imageUrl - Alternative: image URL
+   * @returns {Promise<Object>} OCR result
+   */
+  async recognizeImage(imageData = null, imageUrl = null) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`,
+      'Content-Type': 'application/json'
+    };
+
+    try {
+      const response = await this.axiosInstance.post(
+        '/ocr/recognize',
+        { image: imageData, image_url: imageUrl },
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('OCR recognize error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Convert Chinese text to Jyutping
+   * @param {string} text - Chinese text
+   * @returns {Promise<Object>} Conversion result
+   */
+  async convertToJyutping(text) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`,
+      'Content-Type': 'application/json'
+    };
+
+    try {
+      const response = await this.axiosInstance.post(
+        '/ocr/convert-to-jyutping',
+        { text },
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Convert to Jyutping error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Annotate image with Jyutping
+   * @param {string} imageData - Base64 encoded image or image URL
+   * @param {string} imageUrl - Alternative: image URL
+   * @param {Array} annotations - Array of annotation objects
+   * @returns {Promise<Object>} Annotation result
+   */
+  async annotateImage(imageData = null, imageUrl = null, annotations = []) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`,
+      'Content-Type': 'application/json'
+    };
+
+    try {
+      const response = await this.axiosInstance.post(
+        '/ocr/annotate',
+        { image: imageData, image_url: imageUrl, annotations },
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Annotate image error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get OCR translation history
+   * @param {number} limit - Number of records
+   * @param {number} offset - Offset for pagination
+   * @returns {Promise<Object>} History data
+   */
+  async getOCRHistory(limit = 20, offset = 0) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    try {
+      const response = await this.axiosInstance.get(
+        `/ocr/history?limit=${limit}&offset=${offset}`,
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Get OCR history error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete OCR history entry
+   * @param {number} historyId - History entry ID
+   * @returns {Promise<Object>} Delete result
+   */
+  async deleteOCRHistory(historyId) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    try {
+      const response = await this.axiosInstance.delete(
+        `/ocr/history/${historyId}`,
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Delete OCR history error:', error);
+      throw error;
+    }
+  }
+
+  // ============================================================================
+  // ADMIN PANEL (User Management)
+  // ============================================================================
+
+  /**
+   * Get all users (admin only)
+   * @param {Object} filters - Filter options (page, limit, search, role, is_active)
+   * @returns {Promise<Object>} Users data with pagination
+   */
+  async getAdminUsers(filters = {}) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    try {
+      const params = new URLSearchParams();
+      Object.keys(filters).forEach(key => {
+        if (filters[key] !== null && filters[key] !== undefined) {
+          params.append(key, filters[key]);
+        }
+      });
+
+      const response = await this.axiosInstance.get(
+        `/admin/users?${params.toString()}`,
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Get admin users error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get user details (admin only)
+   * @param {number} userId - User ID
+   * @returns {Promise<Object>} User details
+   */
+  async getAdminUser(userId) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    try {
+      const response = await this.axiosInstance.get(
+        `/admin/users/${userId}`,
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Get admin user error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update user (admin only)
+   * @param {number} userId - User ID
+   * @param {Object} userData - User data to update (name, role, is_active, is_verified, password)
+   * @returns {Promise<Object>} Update result
+   */
+  async updateAdminUser(userId, userData) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`,
+      'Content-Type': 'application/json'
+    };
+
+    try {
+      const response = await this.axiosInstance.put(
+        `/admin/users/${userId}`,
+        userData,
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Update admin user error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete/deactivate user (admin only)
+   * @param {number} userId - User ID
+   * @returns {Promise<Object>} Delete result
+   */
+  async deleteAdminUser(userId) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    try {
+      const response = await this.axiosInstance.delete(
+        `/admin/users/${userId}`,
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Delete admin user error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get admin statistics (admin only)
+   * @returns {Promise<Object>} Statistics data
+   */
+  async getAdminStatistics() {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    try {
+      const response = await this.axiosInstance.get(
+        '/admin/statistics',
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Get admin statistics error:', error);
+      throw error;
     }
   }
 }

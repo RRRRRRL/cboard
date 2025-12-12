@@ -5,18 +5,74 @@
  * This is the main API router that handles all incoming requests
  */
 
+// CORS Configuration
+// Get the origin from the request
+$origin = $_SERVER['HTTP_ORIGIN'] ?? null;
+
+// If no origin header, try to extract from referer
+if (!$origin && isset($_SERVER['HTTP_REFERER'])) {
+    $referer = $_SERVER['HTTP_REFERER'];
+    $parsed = parse_url($referer);
+    if ($parsed && isset($parsed['scheme']) && isset($parsed['host'])) {
+        $origin = $parsed['scheme'] . '://' . $parsed['host'];
+        if (isset($parsed['port'])) {
+            $origin .= ':' . $parsed['port'];
+        }
+    }
+}
+
+// List of allowed origins (for production, specify exact origins)
+// For development, allow common localhost origins
+$allowedOrigins = [
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:3001',
+    'http://192.168.62.37',
+    'http://192.168.62.37:3000',
+    'https://aac.uplifor.org',
+    'https://www.aac.uplifor.org'
+];
+
+// If origin is in allowed list, use it; otherwise use wildcard (but without credentials)
+$corsOrigin = '*';
+$allowCredentials = false;
+
+if ($origin) {
+    if (in_array($origin, $allowedOrigins)) {
+        $corsOrigin = $origin;
+        $allowCredentials = true;
+    } elseif (preg_match('/^https?:\/\/localhost(:\d+)?$/', $origin) || 
+              preg_match('/^https?:\/\/127\.0\.0\.1(:\d+)?$/', $origin) ||
+              preg_match('/^https?:\/\/192\.168\.\d+\.\d+(:\d+)?$/', $origin)) {
+        // Allow any localhost, 127.0.0.1, or local network IP for development
+        $corsOrigin = $origin;
+        $allowCredentials = true;
+    }
+}
+
 // Set CORS headers
-header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Origin: ' . $corsOrigin);
 header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
 // Allow all common headers that frontend might send
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, request-id, requestOrigin, purchaseVersion, traceparent, tracestate, baggage');
-header('Access-Control-Allow-Credentials: true');
+if ($allowCredentials) {
+    header('Access-Control-Allow-Credentials: true');
+}
 header('Access-Control-Max-Age: 86400'); // Cache preflight for 24 hours
 
 // Handle preflight requests
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     header('Content-Type: application/json; charset=utf-8');
+    // Ensure all CORS headers are sent for preflight
+    header('Access-Control-Allow-Origin: ' . $corsOrigin);
+    header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
+    header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, request-id, requestOrigin, purchaseVersion, traceparent, tracestate, baggage');
+    if ($allowCredentials) {
+        header('Access-Control-Allow-Credentials: true');
+    }
+    header('Access-Control-Max-Age: 86400');
     exit;
 }
 
@@ -53,16 +109,26 @@ require_once __DIR__ . '/routes/tts.php';
 require_once __DIR__ . '/routes/scanning.php';
 require_once __DIR__ . '/routes/devices.php';
 require_once __DIR__ . '/routes/jyutping.php';
+require_once __DIR__ . '/routes/transfer.php';
+require_once __DIR__ . '/routes/ai.php';
+require_once __DIR__ . '/routes/games.php';
+require_once __DIR__ . '/routes/ocr.php';
+require_once __DIR__ . '/routes/admin.php';
 
 // Get request method and path
 $method = $_SERVER['REQUEST_METHOD'];
-$path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+$path = $_SERVER['REQUEST_URI'] ?? '/';
+$path = parse_url($path, PHP_URL_PATH) ?? '/';
+
+// Debug logging (can be removed in production)
+error_log("API Request: Method=$method, REQUEST_URI=" . ($_SERVER['REQUEST_URI'] ?? 'N/A') . ", Parsed Path=$path");
 
 // Skip uploads requests - these should be handled by router.php
 // If we reach here, it means router.php didn't catch it (server not started with router)
-if (strpos($path, '/uploads/') === 0 || strpos($path, '/api/uploads/') === 0) {
+if (strpos($path, '/uploads/') !== false || strpos($path, '/api/uploads/') !== false) {
     // Try to serve the file directly as fallback
     $filePath = str_replace('/api/uploads/', '/uploads/', $path);
+    $filePath = str_replace('/uploads/', '/uploads/', $filePath);
     $filePath = __DIR__ . '/..' . $filePath;
     
     if (file_exists($filePath)) {
@@ -73,7 +139,16 @@ if (strpos($path, '/uploads/') === 0 || strpos($path, '/api/uploads/') === 0) {
         header('Content-Type: ' . $mimeType);
         header('Content-Length: ' . filesize($filePath));
         header('Cache-Control: public, max-age=31536000');
-        header('Access-Control-Allow-Origin: *');
+        // Use the same CORS origin logic for file serving
+        $fileOrigin = $_SERVER['HTTP_ORIGIN'] ?? '*';
+        if (preg_match('/^https?:\/\/localhost(:\d+)?$/', $fileOrigin) || 
+            preg_match('/^https?:\/\/127\.0\.0\.1(:\d+)?$/', $fileOrigin) ||
+            preg_match('/^https?:\/\/192\.168\.\d+\.\d+(:\d+)?$/', $fileOrigin) ||
+            in_array($fileOrigin, $allowedOrigins)) {
+            header('Access-Control-Allow-Origin: ' . $fileOrigin);
+        } else {
+            header('Access-Control-Allow-Origin: *');
+        }
         readfile($filePath);
         exit;
     } else {
@@ -84,10 +159,17 @@ if (strpos($path, '/uploads/') === 0 || strpos($path, '/api/uploads/') === 0) {
     }
 }
 
-$path = str_replace('/api', '', $path); // Remove /api prefix if present
+// Remove /api prefix if present (handle both /api/route and /api/route/)
+$path = preg_replace('#^/api/?#', '', $path);
 $path = trim($path, '/');
-$pathParts = array_filter(explode('/', $path)); // Filter empty parts
+$pathParts = array_filter(explode('/', $path), function($part) { return $part !== ''; }); // Filter empty parts
 $pathParts = array_values($pathParts); // Re-index array
+
+// Debug logging
+error_log("API Route: PathParts=" . json_encode($pathParts) . ", Method=$method");
+
+// Debug logging
+error_log("API Route: PathParts=" . json_encode($pathParts));
 
 // Apply rate limiting (skip for OPTIONS requests)
 if ($method !== 'OPTIONS') {
@@ -133,11 +215,18 @@ try {
  */
 function routeRequest($method, $pathParts, $data, $authToken) {
     // Health check
-    if (empty($pathParts) || $pathParts[0] === '') {
+    if (empty($pathParts) || (isset($pathParts[0]) && $pathParts[0] === '')) {
         return ['status' => 200, 'data' => ['message' => 'Cboard API is running', 'version' => '1.0.0']];
     }
     
+    if (empty($pathParts) || !isset($pathParts[0])) {
+        return ['status' => 404, 'data' => ['success' => false, 'message' => 'Route not found', 'debug' => ['pathParts' => $pathParts]]];
+    }
+    
     $route = $pathParts[0];
+    
+    // Debug logging
+    error_log("Routing: method=$method, route=$route, pathParts=" . json_encode($pathParts));
     
     // User routes
     if ($route === 'user') {
@@ -242,6 +331,31 @@ function routeRequest($method, $pathParts, $data, $authToken) {
     // Jyutping routes (Sprint 7)
     if ($route === 'jyutping') {
         return handleJyutpingRoutes($method, $pathParts, $data, $authToken);
+    }
+    
+    // Transfer routes (Sprint 8)
+    if ($route === 'transfer') {
+        return handleTransferRoutes($method, $pathParts, $data, $authToken);
+    }
+    
+    // AI routes (Sprint 9-10)
+    if ($route === 'ai') {
+        return handleAIRoutes($method, $pathParts, $data, $authToken);
+    }
+    
+    // Games routes (Sprint 11)
+    if ($route === 'games') {
+        return handleGamesRoutes($method, $pathParts, $data, $authToken);
+    }
+    
+    // OCR routes (Sprint 11)
+    if ($route === 'ocr') {
+        return handleOCRRoutes($method, $pathParts, $data, $authToken);
+    }
+    
+    // Admin routes
+    if ($route === 'admin') {
+        return handleAdminRoutes($method, $pathParts, $data, $authToken);
     }
     
     // 404 - Route not found

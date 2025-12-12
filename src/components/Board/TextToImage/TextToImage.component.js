@@ -10,7 +10,6 @@ import TextField from '@material-ui/core/TextField';
 import CircularProgress from '@material-ui/core/CircularProgress';
 import Grid from '@material-ui/core/Grid';
 import Typography from '@material-ui/core/Typography';
-import ColorSelect from '../../UI/ColorSelect';
 import API from '../../../api';
 import { API_URL } from '../../../constants';
 import messages from './TextToImage.messages';
@@ -27,19 +26,8 @@ class TextToImage extends Component {
     super(props);
     this.state = {
       text: '',
-      width: 400,
-      height: 400,
-      backgroundColor: '#FFFFFF',
-      textColor: '#000000',
-      fontSize: 24,
       isGenerating: false,
       error: null
-    };
-    // Store original defaults for reset
-    this.defaults = {
-      width: 400,
-      height: 400,
-      fontSize: 24
     };
   }
 
@@ -48,11 +36,6 @@ class TextToImage extends Component {
     if (this.props.open && !prevProps.open) {
       this.setState({
         text: '',
-        width: 400,
-        height: 400,
-        backgroundColor: '#FFFFFF',
-        textColor: '#000000',
-        fontSize: 24,
         isGenerating: false,
         error: null
       });
@@ -63,144 +46,64 @@ class TextToImage extends Component {
     this.setState({ text: event.target.value });
   };
 
-  handleWidthChange = event => {
-    const inputValue = event.target.value;
-    // Allow empty string while typing
-    if (inputValue === '') {
-      this.setState({ width: '' });
-      return;
-    }
-    // Only parse if it's a valid number
-    const value = parseInt(inputValue, 10);
-    if (!isNaN(value)) {
-      this.setState({ width: Math.max(100, Math.min(2000, value)) });
-    }
-  };
-
-  handleWidthBlur = event => {
-    // Validate and set default on blur if empty or invalid
-    const value = parseInt(event.target.value, 10);
-    if (isNaN(value) || value < 100) {
-      this.setState({ width: 400 });
-    } else if (value > 2000) {
-      this.setState({ width: 2000 });
-    }
-  };
-
-  handleHeightChange = event => {
-    const inputValue = event.target.value;
-    // Allow empty string while typing
-    if (inputValue === '') {
-      this.setState({ height: '' });
-      return;
-    }
-    // Only parse if it's a valid number
-    const value = parseInt(inputValue, 10);
-    if (!isNaN(value)) {
-      this.setState({ height: Math.max(100, Math.min(2000, value)) });
-    }
-  };
-
-  handleHeightBlur = event => {
-    // Validate and set default on blur if empty or invalid
-    const value = parseInt(event.target.value, 10);
-    if (isNaN(value) || value < 100) {
-      this.setState({ height: 400 });
-    } else if (value > 2000) {
-      this.setState({ height: 2000 });
-    }
-  };
-
-  handleFontSizeChange = event => {
-    const inputValue = event.target.value;
-    // Allow empty string while typing
-    if (inputValue === '' || inputValue === null || inputValue === undefined) {
-      this.setState({ fontSize: '' });
-      return;
-    }
-    // Allow typing numbers - don't restrict while typing
-    // Store as string to allow partial input like "2" before "24"
-    this.setState({ fontSize: inputValue });
-  };
-
-  handleFontSizeBlur = event => {
-    // Validate and set default on blur if empty or invalid
-    const inputValue = event.target.value;
-    if (inputValue === '' || inputValue === null || inputValue === undefined) {
-      this.setState({ fontSize: 24 });
-      return;
-    }
-    const value = parseInt(inputValue, 10);
-    if (isNaN(value) || value < 10) {
-      this.setState({ fontSize: 24 });
-    } else if (value > 200) {
-      this.setState({ fontSize: 200 });
-    } else {
-      // Ensure it's stored as a number for consistency
-      this.setState({ fontSize: value });
-    }
-  };
-
-  handleBackgroundColorChange = event => {
-    this.setState({ backgroundColor: event.target.value });
-  };
-
-  handleTextColorChange = event => {
-    this.setState({ textColor: event.target.value });
-  };
-
   handleGenerate = async () => {
-    let { text, width, height, backgroundColor, textColor, fontSize } = this.state;
+    const { text } = this.state;
     const { onImageGenerated, onClose } = this.props;
 
     if (!text || text.trim().length === 0) {
-      this.setState({ error: 'Text is required' });
+      this.setState({ error: 'Keywords are required' });
       return;
     }
-
-    // Ensure numeric values are numbers (handle string inputs)
-    width = typeof width === 'string' ? (width === '' ? 400 : parseInt(width, 10) || 400) : width || 400;
-    height = typeof height === 'string' ? (height === '' ? 400 : parseInt(height, 10) || 400) : height || 400;
-    fontSize = typeof fontSize === 'string' ? (fontSize === '' ? 24 : parseInt(fontSize, 10) || 24) : fontSize || 24;
-    
-    // Clamp values to valid ranges
-    width = Math.max(100, Math.min(2000, width));
-    height = Math.max(100, Math.min(2000, height));
-    fontSize = Math.max(10, Math.min(200, fontSize));
 
     this.setState({ isGenerating: true, error: null });
 
     try {
       const imageUrl = await API.generateTextToImage({
-        text: text.trim(),
-        width,
-        height,
-        backgroundColor,
-        textColor,
-        fontSize
+        query: text.trim()
       });
 
       // Convert relative URL to absolute if needed
-      // Backend returns: "uploads/user_1/filename.png" (no leading slash)
-      // We need: "http://localhost:8000/uploads/user_1/filename.png"
+      // Backend returns: "api/uploads/user_1/filename.png" or "uploads/user_1/filename.png"
+      // We need: "http://192.168.62.37/api/uploads/user_1/filename.png" (through nginx)
       let fullUrl = imageUrl;
       if (!imageUrl.startsWith('http')) {
         // Remove any leading slash
         const cleanUrl = imageUrl.replace(/^\/+/, '');
         
-        // For uploads, serve directly from backend root (not through /api)
-        if (cleanUrl.startsWith('uploads/')) {
-          // Extract just the protocol and host from API_URL
-          // API_URL is "http://localhost:8000/api" or "http://localhost:8000/api/"
-          // We want: "http://localhost:8000"
+        // For uploads, construct URL properly
+        if (cleanUrl.startsWith('api/uploads/') || cleanUrl.startsWith('uploads/')) {
+          // Extract base URL from API_URL
+          // API_URL is "http://192.168.62.37/api" or "http://192.168.62.37/api/"
+          // We want: "http://192.168.62.37"
           try {
             const apiUrlObj = new URL(API_URL);
             const baseUrl = `${apiUrlObj.protocol}//${apiUrlObj.host}`;
-            fullUrl = `${baseUrl}/${cleanUrl}`;
+            
+            // If cleanUrl already starts with 'api/uploads/', use it directly
+            // If it starts with 'uploads/', add 'api/' prefix
+            let urlPath = cleanUrl;
+            if (urlPath.startsWith('uploads/') && !urlPath.startsWith('api/uploads/')) {
+              urlPath = 'api/' + urlPath;
+            }
+            
+            // baseUrl is "http://192.168.62.37", urlPath is "api/uploads/..."
+            fullUrl = `${baseUrl}/${urlPath}`;
           } catch (e) {
-            // Fallback: remove /api and trailing slashes
-            const baseUrl = API_URL.replace(/\/api.*$/, '').replace(/\/+$/, '');
-            fullUrl = `${baseUrl}/${cleanUrl}`;
+            // Fallback: use API_URL and append cleanUrl
+            // API_URL is "http://192.168.62.37/api/" (with trailing slash)
+            // If cleanUrl already starts with 'api/uploads/', remove 'api/' from it first
+            // because API_URL already contains '/api'
+            let urlPath = cleanUrl;
+            if (urlPath.startsWith('api/uploads/')) {
+              // Remove 'api/' prefix since API_URL already has '/api'
+              urlPath = urlPath.replace(/^api\//, '');
+            } else if (urlPath.startsWith('uploads/')) {
+              // Keep as is, API_URL will provide the '/api' prefix
+              // urlPath stays as 'uploads/...'
+            }
+            
+            // API_URL already ends with '/', so just append urlPath
+            fullUrl = `${API_URL.replace(/\/+$/, '')}/${urlPath}`;
           }
         } else {
           // For other URLs, use API_URL
@@ -220,11 +123,32 @@ class TextToImage extends Component {
       onClose();
     } catch (error) {
       console.error('Text-to-image generation error:', error);
+      
+      // Extract error message from response
+      let errorMessage = 'Failed to generate image. Please try again.';
+      
+      if (error.response?.data) {
+        // Backend returned structured error
+        if (error.response.data.message) {
+          errorMessage = error.response.data.message;
+        } else if (typeof error.response.data === 'string') {
+          errorMessage = error.response.data;
+        } else if (error.response.data.error) {
+          errorMessage = error.response.data.error;
+        }
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      // Provide more helpful messages based on status code
+      if (error.response?.status === 503) {
+        errorMessage = errorMessage || 'The image search service is currently unavailable. Please try again later or use a different search term.';
+      } else if (error.response?.status === 500) {
+        errorMessage = errorMessage || 'An error occurred on the server. Please try again later.';
+      }
+      
       this.setState({
-        error:
-          error.response?.data?.message ||
-          error.message ||
-          'Failed to generate image. Please try again.',
+        error: errorMessage,
         isGenerating: false
       });
     }
@@ -238,11 +162,6 @@ class TextToImage extends Component {
     const { open, intl } = this.props;
     const {
       text,
-      width,
-      height,
-      backgroundColor,
-      textColor,
-      fontSize,
       isGenerating,
       error
     } = this.state;
@@ -260,75 +179,10 @@ class TextToImage extends Component {
                 value={text}
                 onChange={this.handleTextChange}
                 fullWidth
-                multiline
-                minRows={3}
                 placeholder={intl.formatMessage(messages.textPlaceholder)}
                 variant="outlined"
                 disabled={isGenerating}
-              />
-            </Grid>
-
-            <Grid item xs={6}>
-              <TextField
-                label={intl.formatMessage(messages.widthLabel)}
-                type="number"
-                value={width}
-                onChange={this.handleWidthChange}
-                onBlur={this.handleWidthBlur}
-                fullWidth
-                variant="outlined"
-                inputProps={{ min: 100, max: 2000 }}
-                disabled={isGenerating}
-              />
-            </Grid>
-
-            <Grid item xs={6}>
-              <TextField
-                label={intl.formatMessage(messages.heightLabel)}
-                type="number"
-                value={height}
-                onChange={this.handleHeightChange}
-                onBlur={this.handleHeightBlur}
-                fullWidth
-                variant="outlined"
-                inputProps={{ min: 100, max: 2000 }}
-                disabled={isGenerating}
-              />
-            </Grid>
-
-            <Grid item xs={12}>
-              <TextField
-                label={intl.formatMessage(messages.fontSizeLabel)}
-                type="number"
-                value={fontSize === '' ? '' : fontSize}
-                onChange={this.handleFontSizeChange}
-                onBlur={this.handleFontSizeBlur}
-                fullWidth
-                variant="outlined"
-                inputProps={{ min: 10, max: 200, step: 1 }}
-                disabled={isGenerating}
-              />
-            </Grid>
-
-            <Grid item xs={6}>
-              <Typography variant="body2" gutterBottom>
-                <FormattedMessage {...messages.backgroundColorLabel} />
-              </Typography>
-              <ColorSelect
-                selectedColor={backgroundColor}
-                defaultColor="#FFFFFF"
-                onChange={this.handleBackgroundColorChange}
-              />
-            </Grid>
-
-            <Grid item xs={6}>
-              <Typography variant="body2" gutterBottom>
-                <FormattedMessage {...messages.textColorLabel} />
-              </Typography>
-              <ColorSelect
-                selectedColor={textColor}
-                defaultColor="#000000"
-                onChange={this.handleTextColorChange}
+                helperText={intl.formatMessage(messages.helperText)}
               />
             </Grid>
 

@@ -14,6 +14,13 @@ import Scanning from './Scanning';
 import Navigation from './Navigation';
 import Help from './Help';
 import Symbols from './Symbols';
+import EyeTracking from './EyeTracking';
+import Transfer from './Transfer';
+import LogViewer from './LogViewer';
+import AdminPanel from './AdminPanel';
+import LearningGames from './LearningGames';
+import OCRTranslator from './OCRTranslator';
+import AIFeatures from './AIFeatures';
 
 const SettingsWrapper = ({ match }) => (
   <Fragment>
@@ -31,6 +38,13 @@ const SettingsWrapper = ({ match }) => (
       <Route path={`${match.url}/scanning`} component={Scanning} />
       <Route path={`${match.url}/navigation`} component={Navigation} />
       <Route path={`${match.url}/symbols`} component={Symbols} />
+      <Route path={`${match.url}/eyetracking`} component={EyeTracking} />
+      <Route path={`${match.url}/transfer`} component={Transfer} />
+      <Route path={`${match.url}/log-viewer`} component={LogViewer} />
+      <Route path={`${match.url}/admin`} component={AdminPanel} />
+      <Route path={`${match.url}/learning-games`} component={LearningGames} />
+      <Route path={`${match.url}/ocr-translator`} component={OCRTranslator} />
+      <Route path={`${match.url}/ai-features`} component={AIFeatures} />
     </Switch>
   </Fragment>
 );

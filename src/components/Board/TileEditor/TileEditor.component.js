@@ -721,7 +721,7 @@ export class TileEditor extends Component {
                       onClick={this.handleTextToImageOpen}
                       style={{ marginTop: '8px' }}
                     >
-                      {intl.formatMessage(messages.textToImage || { id: 'textToImage', defaultMessage: 'Text to Image' })}
+                      {intl.formatMessage(messages.textToImage)}
                     </Button>
                   </div>
                   <div className="TileEditor__form-fields">

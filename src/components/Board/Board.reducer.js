@@ -112,13 +112,17 @@ function boardReducer(state = initialState, action) {
   state.boards = state.boards.filter(board => board !== null);
   switch (action.type) {
     case LOGIN_SUCCESS:
+      // Don't override activeBoardId if it's already set to a user board
+      // The login action will set it to the most recent user board after this
       let activeBoardId = state.activeBoardId;
       const userCommunicators = action.payload.communicators || [];
       const activeCommunicator = userCommunicators.length
         ? userCommunicators[userCommunicators.length - 1]
         : null;
 
-      if (activeCommunicator) {
+      // Only set rootBoard if activeBoardId is not already set
+      // This allows the login action to set it to a user board instead
+      if (activeCommunicator && !activeBoardId) {
         activeBoardId =
           activeCommunicator.rootBoard || initialState.activeBoardId;
       }
@@ -138,9 +142,31 @@ function boardReducer(state = initialState, action) {
         boards: action.boards
       };
     case ADD_BOARDS:
+      // Reconcile boards: replace existing boards with same ID, add new ones
+      const existingBoards = [...state.boards];
+      const newBoards = action.boards || [];
+      
+      // For each new board, either replace existing or add new
+      newBoards.forEach(newBoard => {
+        const existingIndex = existingBoards.findIndex(b => b.id === newBoard.id);
+        if (existingIndex >= 0) {
+          // Replace existing board with new one (which has tiles from server)
+          existingBoards[existingIndex] = reconcileBoards(existingBoards[existingIndex], newBoard);
+        } else {
+          // Add new board
+          existingBoards.push(newBoard);
+        }
+      });
+      
+      console.log('ADD_BOARDS - Boards after reconciliation:', {
+        totalBoards: existingBoards.length,
+        boardsWithTiles: existingBoards.filter(b => b.tiles && b.tiles.length > 0).length,
+        boardIds: existingBoards.map(b => ({ id: b.id, tilesCount: b.tiles?.length || 0 }))
+      });
+      
       return {
         ...state,
-        boards: state.boards.concat(action.boards)
+        boards: existingBoards
       };
     case CHANGE_BOARD:
       const taBoards = [...state.boards];

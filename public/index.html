@@ -15,7 +15,7 @@
       gap:
       data:;
   img-src * data:  filesystem:  blob:  ;
-  connect-src 'self' https://* http://* localhost:* 127.0.0.1:* api.localhost:* wss: ws: blob:;
+  connect-src 'self' https://* http://* localhost:* 127.0.0.1:* api.localhost:* http://192.168.62.37:* http://192.168.62.37:8000 http://192.168.62.37:80 wss: ws: blob:;
   ">
 
   <!--
@@ -46,6 +46,12 @@
   <link rel="apple-touch-icon" href="%PUBLIC_URL%/images/touch/apple-touch-icon.png">
   <link rel="apple-touch-icon" sizes="180x180" href="%PUBLIC_URL%/images/touch/touch-icon-iphone-retina.png">
   <link rel="apple-touch-icon" sizes="167x167" href="%PUBLIC_URL%/images/touch/touch-icon-ipad-retina.png">
+
+  <!-- WebGazer.js for camera-based eye tracking -->
+  <script src="https://webgazer.cs.brown.edu/webgazer.js" defer></script>
+  
+  <!-- Tesseract.js for client-side OCR -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/tesseract.min.js" defer></script>
 
   <!-- Color the status bar on mobile devices -->
   <meta name="theme-color" content="#000000">

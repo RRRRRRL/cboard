@@ -4,12 +4,13 @@ import Chip from '@material-ui/core/Chip';
 import CircularProgress from '@material-ui/core/CircularProgress';
 import './JyutpingKeyboard.css';
 
-const WordSuggestions = ({ suggestions, onSelect, isLoading }) => {
+const WordSuggestions = ({ suggestions, onSelect, isLoading, title = 'Suggestions' }) => {
   // Debug logging
   console.log('WordSuggestions render:', { 
     suggestionsCount: suggestions?.length || 0, 
     isLoading,
-    suggestions: suggestions 
+    suggestions: suggestions,
+    title
   });
 
   if (isLoading) {
@@ -28,7 +29,7 @@ const WordSuggestions = ({ suggestions, onSelect, isLoading }) => {
 
   return (
     <div className="WordSuggestions">
-      <div className="WordSuggestions__label">Suggestions:</div>
+      <div className="WordSuggestions__label">{title}:</div>
       <div className="WordSuggestions__list">
         {suggestions.map((suggestion, index) => {
           const displayText =
@@ -64,7 +65,8 @@ WordSuggestions.propTypes = {
     })
   ),
   onSelect: PropTypes.func.isRequired,
-  isLoading: PropTypes.bool
+  isLoading: PropTypes.bool,
+  title: PropTypes.string
 };
 
 WordSuggestions.defaultProps = {

@@ -184,11 +184,12 @@ export function changeDefaultBoard(selectedBoardNameOnJson) {
         communicator => communicator.id === activeCommunicatorId
       )[0];
 
+      const boardsArray = Array.isArray(activeCommunicator.boards) ? activeCommunicator.boards : [];
       const communicatorWithRootBoardReplaced = {
         ...activeCommunicator,
-        boards: activeCommunicator.boards.includes(homeBoardId)
-          ? activeCommunicator.boards
-          : [...activeCommunicator.boards, homeBoardId],
+        boards: boardsArray.includes(homeBoardId)
+          ? boardsArray
+          : [...boardsArray, homeBoardId],
         rootBoard: homeBoardId
       };
 
@@ -717,8 +718,23 @@ export function updateApiObjectsNoChild(
   return async (dispatch, getState) => {
     //create - update parent board
     const action = createParentBoard ? createApiBoard : updateApiBoard;
+    
+    console.log('updateApiObjectsNoChild - Saving board:', {
+      boardId: parentBoard.id,
+      boardName: parentBoard.name,
+      tilesCount: parentBoard.tiles?.length || 0,
+      createParentBoard,
+      action: createParentBoard ? 'CREATE' : 'UPDATE'
+    });
+    
     return await dispatch(action(parentBoard, parentBoard.id))
       .then(res => {
+        console.log('updateApiObjectsNoChild - Board saved:', {
+          originalId: parentBoard.id,
+          newId: res.id,
+          response: res
+        });
+        
         const updatedParentBoardId = res.id;
         //add new boards to the active communicator
         if (parentBoard.id !== updatedParentBoardId) {

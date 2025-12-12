@@ -63,6 +63,7 @@ export const APP_LANGS = [
   'uk-UA',
   'vi-VN',
   'zh-CN',
+  'zh-TW',
   'zu-ZA'
   // for crowdin contextual translation
 ];

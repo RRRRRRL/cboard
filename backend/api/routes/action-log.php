@@ -4,6 +4,8 @@
  * Sprint 4: Log card clicks, sentence composition, and communication actions
  */
 
+require_once __DIR__ . '/../auth.php';
+
 function handleActionLogRoutes($method, $pathParts, $data, $authToken) {
     $db = getDB();
     if (!$db) {
@@ -120,11 +122,30 @@ function handleActionLogRoutes($method, $pathParts, $data, $authToken) {
             $stmt->execute($params);
             $logs = $stmt->fetchAll();
             
-            // Decode metadata JSON
-            foreach ($logs as &$log) {
+            // Process logs: extract important info from metadata and format response
+            // Metadata is still included in response, but we extract key fields for easy display
+            $processedLogs = [];
+            foreach ($logs as $log) {
+                $metadata = null;
                 if ($log['metadata']) {
-                    $log['metadata'] = json_decode($log['metadata'], true);
+                    $metadata = json_decode($log['metadata'], true);
                 }
+                
+                // Extract important information from metadata for display
+                $processedLog = [
+                    'id' => (int)$log['id'],
+                    'created_at' => $log['created_at'],
+                    'action_type' => $log['action_type'],
+                    'sentence' => $metadata['sentence'] ?? $metadata['text'] ?? null,
+                    'device' => $metadata['device_type'] ?? $metadata['device'] ?? null,
+                    'score' => isset($metadata['score']) ? (int)$metadata['score'] : null,
+                    'game_type' => $metadata['game_type'] ?? $metadata['gameType'] ?? null,
+                    'total_questions' => isset($metadata['total_questions']) ? (int)$metadata['total_questions'] : null,
+                    'accuracy' => isset($metadata['accuracy']) ? (float)$metadata['accuracy'] : null,
+                    'metadata' => $metadata // Keep full metadata for export/advanced use
+                ];
+                
+                $processedLogs[] = $processedLog;
             }
             
             // Get total count
@@ -143,7 +164,7 @@ function handleActionLogRoutes($method, $pathParts, $data, $authToken) {
             $total = $stmt->fetch()['total'];
             
             return successResponse([
-                'logs' => $logs,
+                'logs' => $processedLogs,
                 'total' => (int)$total,
                 'limit' => $limit,
                 'offset' => $offset
@@ -195,20 +216,35 @@ function handleActionLogRoutes($method, $pathParts, $data, $authToken) {
             $stmt->execute($params);
             $logs = $stmt->fetchAll();
             
-            // Generate CSV
-            $csv = "Date,Time,Action Type,Profile,Card,Metadata\n";
+            // Generate CSV with important information (metadata still included in raw data)
+            $csv = "Date,Time,Action Type,Sentence,Device,Score,Game Type,Metadata\n";
             foreach ($logs as $log) {
                 $date = date('Y-m-d', strtotime($log['created_at']));
                 $time = date('H:i:s', strtotime($log['created_at']));
-                $metadata = $log['metadata'] ? json_encode(json_decode($log['metadata'], true)) : '';
+                
+                // Extract important info from metadata
+                $metadata = $log['metadata'] ? json_decode($log['metadata'], true) : [];
+                $sentence = $metadata['sentence'] ?? $metadata['text'] ?? '';
+                $device = $metadata['device_type'] ?? $metadata['device'] ?? '';
+                $score = '';
+                if (isset($metadata['score'])) {
+                    $score = isset($metadata['total_questions']) 
+                        ? $metadata['score'] . '/' . $metadata['total_questions']
+                        : (string)$metadata['score'];
+                }
+                $gameType = $metadata['game_type'] ?? $metadata['gameType'] ?? '';
+                $metadataJson = $log['metadata'] ? $log['metadata'] : '';
+                
                 $csv .= sprintf(
-                    "%s,%s,%s,%s,%s,%s\n",
+                    "%s,%s,%s,%s,%s,%s,%s,%s\n",
                     $date,
                     $time,
                     $log['action_type'],
-                    $log['profile_name'] ?? '',
-                    $log['card_title'] ?? '',
-                    $metadata
+                    $sentence,
+                    $device,
+                    $score,
+                    $gameType,
+                    $metadataJson
                 );
             }
             

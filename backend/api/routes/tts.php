@@ -4,6 +4,8 @@
  * Sprint 4: TTS integration for Cantonese + English voices
  */
 
+require_once __DIR__ . '/../auth.php';
+
 function handleTTSRoutes($method, $pathParts, $data, $authToken) {
     // GET /tts/voices (get available voices)
     if ($method === 'GET' && count($pathParts) === 2 && $pathParts[1] === 'voices') {

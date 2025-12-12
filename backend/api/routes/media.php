@@ -4,6 +4,8 @@
  * Sprint 3: File upload, image processing, compression
  */
 
+require_once __DIR__ . '/../auth.php';
+
 function handleMediaRoutes($method, $pathParts, $data, $authToken) {
     $user = requireAuth($authToken);
     
@@ -259,157 +261,266 @@ function handleMediaRoutes($method, $pathParts, $data, $authToken) {
         }
     }
     
-    // POST /media/text-to-image (text-to-image generator)
+    // POST /media/text-to-image (image search using photocen.com API)
     // Note: $pathParts includes 'media' as first element, so ['media', 'text-to-image']
     // Also handle if pathParts[0] is 'text-to-image' (in case routing is different)
     if ($method === 'POST' && (
         (count($pathParts) === 2 && isset($pathParts[1]) && $pathParts[1] === 'text-to-image') ||
         (count($pathParts) === 1 && isset($pathParts[0]) && $pathParts[0] === 'text-to-image')
     )) {
-        $text = $data['text'] ?? '';
-        $width = isset($data['width']) ? (int)$data['width'] : 400;
-        $height = isset($data['height']) ? (int)$data['height'] : 400;
-        $backgroundColor = $data['background_color'] ?? '#FFFFFF';
-        $textColor = $data['text_color'] ?? '#000000';
-        $fontSize = isset($data['font_size']) ? (int)$data['font_size'] : 24;
-        
-        if (empty($text)) {
-            return errorResponse('text is required', 400);
+        // Check if curl extension is available
+        if (!function_exists('curl_init')) {
+            error_log("cURL extension is not available");
+            return errorResponse('cURL extension is required for image search', 500);
         }
         
-        // Check if GD extension is available
-        if (!function_exists('imagecreatetruecolor')) {
-            return errorResponse('GD extension is not installed. Install with: sudo apt-get install php-gd', 500);
+        $query = $data['query'] ?? $data['text'] ?? ''; // Support both 'query' and 'text' for backward compatibility
+        
+        if (empty($query)) {
+            return errorResponse('query is required', 400);
+        }
+        
+        // Validate user exists
+        if (!isset($user['id'])) {
+            error_log("User ID not found in user object");
+            return errorResponse('User authentication error', 401);
         }
         
         try {
-            // Create image
-            $image = @imagecreatetruecolor($width, $height);
-            if (!$image) {
-                return errorResponse('Failed to create image resource', 500);
+            // Call photocen.com API to get image based on query/keywords
+            $photocenUrl = 'https://photocen.com/api.php';
+            $encodedQuery = urlencode($query);
+            
+            // Use GET method first (simpler and more reliable)
+            // Note: The API might be behind Cloudflare which could be blocking automated requests
+            $ch = curl_init();
+            curl_setopt_array($ch, [
+                CURLOPT_URL => $photocenUrl . '?query=' . $encodedQuery,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT => 20, // Increased timeout for slow responses
+                CURLOPT_CONNECTTIMEOUT => 10, // Increased connection timeout
+                CURLOPT_FOLLOWLOCATION => true,
+                CURLOPT_MAXREDIRS => 5,
+                CURLOPT_SSL_VERIFYPEER => true, // Enable SSL verification (proper setup)
+                CURLOPT_SSL_VERIFYHOST => 2, // Verify hostname
+                CURLOPT_USERAGENT => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36', // Realistic user agent
+                CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_2_0, // Try HTTP/2 (photocen.com supports it)
+                CURLOPT_HTTPHEADER => [
+                    'Accept: application/json, text/plain, */*',
+                    'Accept-Language: en-US,en;q=0.9',
+                    'Cache-Control: no-cache'
+                ]
+            ]);
+            
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $curlError = curl_error($ch);
+            $curlInfo = curl_getinfo($ch);
+            curl_close($ch);
+            
+            // Log detailed information for debugging
+            error_log("Photocen API call - Query: $query, HTTP Code: $httpCode, Response length: " . strlen($response));
+            if ($curlError) {
+                error_log("Photocen API curl error: " . $curlError);
             }
             
-            // Parse colors
-            $bgColor = hexToRgb($backgroundColor);
-            $txtColor = hexToRgb($textColor);
-            $bg = imagecolorallocate($image, $bgColor['r'], $bgColor['g'], $bgColor['b']);
-            $txt = imagecolorallocate($image, $txtColor['r'], $txtColor['g'], $txtColor['b']);
-            
-            imagefill($image, 0, 0, $bg);
-            
-            // Add text using TrueType font for better size control
-            // Try to use a system font, fallback to built-in font if not available
-            $fontPath = null;
-            $useTTF = false;
-            
-            // Common system font paths (try these in order)
-            // Prioritize fonts that support Chinese characters (Traditional Chinese)
-            $systemFonts = [
-                // Chinese-supporting fonts (Traditional Chinese) - try first
-                '/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc',
-                '/usr/share/fonts/truetype/noto/NotoSansCJKtc-Regular.otf',
-                '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
-                '/usr/share/fonts/truetype/arphic/uming.ttc', // AR PL UMing (Traditional Chinese)
-                '/usr/share/fonts/truetype/arphic/ukai.ttc', // AR PL UKai (Traditional Chinese)
-                '/usr/share/fonts/truetype/wqy/wqy-microhei.ttc', // WenQuanYi Micro Hei
-                '/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc', // WenQuanYi Zen Hei
-                '/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf', // Noto Sans (supports many languages)
-                // Windows Chinese fonts
-                'C:/Windows/Fonts/msjh.ttc', // Microsoft JhengHei (Traditional Chinese)
-                'C:/Windows/Fonts/msjhbd.ttc', // Microsoft JhengHei Bold
-                'C:/Windows/Fonts/mingliu.ttc', // MingLiU (Traditional Chinese)
-                'C:/Windows/Fonts/simsun.ttc', // SimSun (Simplified Chinese, but supports Traditional)
-                // macOS Chinese fonts
-                '/System/Library/Fonts/Supplemental/PingFang.ttc',
-                '/System/Library/Fonts/Supplemental/STHeiti Light.ttc',
-                // Fallback to general fonts (may not support Chinese)
-                '/usr/share/fonts/truetype/ubuntu/Ubuntu-R.ttf',
-                '/usr/share/fonts/truetype/ubuntu/Ubuntu-Regular.ttf',
-                '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
-                '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
-                '/System/Library/Fonts/Helvetica.ttc',
-                'C:/Windows/Fonts/arial.ttf',
-                __DIR__ . '/../../fonts/arial.ttf',
-                __DIR__ . '/../../fonts/DejaVuSans.ttf'
-            ];
-            
-            foreach ($systemFonts as $font) {
-                if (file_exists($font)) {
-                    $fontPath = $font;
-                    $useTTF = true;
-                    break;
-                }
-            }
-            
-            if ($useTTF && function_exists('imagettftext')) {
-                // Use TrueType font with actual fontSize
-                // Clamp fontSize to reasonable range for TTF (10-200)
-                $actualFontSize = max(10, min(200, (int)$fontSize));
+            // If GET fails, try POST method
+            if ($curlError || $httpCode !== 200) {
+                error_log("GET method failed, trying POST method...");
+                $postData = json_encode(['query' => $query]);
                 
-                // Calculate text bounding box to center it
-                // Note: For Chinese characters, we need to handle multi-byte strings properly
-                $bbox = imagettfbbox($actualFontSize, 0, $fontPath, $text);
-                if ($bbox && $bbox[0] !== false) {
-                    // Calculate text dimensions
-                    $textWidth = abs($bbox[4] - $bbox[0]);
-                    $textHeight = abs($bbox[5] - $bbox[1]);
-                    
-                    // Calculate baseline offset (negative value indicates distance above baseline)
-                    $baselineOffset = abs($bbox[7] - $bbox[1]);
-                    
-                    // Center the text
-                    // Note: imagettftext Y coordinate is baseline (bottom of text)
-                    $textX = ($width - $textWidth) / 2;
-                    $textY = ($height / 2) + ($textHeight / 2) - $baselineOffset;
-                    
-                    // Add text with TrueType font (supports Unicode including Chinese)
-                    imagettftext($image, $actualFontSize, 0, (int)$textX, (int)$textY, $txt, $fontPath, $text);
+                $ch = curl_init();
+                curl_setopt_array($ch, [
+                    CURLOPT_URL => $photocenUrl,
+                    CURLOPT_POST => true,
+                    CURLOPT_POSTFIELDS => $postData,
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_HTTPHEADER => [
+                        'Content-Type: application/json',
+                        'Accept: application/json',
+                        'Accept-Language: en-US,en;q=0.9',
+                        'Cache-Control: no-cache'
+                    ],
+                    CURLOPT_TIMEOUT => 20, // Increased timeout
+                    CURLOPT_CONNECTTIMEOUT => 10, // Increased connection timeout
+                    CURLOPT_FOLLOWLOCATION => true,
+                    CURLOPT_MAXREDIRS => 5,
+                    CURLOPT_SSL_VERIFYPEER => true, // Enable SSL verification
+                    CURLOPT_SSL_VERIFYHOST => 2, // Verify hostname
+                    CURLOPT_USERAGENT => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_2_0 // Try HTTP/2
+                ]);
+                
+                $response = curl_exec($ch);
+                $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                $curlError = curl_error($ch);
+                curl_close($ch);
+                
+                error_log("Photocen API POST - HTTP Code: $httpCode, Response length: " . strlen($response));
+            }
+            
+            if ($curlError || $httpCode !== 200) {
+                error_log("Photocen API error: HTTP $httpCode, " . ($curlError ?: 'Unknown error') . ", Response: " . substr($response, 0, 200));
+                
+                // Provide more helpful error message
+                if ($curlError && (strpos($curlError, 'timeout') !== false || strpos($curlError, 'timed out') !== false)) {
+                    return errorResponse('The image search service (photocen.com) is currently unavailable or taking too long to respond. The API may be down, blocked, or require authentication. Please try again later or contact support if the issue persists.', 503);
+                } elseif ($httpCode === 0) {
+                    return errorResponse('Unable to connect to image search service. The service may be down, unreachable, or blocked by firewall. Please check your network connection and try again.', 503);
                 } else {
-                    // Fallback if bbox calculation fails - estimate position
-                    // For Chinese text, estimate width based on character count
-                    $charCount = mb_strlen($text, 'UTF-8');
-                    $estimatedWidth = $charCount * ($actualFontSize * 0.6); // Approximate width per character
-                    $textX = ($width - $estimatedWidth) / 2;
-                    $textY = $height / 2 + $actualFontSize / 2; // Approximate center
-                    imagettftext($image, $actualFontSize, 0, (int)$textX, (int)$textY, $txt, $fontPath, $text);
+                    return errorResponse('Failed to fetch image from photocen.com: ' . ($curlError ?: "HTTP $httpCode. The API may not be publicly available or may require authentication."), 500);
                 }
+            }
+            
+            if (empty($response)) {
+                error_log("Photocen API returned empty response");
+                return errorResponse('Empty response from photocen.com API', 500);
+            }
+            
+            // Parse response - photocen.com returns JSON with image array
+            // Expected format: {"success": true, "result": [{"previewUrl": "...", "originalUrl": "..."}, ...]}
+            $imageUrl = null;
+            $imageData = null;
+            
+            // Trim whitespace from response
+            $response = trim($response);
+            
+            // Try to parse as JSON first
+            $jsonResponse = json_decode($response, true);
+            if (json_last_error() === JSON_ERROR_NONE && $jsonResponse) {
+                error_log("Photocen API returned JSON response");
+                
+                // Check if API returned success with results
+                if (isset($jsonResponse['success']) && $jsonResponse['success'] === true && isset($jsonResponse['result']) && is_array($jsonResponse['result']) && count($jsonResponse['result']) > 0) {
+                    // Get the first image from results
+                    $firstImage = $jsonResponse['result'][0];
+                    
+                    // Prefer originalUrl, fallback to previewUrl
+                    if (isset($firstImage['originalUrl']) && !empty($firstImage['originalUrl'])) {
+                        $imageUrl = $firstImage['originalUrl'];
+                        error_log("Using originalUrl from Photocen API: " . substr($imageUrl, 0, 100));
+                    } elseif (isset($firstImage['previewUrl']) && !empty($firstImage['previewUrl'])) {
+                        $imageUrl = $firstImage['previewUrl'];
+                        error_log("Using previewUrl from Photocen API: " . substr($imageUrl, 0, 100));
+                    } else {
+                        error_log("No URL found in first image result");
+                    }
+                } elseif (isset($jsonResponse['url'])) {
+                    // Fallback: direct URL in response
+                    $imageUrl = $jsonResponse['url'];
+                } elseif (isset($jsonResponse['image'])) {
+                    // Fallback: base64 image data
+                    $imageData = $jsonResponse['image'];
+                } elseif (isset($jsonResponse['data'])) {
+                    // Fallback: data field
+                    $imageData = $jsonResponse['data'];
+                } else {
+                    error_log("Photocen API JSON response format unexpected: " . substr($response, 0, 200));
+                }
+            } elseif (filter_var($response, FILTER_VALIDATE_URL)) {
+                // Response is a direct URL (not JSON)
+                error_log("Photocen API returned direct URL: " . substr($response, 0, 100));
+                $imageUrl = $response;
+            } elseif (preg_match('/^data:image\//', $response)) {
+                // Response is data URI
+                error_log("Photocen API returned data URI");
+                $imageData = $response;
+            } elseif (preg_match('/^https?:\/\//', $response)) {
+                // Response looks like a URL (even if filter_var failed)
+                error_log("Photocen API returned URL-like string: " . substr($response, 0, 100));
+                $imageUrl = $response;
             } else {
-                // Fallback to built-in font with better scaling
-                // Map fontSize (10-200) to font size 1-5, but use better formula
-                // fontSize 10-50 -> 1, 50-100 -> 2, 100-150 -> 3, 150-180 -> 4, 180-200 -> 5
-                if ($fontSize <= 50) {
-                    $fontSizeMapped = 1;
-                } elseif ($fontSize <= 100) {
-                    $fontSizeMapped = 2;
-                } elseif ($fontSize <= 150) {
-                    $fontSizeMapped = 3;
-                } elseif ($fontSize <= 180) {
-                    $fontSizeMapped = 4;
-                } else {
-                    $fontSizeMapped = 5;
+                // Check if response is binary image data
+                $imageMagicBytes = [
+                    "\xFF\xD8\xFF", // JPEG
+                    "\x89\x50\x4E\x47", // PNG
+                    "GIF87a", // GIF
+                    "GIF89a", // GIF
+                    "RIFF" // WebP
+                ];
+                
+                $isBinaryImage = false;
+                foreach ($imageMagicBytes as $magic) {
+                    if (substr($response, 0, strlen($magic)) === $magic) {
+                        $isBinaryImage = true;
+                        break;
+                    }
                 }
                 
-                $textX = ($width - strlen($text) * imagefontwidth($fontSizeMapped)) / 2;
-                $textY = ($height - imagefontheight($fontSizeMapped)) / 2;
-                imagestring($image, $fontSizeMapped, (int)$textX, (int)$textY, $text, $txt);
+                if ($isBinaryImage) {
+                    error_log("Photocen API returned binary image data");
+                    $imageData = $response;
+                } else {
+                    error_log("Photocen API response format unknown: " . substr($response, 0, 200));
+                }
             }
             
-            // Save to user directory
+            // If we got an image URL, download it
+            if ($imageUrl) {
+                error_log("Downloading image from URL: " . substr($imageUrl, 0, 100));
+                $ch = curl_init();
+                curl_setopt_array($ch, [
+                    CURLOPT_URL => $imageUrl,
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_TIMEOUT => 30,
+                    CURLOPT_CONNECTTIMEOUT => 10,
+                    CURLOPT_FOLLOWLOCATION => true,
+                    CURLOPT_MAXREDIRS => 5,
+                    CURLOPT_SSL_VERIFYPEER => false,
+                    CURLOPT_SSL_VERIFYHOST => false
+                ]);
+                $imageData = curl_exec($ch);
+                $imageHttpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                $imageCurlError = curl_error($ch);
+                curl_close($ch);
+                
+                if ($imageCurlError || $imageHttpCode !== 200 || !$imageData) {
+                    error_log("Failed to download image from photocen.com: HTTP $imageHttpCode, " . ($imageCurlError ?: 'No data') . ", URL: " . substr($imageUrl, 0, 100));
+                    return errorResponse('Failed to download image from photocen.com. HTTP ' . $imageHttpCode, 500);
+                }
+                
+                error_log("Successfully downloaded image, size: " . strlen($imageData) . " bytes");
+            }
+            
+            if (!$imageData) {
+                error_log("No image data available. imageUrl: " . ($imageUrl ? 'set' : 'null') . ", imageData: " . ($imageData ? 'set' : 'null'));
+                return errorResponse('No image data received from photocen.com. Please check server logs for details.', 500);
+            }
+            
+            // Save image to user directory
             $uploadDir = __DIR__ . '/../../uploads/user_' . $user['id'] . '/';
             if (!is_dir($uploadDir)) {
-                mkdir($uploadDir, 0755, true);
+                $created = @mkdir($uploadDir, 0755, true);
+                if (!$created) {
+                    error_log("Failed to create upload directory: $uploadDir");
+                    return errorResponse('Failed to create upload directory. Check permissions.', 500);
+                }
             }
             
-            $filename = 'text_' . uniqid() . '.png';
+            // Check if directory is writable
+            if (!is_writable($uploadDir)) {
+                error_log("Upload directory is not writable: $uploadDir");
+                return errorResponse('Upload directory is not writable. Check permissions.', 500);
+            }
+            
+            // Determine file extension from content or URL
+            $extension = 'jpg'; // Default
+            if ($imageUrl) {
+                $parsedUrl = parse_url($imageUrl);
+                $path = $parsedUrl['path'] ?? '';
+                if (preg_match('/\.(jpg|jpeg|png|gif|webp)$/i', $path, $matches)) {
+                    $extension = strtolower($matches[1]);
+                    if ($extension === 'jpeg') $extension = 'jpg';
+                }
+            }
+            
+            $filename = 'photocen_' . uniqid() . '.' . $extension;
             $filePath = $uploadDir . $filename;
             
-            // Save image
-            if (!@imagepng($image, $filePath)) {
-                imagedestroy($image);
+            // Save image data
+            if (file_put_contents($filePath, $imageData) === false) {
                 return errorResponse('Failed to save image file. Check directory permissions.', 500);
             }
-            
-            imagedestroy($image);
             
             // Verify file was created
             if (!file_exists($filePath)) {
@@ -417,23 +528,26 @@ function handleMediaRoutes($method, $pathParts, $data, $authToken) {
             }
             
             $fileSize = filesize($filePath);
-            // Return URL without leading slash - frontend will prepend API_URL
-            $fileUrl = 'uploads/user_' . $user['id'] . '/' . $filename;
+            // Return URL with /api/ prefix to ensure it works through nginx proxy
+            // Frontend will handle URL construction properly
+            $fileUrl = 'api/uploads/user_' . $user['id'] . '/' . $filename;
             
             // Save to database (optional - continue even if DB fails)
             if ($db) {
                 try {
+                    $mimeType = 'image/' . ($extension === 'jpg' ? 'jpeg' : $extension);
                     $stmt = $db->prepare("
                         INSERT INTO media (user_id, filename, original_filename, file_path, file_url, file_type, file_size, mime_type, created_at)
-                        VALUES (?, ?, ?, ?, ?, 'image', ?, 'image/png', NOW())
+                        VALUES (?, ?, ?, ?, ?, 'image', ?, ?, NOW())
                     ");
                     $stmt->execute([
                         $user['id'],
                         $filename,
-                        'text-to-image.png',
+                        'photocen-' . $query . '.' . $extension,
                         $filePath,
                         $fileUrl,
-                        $fileSize
+                        $fileSize,
+                        $mimeType
                     ]);
                 } catch (Exception $dbError) {
                     // File was created but DB insert failed - still return success with URL
@@ -446,15 +560,23 @@ function handleMediaRoutes($method, $pathParts, $data, $authToken) {
             return successResponse([
                 'url' => $fileUrl,
                 'filename' => $filename,
-                'text' => $text,
-                'width' => $width,
-                'height' => $height
+                'query' => $query
             ], 201);
             
-        } catch (Exception $e) {
-            error_log("Text-to-image error: " . $e->getMessage());
+        } catch (Throwable $e) {
+            // Catch both Exception and Error (PHP 7+)
+            error_log("Photocen API error: " . $e->getMessage());
+            error_log("Error type: " . get_class($e));
+            error_log("File: " . $e->getFile() . " Line: " . $e->getLine());
             error_log("Stack trace: " . $e->getTraceAsString());
-            return errorResponse('Text-to-image generation failed: ' . $e->getMessage(), 500);
+            
+            $errorMessage = 'Image search failed: ' . $e->getMessage();
+            return errorResponse($errorMessage, 500);
+        } catch (Exception $e) {
+            // Fallback for PHP < 7
+            error_log("Photocen API error: " . $e->getMessage());
+            error_log("Stack trace: " . $e->getTraceAsString());
+            return errorResponse('Image search failed: ' . $e->getMessage(), 500);
         }
     }
     
