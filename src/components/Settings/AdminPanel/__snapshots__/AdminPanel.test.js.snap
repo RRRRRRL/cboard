@@ -1,0 +1,141 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`AdminPanel tests default renderer 1`] = `
+<AdminPanel
+  classes={
+    Object {
+      "filterSection": "AdminPanel-filterSection-3 filterSection",
+      "formControl": "AdminPanel-formControl-1 formControl",
+      "roleChip": "AdminPanel-roleChip-6 roleChip",
+      "statCard": "AdminPanel-statCard-5 statCard",
+      "statsSection": "AdminPanel-statsSection-4 statsSection",
+      "tableContainer": "AdminPanel-tableContainer-2 tableContainer",
+    }
+  }
+  intl={
+    Object {
+      "formatMessage": [Function],
+    }
+  }
+  loading={false}
+  onClose={[MockFunction]}
+  onDeleteUser={[MockFunction]}
+  onLoadStatistics={[MockFunction]}
+  onLoadUsers={[MockFunction]}
+  onUpdateUser={[MockFunction]}
+  pagination={null}
+  statistics={null}
+  users={Array []}
+/>
+`;
+
+exports[`AdminPanel tests renders loading state 1`] = `
+<AdminPanel
+  classes={
+    Object {
+      "filterSection": "AdminPanel-filterSection-3 filterSection",
+      "formControl": "AdminPanel-formControl-1 formControl",
+      "roleChip": "AdminPanel-roleChip-6 roleChip",
+      "statCard": "AdminPanel-statCard-5 statCard",
+      "statsSection": "AdminPanel-statsSection-4 statsSection",
+      "tableContainer": "AdminPanel-tableContainer-2 tableContainer",
+    }
+  }
+  intl={
+    Object {
+      "formatMessage": [Function],
+    }
+  }
+  loading={true}
+  onClose={[MockFunction]}
+  onDeleteUser={[MockFunction]}
+  onLoadStatistics={[MockFunction]}
+  onLoadUsers={[MockFunction]}
+  onUpdateUser={[MockFunction]}
+  pagination={null}
+  statistics={null}
+  users={Array []}
+/>
+`;
+
+exports[`AdminPanel tests renders with statistics 1`] = `
+<AdminPanel
+  classes={
+    Object {
+      "filterSection": "AdminPanel-filterSection-3 filterSection",
+      "formControl": "AdminPanel-formControl-1 formControl",
+      "roleChip": "AdminPanel-roleChip-6 roleChip",
+      "statCard": "AdminPanel-statCard-5 statCard",
+      "statsSection": "AdminPanel-statsSection-4 statsSection",
+      "tableContainer": "AdminPanel-tableContainer-2 tableContainer",
+    }
+  }
+  intl={
+    Object {
+      "formatMessage": [Function],
+    }
+  }
+  loading={false}
+  onClose={[MockFunction]}
+  onDeleteUser={[MockFunction]}
+  onLoadStatistics={[MockFunction]}
+  onLoadUsers={[MockFunction]}
+  onUpdateUser={[MockFunction]}
+  pagination={null}
+  statistics={
+    Object {
+      "active_users": 80,
+      "recent_registrations": 10,
+      "total_profiles": 200,
+      "total_users": 100,
+    }
+  }
+  users={Array []}
+/>
+`;
+
+exports[`AdminPanel tests renders with users 1`] = `
+<AdminPanel
+  classes={
+    Object {
+      "filterSection": "AdminPanel-filterSection-3 filterSection",
+      "formControl": "AdminPanel-formControl-1 formControl",
+      "roleChip": "AdminPanel-roleChip-6 roleChip",
+      "statCard": "AdminPanel-statCard-5 statCard",
+      "statsSection": "AdminPanel-statsSection-4 statsSection",
+      "tableContainer": "AdminPanel-tableContainer-2 tableContainer",
+    }
+  }
+  intl={
+    Object {
+      "formatMessage": [Function],
+    }
+  }
+  loading={false}
+  onClose={[MockFunction]}
+  onDeleteUser={[MockFunction]}
+  onLoadStatistics={[MockFunction]}
+  onLoadUsers={[MockFunction]}
+  onUpdateUser={[MockFunction]}
+  pagination={
+    Object {
+      "limit": 20,
+      "page": 1,
+      "total": 1,
+    }
+  }
+  statistics={null}
+  users={
+    Array [
+      Object {
+        "created_at": "2024-01-01T00:00:00Z",
+        "email": "test@example.com",
+        "id": 1,
+        "is_active": 1,
+        "name": "Test User",
+        "role": "teacher",
+      },
+    ]
+  }
+/>
+`;

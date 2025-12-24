@@ -19,6 +19,49 @@ function handleOCRRoutes($method, $pathParts, $data, $authToken) {
         error_log("Database connection failed in handleOCRRoutes");
         return errorResponse('Database connection failed. Please check server configuration.', 500);
     }
+
+    /**
+     * Helper: persist an OCR image to the user uploads directory and return a relative API path.
+     * Output example: "api/uploads/user_1/ocr/ocr_64f8a1c2e3.png"
+     */
+    $saveOcrImage = function ($userId, $imageBinary, $extension = 'png') {
+        if (!$imageBinary) {
+            return null;
+        }
+
+        $userId = (int)$userId;
+        if ($userId <= 0) {
+            return null;
+        }
+
+        $uploadsRoot = __DIR__ . '/../../uploads';
+        $userDir     = $uploadsRoot . '/user_' . $userId;
+        $ocrDir      = $userDir . '/ocr';
+
+        if (!is_dir($userDir)) {
+            @mkdir($userDir, 0755, true);
+        }
+        if (!is_dir($ocrDir)) {
+            @mkdir($ocrDir, 0755, true);
+        }
+
+        if (!is_writable($ocrDir)) {
+            error_log("OCR uploads directory not writable: " . $ocrDir);
+            return null;
+        }
+
+        $extension = $extension ?: 'png';
+        $filename  = 'ocr_' . uniqid() . '.' . $extension;
+        $filePath  = $ocrDir . '/' . $filename;
+
+        if (file_put_contents($filePath, $imageBinary) === false) {
+            error_log("Failed to save OCR image file: " . $filePath);
+            return null;
+        }
+
+        // API is served from /api, and router exposes /uploads via /api/uploads
+        return 'api/uploads/user_' . $userId . '/ocr/' . $filename;
+    };
     
     // POST /ocr/recognize - OCR image recognition
     if ($method === 'POST' && count($pathParts) === 2 && $pathParts[1] === 'recognize') {
@@ -34,6 +77,7 @@ function handleOCRRoutes($method, $pathParts, $data, $authToken) {
             // Process image for OCR
             $recognizedText = '';
             $confidence = 0.0;
+            $storedImagePath = null; // final path we keep in ocr_history for later display
             
             // Handle base64 image data
             if ($imageData) {
@@ -45,7 +89,10 @@ function handleOCRRoutes($method, $pathParts, $data, $authToken) {
                     return errorResponse('Invalid image data', 400);
                 }
                 
-                // Save temporary image file
+                // Persist original image for history (so it can be shown later)
+                $storedImagePath = $saveOcrImage($user['id'], $imageBinary, 'png') ?: $storedImagePath;
+
+                // Save temporary image file for Tesseract processing
                 $tempFile = sys_get_temp_dir() . '/ocr_' . uniqid() . '.png';
                 file_put_contents($tempFile, $imageBinary);
                 
@@ -55,17 +102,88 @@ function handleOCRRoutes($method, $pathParts, $data, $authToken) {
                 
                 // Try to use Tesseract if available
                 $tesseractPath = '/usr/bin/tesseract'; // Common Linux path
+                // Also try alternative paths
+                if (!file_exists($tesseractPath)) {
+                    $tesseractPath = '/usr/local/bin/tesseract';
+                }
+                if (!file_exists($tesseractPath)) {
+                    $tesseractPath = exec('which tesseract 2>/dev/null');
+                }
+                
                 if (file_exists($tesseractPath) && function_exists('exec')) {
                     $outputFile = sys_get_temp_dir() . '/ocr_output_' . uniqid();
-                    $command = escapeshellcmd($tesseractPath) . ' ' . 
-                               escapeshellarg($tempFile) . ' ' . 
-                               escapeshellarg($outputFile) . ' -l chi_sim+eng 2>&1';
-                    exec($command, $output, $returnCode);
                     
-                    if ($returnCode === 0 && file_exists($outputFile . '.txt')) {
-                        $recognizedText = trim(file_get_contents($outputFile . '.txt'));
-                        $confidence = 0.85;
-                        unlink($outputFile . '.txt');
+                    // Priority: Traditional Chinese > English > Simplified Chinese
+                    // Try multiple configurations for best results
+                    $attempts = [
+                        [
+                            'lang' => 'chi_tra+eng+chi_sim',
+                            'psm' => '6',
+                            'oem' => '1', // Neural nets LSTM engine only
+                            'confidence' => 0.90
+                        ],
+                        [
+                            'lang' => 'chi_tra+eng',
+                            'psm' => '6',
+                            'oem' => '1',
+                            'confidence' => 0.85
+                        ],
+                        [
+                            'lang' => 'chi_tra+eng+chi_sim',
+                            'psm' => '11', // Sparse text
+                            'oem' => '1',
+                            'confidence' => 0.85
+                        ],
+                        [
+                            'lang' => 'chi_tra',
+                            'psm' => '6',
+                            'oem' => '1',
+                            'confidence' => 0.80
+                        ],
+                        [
+                            'lang' => 'eng+chi_tra',
+                            'psm' => '6',
+                            'oem' => '1',
+                            'confidence' => 0.75
+                        ]
+                    ];
+                    
+                    foreach ($attempts as $attempt) {
+                        $command = escapeshellcmd($tesseractPath) . ' ' . 
+                                   escapeshellarg($tempFile) . ' ' . 
+                                   escapeshellarg($outputFile) . 
+                                   ' -l ' . $attempt['lang'] .
+                                   ' --psm ' . $attempt['psm'] .
+                                   ' --oem ' . $attempt['oem'] .
+                                   ' 2>&1';
+                        
+                        exec($command, $output, $returnCode);
+                        
+                        if ($returnCode === 0 && file_exists($outputFile . '.txt')) {
+                            $resultText = trim(file_get_contents($outputFile . '.txt'));
+                            if (!empty($resultText)) {
+                                $recognizedText = $resultText;
+                                $confidence = $attempt['confidence'];
+                                unlink($outputFile . '.txt');
+                                break; // Success, stop trying
+                            }
+                            unlink($outputFile . '.txt');
+                        }
+                    }
+                    
+                    // Final fallback: simplified Chinese
+                    if (empty($recognizedText)) {
+                        $command = escapeshellcmd($tesseractPath) . ' ' . 
+                                   escapeshellarg($tempFile) . ' ' . 
+                                   escapeshellarg($outputFile) . 
+                                   ' -l chi_sim+eng --psm 6 --oem 1 2>&1';
+                        exec($command, $output, $returnCode);
+                        
+                        if ($returnCode === 0 && file_exists($outputFile . '.txt')) {
+                            $recognizedText = trim(file_get_contents($outputFile . '.txt'));
+                            $confidence = 0.70;
+                            unlink($outputFile . '.txt');
+                        }
                     }
                 }
                 
@@ -91,22 +209,81 @@ function handleOCRRoutes($method, $pathParts, $data, $authToken) {
                 // Download image and process
                 $imageContent = @file_get_contents($imageUrl);
                 if ($imageContent !== false) {
+                    // Persist downloaded image as well for history usage
+                    $storedImagePath = $saveOcrImage($user['id'], $imageContent, 'png') ?: $storedImagePath;
                     $tempFile = sys_get_temp_dir() . '/ocr_' . uniqid() . '.png';
                     file_put_contents($tempFile, $imageContent);
                     
                     // Try Tesseract if available
                     $tesseractPath = '/usr/bin/tesseract';
+                    if (!file_exists($tesseractPath)) {
+                        $tesseractPath = '/usr/local/bin/tesseract';
+                    }
+                    if (!file_exists($tesseractPath)) {
+                        $tesseractPath = exec('which tesseract 2>/dev/null');
+                    }
+                    
                     if (file_exists($tesseractPath) && function_exists('exec')) {
                         $outputFile = sys_get_temp_dir() . '/ocr_output_' . uniqid();
-                        $command = escapeshellcmd($tesseractPath) . ' ' . 
-                                   escapeshellarg($tempFile) . ' ' . 
-                                   escapeshellarg($outputFile) . ' -l chi_sim+eng 2>&1';
-                        exec($command, $output, $returnCode);
                         
-                        if ($returnCode === 0 && file_exists($outputFile . '.txt')) {
-                            $recognizedText = trim(file_get_contents($outputFile . '.txt'));
-                            $confidence = 0.85;
-                            unlink($outputFile . '.txt');
+                        // Priority: Traditional Chinese > English > Simplified Chinese
+                        $attempts = [
+                            [
+                                'lang' => 'chi_tra+eng+chi_sim',
+                                'psm' => '6',
+                                'oem' => '1',
+                                'confidence' => 0.90
+                            ],
+                            [
+                                'lang' => 'chi_tra+eng',
+                                'psm' => '6',
+                                'oem' => '1',
+                                'confidence' => 0.85
+                            ],
+                            [
+                                'lang' => 'chi_tra',
+                                'psm' => '6',
+                                'oem' => '1',
+                                'confidence' => 0.80
+                            ]
+                        ];
+                        
+                        foreach ($attempts as $attempt) {
+                            $command = escapeshellcmd($tesseractPath) . ' ' . 
+                                       escapeshellarg($tempFile) . ' ' . 
+                                       escapeshellarg($outputFile) . 
+                                       ' -l ' . $attempt['lang'] .
+                                       ' --psm ' . $attempt['psm'] .
+                                       ' --oem ' . $attempt['oem'] .
+                                       ' 2>&1';
+                            
+                            exec($command, $output, $returnCode);
+                            
+                            if ($returnCode === 0 && file_exists($outputFile . '.txt')) {
+                                $resultText = trim(file_get_contents($outputFile . '.txt'));
+                                if (!empty($resultText)) {
+                                    $recognizedText = $resultText;
+                                    $confidence = $attempt['confidence'];
+                                    unlink($outputFile . '.txt');
+                                    break;
+                                }
+                                unlink($outputFile . '.txt');
+                            }
+                        }
+                        
+                        // Final fallback: simplified Chinese
+                        if (empty($recognizedText)) {
+                            $command = escapeshellcmd($tesseractPath) . ' ' . 
+                                       escapeshellarg($tempFile) . ' ' . 
+                                       escapeshellarg($outputFile) . 
+                                       ' -l chi_sim+eng --psm 6 --oem 1 2>&1';
+                            exec($command, $output, $returnCode);
+                            
+                            if ($returnCode === 0 && file_exists($outputFile . '.txt')) {
+                                $recognizedText = trim(file_get_contents($outputFile . '.txt'));
+                                $confidence = 0.70;
+                                unlink($outputFile . '.txt');
+                            }
                         }
                     }
                     
@@ -122,12 +299,12 @@ function handleOCRRoutes($method, $pathParts, $data, $authToken) {
                 $confidence = 0.0;
             }
             
-            // Save to history
+            // Save to history (use stored local image if available, otherwise fallback)
             $stmt = $db->prepare("
                 INSERT INTO ocr_history (user_id, source_image_path, extracted_text, created_at)
                 VALUES (?, ?, ?, NOW())
             ");
-            $imagePath = $imageUrl ?? 'uploaded_image_' . uniqid();
+            $imagePath = $storedImagePath ?: ($imageUrl ?? 'uploaded_image_' . uniqid());
             $stmt->execute([$user['id'], $imagePath, $recognizedText]);
             $ocrId = $db->lastInsertId();
             

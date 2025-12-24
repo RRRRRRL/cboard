@@ -22,7 +22,6 @@ jest.mock('./AIFeatures.messages', () => {
 jest.mock('../../../api', () => ({
   getAISuggestions: jest.fn(),
   getTypingPredictions: jest.fn(),
-  getJyutpingPredictions: jest.fn(),
   getLearningStats: jest.fn()
 }));
 

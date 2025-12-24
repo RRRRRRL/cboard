@@ -1,0 +1,60 @@
+.DeviceConnectionStatus {
+  display: inline-flex;
+  align-items: center;
+  margin: 0 4px;
+}
+
+.DeviceConnectionStatus__button {
+  position: relative;
+  padding: 4px !important;
+  min-width: auto !important;
+  width: auto !important;
+}
+
+.DeviceConnectionStatus__icons {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.DeviceConnectionStatus__icon {
+  transition: opacity 0.2s ease;
+}
+
+.DeviceConnectionStatus__icon--connected {
+  color: #4CAF50;
+  opacity: 1;
+}
+
+.DeviceConnectionStatus__icon--disconnected {
+  color: #757575;
+  opacity: 0.4;
+}
+
+.DeviceConnectionStatus__status-dot {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .DeviceConnectionStatus__icon {
+    font-size: 16px !important;
+  }
+  
+  .DeviceConnectionStatus__status-dot {
+    font-size: 6px !important;
+  }
+}
+

@@ -25,6 +25,10 @@ export default defineMessages({
     id: 'cboard.components.WelcomeScreen.skipForNow',
     defaultMessage: 'Skip for now'
   },
+  continueAsGuest: {
+    id: 'cboard.components.WelcomeScreen.continueAsGuest',
+    defaultMessage: 'Continue as Guest'
+  },
   loginErrorAndroid: {
     id: 'cboard.components.WelcomeScreen.loginErrorAndroid',
     defaultMessage:

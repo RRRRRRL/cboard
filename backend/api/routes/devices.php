@@ -251,9 +251,14 @@ function handleDevicesRoutes($method, $pathParts, $data, $authToken) {
                 $allSettings['accessibility']['eye_tracking']['devices'][] = $device;
             }
             
-            // Set as active device
-            $allSettings['accessibility']['eye_tracking']['enabled'] = true;
+            // Set as active device (but don't auto-enable - user must enable manually)
             $allSettings['accessibility']['eye_tracking']['device'] = $device['id'];
+            // Explicitly ensure enabled is false - user must manually enable eye tracking
+            if (!isset($allSettings['accessibility']['eye_tracking']['enabled'])) {
+                $allSettings['accessibility']['eye_tracking']['enabled'] = false;
+            }
+            // Don't change enabled to true even if it was previously true - user must re-enable manually
+            // This ensures eye tracking is not automatically enabled after device registration
             
             // Save settings
             $settingsData = json_encode($allSettings);
@@ -271,11 +276,8 @@ function handleDevicesRoutes($method, $pathParts, $data, $authToken) {
                 'sdk_version' => $sdkVersion
             ]);
             
-            $stmt = $db->prepare("
-                INSERT INTO action_logs (user_id, profile_id, board_id, card_id, action_type, metadata, created_at)
-                VALUES (?, ?, ?, ?, 'device_register', ?, NOW())
-            ");
-            $stmt->execute([$user['id'], null, null, null, $metadata]);
+            require_once __DIR__ . '/action-log.php';
+            insertActionLog($db, $user['id'], null, null, 'device_register', $metadata);
             
             return successResponse([
                 'success' => true,
@@ -380,11 +382,8 @@ function handleDevicesRoutes($method, $pathParts, $data, $authToken) {
                 'event_type' => 'long_press'
             ]);
             
-            $stmt = $db->prepare("
-                INSERT INTO action_logs (user_id, profile_id, board_id, card_id, action_type, metadata, created_at)
-                VALUES (?, ?, ?, ?, 'switch_longpress', ?, NOW())
-            ");
-            $stmt->execute([$userId, $profileId, null, null, $metadata]);
+            require_once __DIR__ . '/action-log.php';
+            insertActionLog($db, $userId, $profileId, null, 'switch_longpress', $metadata);
             
             // Determine response based on action
             $response = [
@@ -467,11 +466,8 @@ function handleDevicesRoutes($method, $pathParts, $data, $authToken) {
                 'calibration_points_count' => count($calibrationPoints)
             ]);
             
-            $stmt = $db->prepare("
-                INSERT INTO action_logs (user_id, profile_id, board_id, card_id, action_type, metadata, created_at)
-                VALUES (?, ?, ?, ?, 'eyetracking_calibrate', ?, NOW())
-            ");
-            $stmt->execute([$user['id'], null, null, null, $metadata]);
+            require_once __DIR__ . '/action-log.php';
+            insertActionLog($db, $user['id'], null, null, 'eyetracking_calibrate', $metadata);
             
             return successResponse([
                 'success' => true,
@@ -527,11 +523,8 @@ function handleDevicesRoutes($method, $pathParts, $data, $authToken) {
                 'selection_method' => 'gaze'
             ]);
             
-            $stmt = $db->prepare("
-                INSERT INTO action_logs (user_id, profile_id, board_id, card_id, action_type, metadata, created_at)
-                VALUES (?, ?, ?, ?, 'eyetracking_select', ?, NOW())
-            ");
-            $stmt->execute([$userId, $profileId, null, $cardId, $metadata]);
+            require_once __DIR__ . '/action-log.php';
+            insertActionLog($db, $userId, $profileId, $cardId, 'eyetracking_select', $metadata);
             
             return successResponse([
                 'success' => true,

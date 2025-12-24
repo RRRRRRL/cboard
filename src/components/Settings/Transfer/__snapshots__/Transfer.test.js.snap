@@ -1,0 +1,81 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`Transfer tests default renderer 1`] = `
+<Transfer
+  classes={
+    Object {
+      "codeDisplay": "Transfer-codeDisplay-4",
+      "formControl": "Transfer-formControl-2",
+      "qrCodeContainer": "Transfer-qrCodeContainer-3",
+      "tabPanel": "Transfer-tabPanel-1",
+    }
+  }
+  history={
+    Object {
+      "goBack": [MockFunction],
+    }
+  }
+  intl={
+    Object {
+      "formatMessage": [Function],
+    }
+  }
+  onExportProfile={[MockFunction]}
+  onGenerateCloudCode={[MockFunction]}
+  onGenerateEmailTransfer={[MockFunction]}
+  onGenerateQRCode={[MockFunction]}
+  onImportProfile={[MockFunction]}
+  onRedeemCloudCode={[MockFunction]}
+  onRedeemQRToken={[MockFunction]}
+  profiles={
+    Array [
+      Object {
+        "id": 1,
+        "name": "Test Profile",
+      },
+    ]
+  }
+/>
+`;
+
+exports[`Transfer tests renders with profiles 1`] = `
+<Transfer
+  classes={
+    Object {
+      "codeDisplay": "Transfer-codeDisplay-4",
+      "formControl": "Transfer-formControl-2",
+      "qrCodeContainer": "Transfer-qrCodeContainer-3",
+      "tabPanel": "Transfer-tabPanel-1",
+    }
+  }
+  history={
+    Object {
+      "goBack": [MockFunction],
+    }
+  }
+  intl={
+    Object {
+      "formatMessage": [Function],
+    }
+  }
+  onExportProfile={[MockFunction]}
+  onGenerateCloudCode={[MockFunction]}
+  onGenerateEmailTransfer={[MockFunction]}
+  onGenerateQRCode={[MockFunction]}
+  onImportProfile={[MockFunction]}
+  onRedeemCloudCode={[MockFunction]}
+  onRedeemQRToken={[MockFunction]}
+  profiles={
+    Array [
+      Object {
+        "id": 1,
+        "name": "Profile 1",
+      },
+      Object {
+        "id": 2,
+        "name": "Profile 2",
+      },
+    ]
+  }
+/>
+`;

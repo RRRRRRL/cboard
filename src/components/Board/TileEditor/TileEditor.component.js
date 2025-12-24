@@ -221,11 +221,37 @@ export class TileEditor extends Component {
         let currentImage = tileToAdd.image;
         if (currentImage && typeof currentImage === 'string') {
           // Convert relative upload paths to absolute URLs
-          if (currentImage.startsWith('uploads/')) {
+          // Backend returns URLs like "uploads/user_1/image.png" or "api/uploads/user_1/image.png"
+          // Images should be accessed via /api/uploads/ (with /api/ prefix)
+          // Use base URL from API_URL (which uses REACT_APP_DEV_API_URL from .env)
+          if (currentImage.startsWith('uploads/') || currentImage.startsWith('api/uploads/')) {
             try {
-              const apiUrlObj = new URL(API_URL);
-              const baseUrl = `${apiUrlObj.protocol}//${apiUrlObj.host}`;
-              currentImage = `${baseUrl}/${currentImage}`;
+              // Get base URL from API_URL (which uses .env config)
+              let baseUrl;
+              if (API_URL) {
+                // Check if API_URL is a relative path (starts with /)
+                if (API_URL.startsWith('/')) {
+                  // Relative path - use current origin
+                  baseUrl = window.location.origin;
+                } else {
+                  // Absolute URL - extract base URL
+                  const apiUrlObj = new URL(API_URL);
+                  baseUrl = `${apiUrlObj.protocol}//${apiUrlObj.host}`;
+                }
+              } else {
+                // Fallback: use current origin
+                baseUrl = window.location.origin;
+              }
+              
+              // Ensure 'api/' prefix is present
+              let imagePath = currentImage;
+              if (imagePath.startsWith('uploads/') && !imagePath.startsWith('api/uploads/')) {
+                imagePath = 'api/' + imagePath;
+              }
+              
+              // Construct URL: baseUrl + /api/uploads/...
+              // Result: "http://192.168.62.41/api/uploads/user_1/image.png"
+              currentImage = `${baseUrl}/${imagePath}`;
             } catch (e) {
               console.warn('Failed to convert relative upload path:', e);
             }
@@ -275,9 +301,51 @@ export class TileEditor extends Component {
       //   loading: true
       // });
       try {
-        const imageUrl = await API.uploadFile(blob, fileName);
+        let imageUrl = await API.uploadFile(blob, fileName);
+        
+        // Ensure the URL has /api/ prefix if it's a relative path
+        if (imageUrl && typeof imageUrl === 'string' && !imageUrl.startsWith('http')) {
+          if (imageUrl.startsWith('uploads/') && !imageUrl.startsWith('api/uploads/')) {
+            imageUrl = 'api/' + imageUrl;
+          }
+        }
+        
+        // Convert to catchable URL (for CDN or blob storage)
+        imageUrl = convertImageUrlToCatchable(imageUrl) || imageUrl;
+        
+        // If it's still a relative path, convert to full URL with /api/ prefix
+        if (imageUrl && typeof imageUrl === 'string' && !imageUrl.startsWith('http') && !imageUrl.startsWith('data:') && !imageUrl.startsWith('blob:')) {
+          try {
+            let baseUrl;
+            if (API_URL) {
+              // Check if API_URL is a relative path (starts with /)
+              if (API_URL.startsWith('/')) {
+                // Relative path - use current origin
+                baseUrl = window.location.origin;
+              } else {
+                // Absolute URL - extract base URL
+                const apiUrlObj = new URL(API_URL);
+                baseUrl = `${apiUrlObj.protocol}//${apiUrlObj.host}`;
+              }
+            } else {
+              // Fallback: use current origin
+              baseUrl = window.location.origin;
+            }
+            
+            // Ensure /api/ prefix
+            let imagePath = imageUrl;
+            if (imagePath.startsWith('uploads/') && !imagePath.startsWith('api/uploads/')) {
+              imagePath = 'api/' + imagePath;
+            }
+            
+            imageUrl = `${baseUrl}/${imagePath}`;
+          } catch (e) {
+            console.warn('Failed to convert relative upload path to absolute URL:', e);
+          }
+        }
+        
         // console.log('imagen guardada en servidor', imageUrl);
-        return convertImageUrlToCatchable(imageUrl) || imageUrl;
+        return imageUrl;
       } catch (error) {
         //console.log('imagen no guardad en servidor');
         return await this.blobToBase64(blob);
@@ -449,6 +517,9 @@ export class TileEditor extends Component {
   };
   handleTypeChange = (event, type) => {
     let loadBoard = '';
+    // IMPORTANT: For folders in user profiles, we need to create a new profile
+    // The loadBoard will be set when the folder is saved (in handleAddTileEditorSubmit)
+    // For now, generate a random ID that will be replaced with actual profile ID after creation
     if (type === 'folder' || type === 'board') {
       loadBoard = shortid.generate();
     }

@@ -6,3 +6,62 @@
   margin-bottom: 16px;
 }
 
+/* Game feedback animations */
+@keyframes correctPulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.7);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 0 0 10px rgba(76, 175, 80, 0);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(76, 175, 80, 0);
+  }
+}
+
+@keyframes incorrectShake {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-10px);
+  }
+  75% {
+    transform: translateX(10px);
+  }
+}
+
+.LearningGames .correct-feedback {
+  animation: correctPulse 0.5s ease-in-out;
+}
+
+.LearningGames .incorrect-feedback {
+  animation: incorrectShake 0.5s ease-in-out;
+}
+
+.LearningGames-history-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.LearningGames-history-table th,
+.LearningGames-history-table td {
+  border: 1px solid #ddd;
+  padding: 8px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.LearningGames-history-table th {
+  background-color: #f5f5f5;
+  font-weight: 600;
+}
+
+.LearningGames-history-table tbody tr:nth-child(even) {
+  background-color: #fafafa;
+}
+

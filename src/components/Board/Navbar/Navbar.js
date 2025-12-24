@@ -5,6 +5,7 @@ import classNames from 'classnames';
 import { Scannable } from 'react-scannable';
 import { IconButton } from '@material-ui/core';
 import ScannerDeactivateIcon from '@material-ui/icons/ExploreOff';
+import KeyboardIcon from '@material-ui/icons/Keyboard';
 import BoardShare from '../BoardShare';
 import FullScreenButton from '../../UI/FullScreenButton';
 import PrintBoardButton from '../../UI/PrintBoardButton';
@@ -13,6 +14,7 @@ import LockToggle from '../../UI/LockToggle';
 import BackButton from '../../UI/BackButton';
 import HelpButton from '../../UI/HelpButton';
 import SettingsButton from '../../UI/SettingsButton';
+import DeviceConnectionStatus from '../../UI/DeviceConnectionStatus/DeviceConnectionStatus.component';
 import messages from '../Board.messages';
 import { isCordova, isAndroid } from '../../../cordova-util';
 import './Navbar.css';
@@ -82,6 +84,7 @@ export class Navbar extends React.Component {
     }
   };
 
+
   getBoardToShare = () => {
     const { board } = this.props;
     if (isCordova()) {
@@ -104,7 +107,8 @@ export class Navbar extends React.Component {
       onBackClick,
       onDeactivateScannerClick,
       onLockClick,
-      onLockNotify
+      onLockNotify,
+      onJyutpingKeyboardClick
     } = this.props;
 
     const isPublic = board && board.isPublic;
@@ -143,6 +147,8 @@ export class Navbar extends React.Component {
         <div className="Navbar__group Navbar__group--end">
           {!isLocked && (
             <React.Fragment>
+              {/* Device Connection Status Indicator */}
+              <DeviceConnectionStatus intl={intl} />
               <PrintBoardButton />
               {!isCordova() && <FullScreenButton />}
               <SettingsButton component={Link} to="/settings" />
@@ -159,12 +165,31 @@ export class Navbar extends React.Component {
                 open={this.state.openShareDialog}
                 url={this.getBoardToShare()}
                 fullScreen={false}
+                profiles={this.props.profiles || []}
+                onGenerateQR={this.props.onGenerateQR}
+                onGenerateCloudCode={this.props.onGenerateCloudCode}
+                onGenerateEmail={this.props.onGenerateEmail}
+                onRedeemCode={this.props.onRedeemCode}
               />
             </React.Fragment>
           )}
           <div className={'personal__account'}>
             <UserIcon onClick={this.onUserIconClick} />
           </div>
+          {onJyutpingKeyboardClick && (
+            <div className={'jyutping__keyboard'}>
+              <IconButton
+                onClick={() => {
+                  onJyutpingKeyboardClick();
+                }}
+                disabled={false}
+                title={intl.formatMessage(messages.jyutpingKeyboard)}
+                style={{ color: '#fff' }}
+              >
+                <KeyboardIcon />
+              </IconButton>
+            </div>
+          )}
           <div className={'open__lock'}>
             <LockToggle
               locked={isLocked}
@@ -205,7 +230,14 @@ Navbar.propTypes = {
   onLockClick: PropTypes.func,
   isScannerActive: PropTypes.bool,
   onDeactivateScannerClick: PropTypes.func,
-  history: PropTypes.object.isRequired
+  history: PropTypes.object.isRequired,
+  profiles: PropTypes.array,
+  onGenerateQR: PropTypes.func,
+  onGenerateCloudCode: PropTypes.func,
+  onGenerateEmail: PropTypes.func,
+  onRedeemCode: PropTypes.func,
+  onJyutpingKeyboardClick: PropTypes.func,
+  showNotification: PropTypes.func
 };
 
 export default withRouter(injectIntl(Navbar));

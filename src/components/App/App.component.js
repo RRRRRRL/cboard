@@ -75,7 +75,25 @@ export class App extends Component {
           <Route path="/activate/:url" component={Activate} />
           <Route path="/reset/:userid/:url" component={ChangePassword} />
           <Route path="/login/:type/callback" component={OAuthLogin} />
-          <Route path="/board/:id" component={BoardContainer} />
+          {/* 兼容舊網址：/board/:id 立即 302 到 /profile/:id */}
+          <Route
+            path="/board/:id"
+            render={props => {
+              const {
+                match: { params },
+                history
+              } = props;
+              const targetId = params.id;
+              if (targetId) {
+                history.replace(`/profile/${targetId}`);
+              } else {
+                history.replace('/');
+              }
+              return null;
+            }}
+          />
+          {/* 主溝通頁：改用 profile 路徑，id 視為 profileId */}
+          <Route path="/profile/:id" component={BoardContainer} />
           {isDownloadingLang && (
             <Route exact path={'/'}>
               <Redirect to={'/settings/language'} />
@@ -84,8 +102,12 @@ export class App extends Component {
           <Route
             exact
             path="/"
-            component={
-              isFirstVisit && !isLogged ? WelcomeScreen : BoardContainer
+            render={props =>
+              isFirstVisit && !isLogged ? (
+                <WelcomeScreen />
+              ) : (
+                <BoardContainer {...props} />
+              )
             }
           />
           <Route component={NotFound} />

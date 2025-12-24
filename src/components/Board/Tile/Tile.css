@@ -16,6 +16,19 @@
   outline: 0;
 }
 
+/* Row/Column scanning highlights */
+.Tile.scanner__row_highlighted {
+  outline: 4px solid rgba(255, 0, 0, 0.8);
+  outline-offset: -2px;
+  background-color: rgba(255, 0, 0, 0.1);
+}
+
+.Tile.scanner__col_highlighted {
+  outline: 4px solid rgba(255, 0, 0, 0.8);
+  outline-offset: -2px;
+  background-color: rgba(255, 0, 0, 0.1);
+}
+
 .CheckCircle {
   color: #1976d2;
   border-radius: 50%;

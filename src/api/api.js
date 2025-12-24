@@ -12,6 +12,12 @@ import { getStore } from '../store';
 import { dataURLtoFile } from '../helpers';
 import { logout } from '../components/Account/Login/Login.actions.js';
 import { isAndroid } from '../cordova-util';
+import {
+  cacheApiResponse,
+  getCachedApiResponse,
+  isOnline,
+  initOfflineStorage
+} from '../utils/offlineStorage';
 
 const BASE_URL = API_URL;
 const LOCAL_COMMUNICATOR_ID = 'cboard_default';
@@ -49,6 +55,7 @@ class API {
   constructor(config = {}) {
     this.axiosInstance = axios.create({
       baseURL: BASE_URL,
+      timeout: 30000, // 30 second default timeout for all requests
       ...config
     });
     this.axiosInstance.interceptors.response.use(
@@ -75,17 +82,78 @@ class API {
         return Promise.reject(error);
       }
     );
+    
+    // Initialize offline storage
+    if (typeof window !== 'undefined' && 'indexedDB' in window) {
+      initOfflineStorage().catch(err => {
+        console.warn('Failed to initialize offline storage:', err);
+      });
+    }
+  }
+
+  /**
+   * Make API request with offline support
+   * @param {string} method - HTTP method (GET, POST, etc.)
+   * @param {string} url - API endpoint URL
+   * @param {object} config - Axios config
+   * @param {object} cacheConfig - Cache configuration { enabled: true, maxAge: 3600000 }
+   */
+  async requestWithOfflineSupport(method, url, config = {}, cacheConfig = { enabled: true, maxAge: 60 * 60 * 1000 }) {
+    const fullUrl = url.startsWith('http') ? url : `${BASE_URL}${url}`;
+    const params = config.params || {};
+    
+    // Try to get from cache first if offline or cache is enabled
+    if (cacheConfig.enabled && !isOnline()) {
+      const cachedData = await getCachedApiResponse(fullUrl, params);
+      if (cachedData !== null) {
+        // Suppress offline cache logs to reduce console noise
+        // console.log('Using cached data for offline request:', url);
+        return { data: cachedData, fromCache: true };
+      }
+    }
+
+    try {
+      // Make network request
+      const response = await this.axiosInstance.request({
+        method,
+        url,
+        ...config
+      });
+
+      // Cache successful GET requests
+      if (cacheConfig.enabled && method.toUpperCase() === 'GET' && response.status === 200) {
+        await cacheApiResponse(fullUrl, params, response.data, cacheConfig.maxAge);
+      }
+
+      return { ...response, fromCache: false };
+    } catch (error) {
+      // If network fails and we're offline, try cache
+      if (cacheConfig.enabled && (!isOnline() || error.code === 'ERR_NETWORK')) {
+        const cachedData = await getCachedApiResponse(fullUrl, params);
+        if (cachedData !== null) {
+          // Suppress offline cache logs to reduce console noise
+          // console.log('Network failed, using cached data:', url);
+          return { data: cachedData, fromCache: true, error: null };
+        }
+      }
+      throw error;
+    }
   }
 
   async getLanguage(lang) {
     try {
-      const { status, data } = await this.axiosInstance.get(
-        `/languages/${lang}`
+      const response = await this.requestWithOfflineSupport(
+        'GET',
+        `/languages/${lang}`,
+        {},
+        { enabled: true, maxAge: 24 * 60 * 60 * 1000 } // Cache for 24 hours
       );
-      if (status === 200) return data;
+      if (response.data) return response.data;
       return null;
     } catch (err) {
-      return null;
+      // Try cache as fallback
+      const cachedData = await getCachedApiResponse(`${BASE_URL}/languages/${lang}`, {});
+      return cachedData || null;
     }
   }
 
@@ -150,29 +218,55 @@ class API {
   }
 
   async login(email, password) {
-    const response = await this.axiosInstance.post('/user/login', {
-      email,
-      password
-    });
+    try {
+      // Login requests should not use offline support - they need real-time authentication
+      const response = await this.axiosInstance.post('/user/login', {
+        email,
+        password
+      }, {
+        timeout: 30000 // 30 second timeout for login
+      });
 
-    // Handle response - backend returns {id, authToken, communicators, boards, settings, ...}
-    const data = response.data;
+      // Handle response - backend returns {id, authToken, communicators, boards, settings, ...}
+      const data = response.data;
 
-    // If response has 'user' object (registration format), extract it
-    if (data.user && data.user.authToken) {
-      return data.user;
+      // If response has 'user' object (registration format), extract it
+      if (data.user && data.user.authToken) {
+        return data.user;
+      }
+
+      // Otherwise return data directly (login format)
+      return data;
+    } catch (error) {
+      // Provide better error messages for login failures
+      if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+        throw new Error('Connection timeout. Please check your network connection and try again.');
+      }
+      if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
+        throw new Error('Unable to connect to server. Please check your network connection.');
+      }
+      // Re-throw other errors (like 401, 403, etc.) as-is
+      throw error;
     }
-
-    // Otherwise return data directly (login format)
-    return data;
   }
 
   async forgot(email) {
-    const { data } = await this.axiosInstance.post('/user/forgot', {
-      email
-    });
-
-    return data;
+    try {
+      const { data } = await this.axiosInstance.post('/user/forgot', {
+        email
+      }, {
+        timeout: 30000 // 30 second timeout
+      });
+      return data;
+    } catch (error) {
+      if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+        throw new Error('Connection timeout. Please check your network connection and try again.');
+      }
+      if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
+        throw new Error('Unable to connect to server. Please check your network connection.');
+      }
+      throw error;
+    }
   }
 
   async storePassword(userid, password, url) {
@@ -215,6 +309,8 @@ class API {
     return data;
   }
 
+  // 已廢棄：舊的「board 列表」，現在其實是「公開 profiles 列表」包一層。
+  // 建議前端直接改用 getPublicProfiles（如果有）或 getPublicBoardsProfiles 之類的新方法。
   async getBoards({
     page = 1,
     limit = 10,
@@ -228,6 +324,8 @@ class API {
     return data;
   }
 
+  // 已廢棄：舊的「公開 boards」，後端現在返回的是 profiles。
+  // 這裡做一層轉換，保持 Communicator 等舊代碼暫時可用。
   async getPublicBoards({
     page = 1,
     limit = 10,
@@ -235,12 +333,89 @@ class API {
     sort = '-_id',
     search = ''
   } = {}) {
+    const normalizeProfilesToBoards = (profiles, page, limit, total) => {
+      if (!Array.isArray(profiles)) {
+        return { data: [], total: total || 0, page, limit };
+      }
+      const { transformBoardsImageUrls } = require('../utils/imageUrlTransformer');
+      const normalized = profiles.map(p => ({
+        ...p,
+        id: String(p.id),
+        // 舊代碼使用 board.name，這裡用 display_name 做兼容
+        name: p.display_name || p.name || '',
+        // 作者名稱：後端對 /board/my 已提供 author / author_name，public 可為空
+        author: p.author || p.author_name || '',
+        // 封面圖片
+        caption: p.caption || p.cover_image || null,
+        // 語言代碼
+        locale: p.locale || p.language || null,
+        // 公開標記
+        isPublic: !!p.is_public,
+        // tiles_count 用於顯示和過濾
+        tiles_count: p.tiles_count || (Array.isArray(p.tiles) ? p.tiles.length : 0),
+        tilesCount: p.tiles_count || (Array.isArray(p.tiles) ? p.tiles.length : 0)
+      }));
+      // Transform image URLs in all boards
+      const transformed = transformBoardsImageUrls(normalized);
+      return {
+        data: transformed,
+        total: total || transformed.length,
+        page,
+        limit
+      };
+    };
+
     const query = getQueryParameters({ page, limit, offset, sort, search });
     const url = `/board/public?${query}`;
+    console.log('[API getPublicBoards] Requesting:', { url, page, limit, search });
     const { data } = await this.axiosInstance.get(url);
-    return data;
+    console.log('[API getPublicBoards] Response received:', {
+      hasData: !!data,
+      isArray: Array.isArray(data),
+      hasProfiles: !!(data && data.profiles),
+      profilesCount: data?.profiles?.length || data?.length || 0,
+      total: data?.total || 0
+    });
+
+    // 後端（PHP）目前返回格式：{ profiles: [...], total, page, limit }
+    // 舊 Cboard 雲端可能返回：{ boards: [...], total, page, limit } 或 { data: [...] }
+    // CommunicatorDialogContainer 期望：{ data: [...], total }
+    if (Array.isArray(data)) {
+      return normalizeProfilesToBoards(data, page, limit, data.length);
+    }
+
+    if (data && Array.isArray(data.profiles)) {
+      return normalizeProfilesToBoards(
+        data.profiles,
+        data.page || page,
+        data.limit || limit,
+        data.total
+      );
+    }
+
+    if (data && Array.isArray(data.boards)) {
+      return normalizeProfilesToBoards(
+        data.boards,
+        data.page || page,
+        data.limit || limit,
+        data.total
+      );
+    }
+
+    if (data && Array.isArray(data.data)) {
+      return normalizeProfilesToBoards(
+        data.data,
+        data.page || page,
+        data.limit || limit,
+        data.total
+      );
+    }
+
+    return { data: [], total: 0, page, limit };
   }
 
+  // 已廢棄：舊的「我的 boards」，現在後端返回的是我的 profiles。
+  // 這裡轉成 { data: [...] } 給現有代碼用；新代碼請直接用 getProfiles。
   async getMyBoards({
     page = 1,
     limit = 10,
@@ -261,15 +436,99 @@ class API {
     // Use token-based endpoint instead of email-based (more secure, no email in URL)
     const url = `/board/my?${query}`;
 
+    const normalize = (raw) => {
+      const { transformBoardsImageUrls } = require('../utils/imageUrlTransformer');
+
+      // Helper function to filter out corrupted profiles (all tiles are null)
+      // IMPORTANT: Don't filter out profiles with virtual tiles (null arrays)
+      // These are normal responses from /board/my endpoint
+      const filterCorruptedProfiles = (profiles) => {
+        if (!Array.isArray(profiles)) return profiles;
+        
+        // Don't filter - all profiles from /board/my are valid
+        // Virtual tiles arrays (filled with null) are intentional for metadata display
+        return profiles;
+      };
+
+      const normalizeProfilesToBoards = (profiles, pageArg, limitArg, total) => {
+        if (!Array.isArray(profiles)) {
+          return { data: [], total: total || 0, page: pageArg, limit: limitArg };
+        }
+        const filteredProfiles = filterCorruptedProfiles(profiles);
+        // 映射為舊的 board 結構，供 Communicator / Board 列表使用
+        const boardsLike = filteredProfiles.map(p => ({
+          ...p,
+          id: String(p.id),
+          name: p.display_name || p.name || '',
+          author: p.author || p.author_name || '',
+          caption: p.caption || p.cover_image || null,
+          locale: p.locale || p.language || null,
+          isPublic: !!p.is_public,
+          // tiles_count 用於顯示和過濾
+          tiles_count: p.tiles_count || (Array.isArray(p.tiles) ? p.tiles.length : 0),
+          tilesCount: p.tiles_count || (Array.isArray(p.tiles) ? p.tiles.length : 0)
+        }));
+        return {
+          data: transformBoardsImageUrls(boardsLike),
+          total: total || boardsLike.length,
+          page: pageArg,
+          limit: limitArg
+        };
+      };
+
+      if (Array.isArray(raw)) {
+        return normalizeProfilesToBoards(raw, page, limit, raw.length);
+      }
+
+      if (raw?.profiles && Array.isArray(raw.profiles)) {
+        return normalizeProfilesToBoards(
+          raw.profiles,
+          raw.page || page,
+          raw.limit || limit,
+          raw.total
+        );
+      }
+
+      return { data: [], total: 0, page, limit };
+    };
+
     try {
-      const { data } = await this.axiosInstance.get(url, { headers });
-      return data;
+      const response = await this.requestWithOfflineSupport(
+        'GET',
+        url,
+        { headers },
+        { enabled: true, maxAge: 5 * 60 * 1000 } // Cache for 5 minutes
+      );
+
+      return normalize(response.data);
     } catch (error) {
-      console.error('getMyBoards error:', error);
-      // If it's a network error, provide more helpful message
-      if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
-        console.error('Network error - check API base URL and CORS settings');
-        throw new Error('Cannot connect to server. Please check your connection and API configuration.');
+      // If it's a network error and we're offline, try to return cached data
+      if (
+        (error.code === 'ERR_NETWORK' || error.message === 'Network Error') &&
+        !isOnline()
+      ) {
+        const cachedData = await getCachedApiResponse(`${BASE_URL}${url}`, {
+          page,
+          limit,
+          offset,
+          sort,
+          search
+        });
+        if (cachedData) {
+          return normalize(cachedData);
+        }
+        return { data: [], total: 0, page, limit }; // Return empty result when offline
+      }
+      // Suppress network errors when offline to reduce console noise
+      const isNetworkError =
+        error.code === 'ERR_NETWORK' || error.message === 'Network Error';
+      if (isNetworkError && !navigator.onLine) {
+        // Silently handle offline network errors
+        throw error;
+      }
+      // Only log non-network errors or network errors when online
+      if (!isNetworkError || navigator.onLine) {
+        console.error('getMyBoards error:', error);
       }
       throw error;
     }
@@ -309,9 +568,83 @@ class API {
     }
   }
 
-  async getBoard(id) {
-    const { data } = await this.axiosInstance.get(`/board/${id}`);
-    return data;
+  // 新版：從 profile 入口讀主板
+  // id 現在應理解為 profileId（兼容舊代碼仍叫 "board id"）
+  // token: optional auth token (useful during login before Redux state is updated)
+  async getBoard(id, token = null) {
+    // Use provided token, or get from Redux state, or try to get from loginData
+    const authToken = token || getAuthToken();
+    const headers = authToken ? {
+      Authorization: `Bearer ${authToken}`
+    } : {};
+    
+    console.log('[API GET BOARD] Requesting board data:', {
+      profileId: id,
+      hasAuthToken: !!authToken,
+      endpoint: `/profiles/${id}/board`
+    });
+    
+    try {
+      const response = await this.requestWithOfflineSupport(
+        'GET',
+        `/profiles/${id}/board`,
+        { headers },
+        { enabled: true, maxAge: 60 * 60 * 1000 } // Cache for 1 hour
+      );
+
+      if (response.data) {
+        console.log('[API GET BOARD] Raw response received:', {
+          profileId: id,
+          boardId: response.data.id,
+          boardName: response.data.name,
+          tilesCount: response.data.tiles?.length || 0,
+          gridRows: response.data.grid?.rows,
+          gridColumns: response.data.grid?.columns
+        });
+        
+        const { transformBoardImageUrls } = require('../utils/imageUrlTransformer');
+        const boardData = transformBoardImageUrls(response.data);
+        
+        // Filter out null/undefined tiles, but不要再把「全為 null」視為損壞板，
+        // 否則在 profile->board 過程中任何暫時為 null 的情況都會把板攔住。
+        if (boardData.tiles && Array.isArray(boardData.tiles)) {
+          const validTiles = boardData.tiles.filter(tile => 
+            tile !== null && tile !== undefined && typeof tile === 'object'
+          );
+          boardData.tiles = validTiles;
+          
+          console.log('[API GET BOARD] Tiles filtered:', {
+            profileId: id,
+            originalTilesCount: response.data.tiles?.length || 0,
+            validTilesCount: validTiles.length,
+            first3Tiles: validTiles.slice(0, 3).map(t => ({
+              id: t.id,
+              label: t.label,
+              labelKey: t.labelKey,
+              position: `row=${t.row}, col=${t.col}`
+            }))
+          });
+        }
+        
+        console.log('[API GET BOARD] Returning board data:', {
+          profileId: id,
+          boardId: boardData.id,
+          boardName: boardData.name,
+          finalTilesCount: boardData.tiles?.length || 0
+        });
+        
+        return boardData;
+      }
+
+      return response.data;
+    } catch (error) {
+      // If offline and no cache, return null or empty board structure
+      if (!isOnline()) {
+        console.warn('Offline: Could not load profile board', id);
+        return null;
+      }
+      throw error;
+    }
   }
 
   async getCbuilderBoard(id) {
@@ -324,24 +657,112 @@ class API {
     const headers = {
       Authorization: `Bearer ${authToken}`
     };
-    const { data } = await this.axiosInstance.get(`/board/cbuilder/${id}`, {
+
+    // 新模型下，cbuilder 也透過 profile 主板接口獲取資料
+    const { data } = await this.axiosInstance.get(`/profiles/${id}/board`, {
       headers
     });
+
+    if (data) {
+      const { transformBoardImageUrls } = require('../utils/imageUrlTransformer');
+      return transformBoardImageUrls(data);
+    }
+
     return data;
   }
 
   async getSettings() {
     const authToken = getAuthToken();
+    
+    // Default settings for guest users or when not authenticated
+    const defaultSettings = {
+      settings: {
+        speech: {
+          voice: 'en-US-Neural-A',
+          language: 'en',
+          rate: 1.0,
+          pitch: 1.0,
+          volume: 1.0
+        },
+        accessibility: {
+          scanning: {
+            mode: 'single',
+            speed: 1.0,
+            loop: 'finite',
+            loop_count: 3
+          },
+          audio_guide: 'off',
+          switch: {
+            type: null,
+            device_id: null
+          },
+          eye_tracking: {
+            enabled: false,
+            device: null
+          }
+        },
+        eyeTracking: {
+          enabled: false,
+          deviceType: 'tobii',
+          dwellTime: 1000
+        }
+      },
+      eyeTracking: {
+        enabled: false,
+        deviceType: 'tobii',
+        dwellTime: 1000
+      }
+    };
+    
+    // If no auth token, return default settings (guest mode)
     if (!(authToken && authToken.length)) {
-      throw new Error('Need to be authenticated to perform this request');
+      console.log('[API] getSettings - No auth token, returning default settings (guest mode)');
+      return defaultSettings.settings;
     }
 
     const headers = {
       Authorization: `Bearer ${authToken}`
     };
 
-    const { data } = await this.axiosInstance.get(`/settings`, { headers });
-    return data;
+    try {
+      const response = await this.requestWithOfflineSupport('GET', `/settings`, { headers }, { enabled: true, maxAge: 5 * 60 * 1000 });
+      const data = response.data || response;
+      
+      // Normalize settings structure - backend uses accessibility.eye_tracking, frontend uses eyeTracking
+      const settings = data.settings || data;
+      
+      // Convert backend format (accessibility.eye_tracking) to frontend format (eyeTracking)
+      let eyeTrackingSettings = settings.eyeTracking;
+      if (!eyeTrackingSettings && settings.accessibility && settings.accessibility.eye_tracking) {
+        const backendSettings = settings.accessibility.eye_tracking;
+        eyeTrackingSettings = {
+          enabled: backendSettings.enabled || false,
+          deviceType: backendSettings.device_type || backendSettings.deviceType || 'tobii',
+          dwellTime: backendSettings.dwell_time || backendSettings.dwellTime || 1000,
+          device: backendSettings.device || null
+        };
+      }
+      
+      // Return normalized settings - ensure eyeTracking is always available
+      const normalized = {
+        ...settings,
+        eyeTracking: eyeTrackingSettings || { enabled: false, deviceType: 'tobii', dwellTime: 1000 }
+      };
+      
+      // Log for debugging
+      console.log('[API] getSettings - Normalized eye tracking settings:', normalized.eyeTracking);
+      
+      return normalized;
+    } catch (error) {
+      // Return default settings if offline
+      if (!isOnline() || error.code === 'ERR_NETWORK') {
+        console.log('[API] getSettings - Offline, returning default settings');
+        return defaultSettings.settings;
+      }
+      
+      // For other errors, rethrow so callers can handle (e.g., force re-login on 401)
+      throw error;
+    }
   }
 
   async updateSettings(newSettings = {}) {
@@ -354,7 +775,55 @@ class API {
       Authorization: `Bearer ${authToken}`
     };
 
-    const { data } = await this.axiosInstance.post(`/settings`, newSettings, {
+    // Convert frontend format (eyeTracking) to backend format (accessibility.eye_tracking) if needed
+    let settingsToSave = { ...newSettings };
+    
+    // If eyeTracking is being updated, also update accessibility.eye_tracking for backend compatibility
+    if (newSettings.eyeTracking) {
+      // Get existing settings to merge properly
+      try {
+        const existing = await this.getSettings();
+        const existingSettings = existing.settings || existing;
+        
+        settingsToSave = {
+          ...existingSettings,
+          ...newSettings,
+          // Ensure both formats are saved
+          eyeTracking: newSettings.eyeTracking,
+          accessibility: {
+            ...(existingSettings.accessibility || {}),
+            eye_tracking: {
+              ...(existingSettings.accessibility?.eye_tracking || {}),
+              enabled: newSettings.eyeTracking.enabled || false,
+              device_type: newSettings.eyeTracking.deviceType || existingSettings.accessibility?.eye_tracking?.device_type || 'tobii',
+              dwell_time: newSettings.eyeTracking.dwellTime || existingSettings.accessibility?.eye_tracking?.dwell_time || 1000,
+              device: newSettings.eyeTracking.device || existingSettings.accessibility?.eye_tracking?.device || null
+            }
+          }
+        };
+        
+        console.log('[API] updateSettings - Saving eye tracking settings:', {
+          eyeTracking: settingsToSave.eyeTracking,
+          accessibility_eye_tracking: settingsToSave.accessibility?.eye_tracking
+        });
+      } catch (e) {
+        // If getSettings fails, create new structure
+        console.warn('[API] Failed to get existing settings for merge:', e);
+        settingsToSave = {
+          ...newSettings,
+          accessibility: {
+            eye_tracking: {
+              enabled: newSettings.eyeTracking?.enabled || false,
+              device_type: newSettings.eyeTracking?.deviceType || 'tobii',
+              dwell_time: newSettings.eyeTracking?.dwellTime || 1000,
+              device: newSettings.eyeTracking?.device || null
+            }
+          }
+        };
+      }
+    }
+
+    const { data } = await this.axiosInstance.post(`/settings`, settingsToSave, {
       headers
     });
 
@@ -496,14 +965,26 @@ class API {
   }
 
   // Sprint 4: Public profiles
-  async getPublicProfiles(language = null, layoutType = null) {
-    const params = {};
-    if (language) params.language = language;
-    if (layoutType) params.layout_type = layoutType;
-    const { data } = await this.axiosInstance.get(`/profiles/public`, {
-      params
-    });
-    return data;
+  /**
+   * Get current user's profiles (communication profiles).
+   * Backend: GET /profiles
+   */
+  async getProfiles() {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    const { data } = await this.axiosInstance.get('/profiles', { headers });
+    // Backend returns { profiles, total, page, limit }
+    if (data && Array.isArray(data.profiles)) {
+      return data.profiles;
+    }
+    return Array.isArray(data) ? data : [];
   }
 
   // Sprint 4: Action logging
@@ -540,8 +1021,16 @@ class API {
       Authorization: `Bearer ${authToken}`
     };
 
-    const { data } = await this.axiosInstance.get(`/devices/list`, { headers });
-    return data;
+    try {
+      const response = await this.requestWithOfflineSupport('GET', `/devices/list`, { headers }, { enabled: true, maxAge: 5 * 60 * 1000 });
+      return response.data || response;
+    } catch (error) {
+      // Return empty devices list if offline
+      if (!isOnline() || error.code === 'ERR_NETWORK') {
+        return { eye_tracking: [], switch: [] };
+      }
+      throw error;
+    }
   }
 
   async registerSwitchDevice(deviceData = {}) {
@@ -598,18 +1087,116 @@ class API {
       throw new Error('Need to be authenticated to perform this request');
     }
 
+    // Verify device connection before registering
+    const deviceType = deviceData.device_type || '';
+    let deviceConnected = false;
+
+    try {
+      if (deviceType === 'camera') {
+        // Verify camera is available
+        try {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const videoDevices = devices.filter(device => device.kind === 'videoinput');
+          if (videoDevices.length === 0) {
+            throw new Error('No camera devices found');
+          }
+          
+          // Try to access camera to verify it's actually working
+          const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+          const tracks = stream.getVideoTracks();
+          if (tracks.length === 0) {
+            throw new Error('Camera stream has no video tracks');
+          }
+          
+          // Check if track is actually active
+          if (!tracks[0].readyState || tracks[0].readyState !== 'live') {
+            throw new Error('Camera track is not live');
+          }
+          
+          // Stop the test stream
+          tracks.forEach(track => track.stop());
+          deviceConnected = true;
+        } catch (err) {
+          throw new Error(`Camera not connected or accessible: ${err.message}`);
+        }
+      } else if (deviceType === 'tobii') {
+        // Verify Tobii device is available
+        if (typeof window.Tobii === 'undefined' && typeof window.tobii === 'undefined') {
+          throw new Error('Tobii SDK not loaded. Please ensure Tobii device is connected and drivers are installed.');
+        }
+        // Additional verification can be added here if Tobii SDK provides connection check
+        deviceConnected = true;
+      } else if (deviceType === 'eyetribe') {
+        // Verify EyeTribe device is available
+        if (typeof window.EyeTribe === 'undefined' && typeof window.eyetribe === 'undefined') {
+          throw new Error('EyeTribe SDK not loaded. Please ensure EyeTribe device is connected and drivers are installed.');
+        }
+        // Additional verification can be added here if EyeTribe SDK provides connection check
+        deviceConnected = true;
+      } else if (deviceType === 'pupil') {
+        // Verify Pupil device is available
+        // Pupil typically connects via WebSocket, so we'd need to check connection
+        // For now, assume it's connected if the type is specified
+        deviceConnected = true;
+      } else {
+        // For custom devices, assume connected if device type is provided
+        deviceConnected = true;
+      }
+    } catch (err) {
+      // Device verification failed
+      const verificationError = new Error(`Device connection verification failed: ${err.message}`);
+      verificationError.originalError = err;
+      verificationError.deviceType = deviceType;
+      throw verificationError;
+    }
+
+    if (!deviceConnected) {
+      throw new Error(`Device type "${deviceType}" is not connected or accessible`);
+    }
+
+    // Device is verified, proceed with registration
     const headers = {
       Authorization: `Bearer ${authToken}`
     };
 
-    const { data } = await this.axiosInstance.post(
-      `/devices/eyetracking/register`,
-      deviceData,
-      {
-        headers
+    try {
+      // Add timeout to prevent hanging on network errors
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Request timeout')), 5000)
+      );
+      
+      // Include connection verification status in registration data
+      const registrationData = {
+        ...deviceData,
+        connection_verified: true,
+        verified_at: new Date().toISOString()
+      };
+      
+      const requestPromise = this.axiosInstance.post(
+        `/devices/eyetracking/register`,
+        registrationData,
+        {
+          headers,
+          timeout: 5000 // 5 second timeout
+        }
+      );
+      
+      const response = await Promise.race([requestPromise, timeoutPromise]);
+      return response.data;
+    } catch (error) {
+      // Handle network errors gracefully
+      const isNetworkError = error.code === 'ERR_NETWORK' || 
+                            error.message === 'Network Error' || 
+                            error.message === 'Request timeout';
+      if (isNetworkError) {
+        // Return a soft error that won't break initialization
+        const networkError = new Error('Network error during device registration');
+        networkError.code = 'ERR_NETWORK';
+        networkError.isNetworkError = true;
+        throw networkError;
       }
-    );
-    return data;
+      throw error;
+    }
   }
 
   async calibrateEyeTrackingDevice(deviceId, calibrationData = {}) {
@@ -634,11 +1221,35 @@ class API {
   }
 
   async selectCardViaEyeTracking(selectionData = {}) {
-    const { data } = await this.axiosInstance.post(
-      `/devices/eyetracking/select`,
-      selectionData
-    );
-    return data;
+    try {
+      // Add timeout to prevent hanging
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Request timeout')), 3000)
+      );
+      
+      const requestPromise = this.axiosInstance.post(
+        `/devices/eyetracking/select`,
+        selectionData,
+        {
+          timeout: 3000 // 3 second timeout for logging
+        }
+      );
+      
+      const response = await Promise.race([requestPromise, timeoutPromise]);
+      return response.data;
+    } catch (error) {
+      // Don't throw errors for logging - it's non-critical
+      const isNetworkError = error.code === 'ERR_NETWORK' || 
+                            error.message === 'Network Error' || 
+                            error.message === 'Request timeout';
+      if (isNetworkError) {
+        // Silently fail for network errors - logging is not critical
+        return null;
+      }
+      // For other errors, still don't throw but log
+      console.warn('Eye tracking selection log failed:', error.message || error);
+      return null;
+    }
   }
 
   // ============================================================================
@@ -720,15 +1331,131 @@ class API {
     }
   }
 
-  async getRelatedWords(hanzi, jyutping) {
+  async getRelatedWords(hanzi, jyutping, context = '') {
     try {
       const { data } = await this.axiosInstance.get(`/jyutping/related`, {
-        params: { hanzi, jyutping }
+        params: { hanzi, jyutping, context }
       });
       return data;
     } catch (err) {
       console.error('Related words error:', err);
       throw err;
+    }
+  }
+
+  /**
+   * Get Jyutping matching rules for a student
+   * @param {number} userId - Student user ID
+   * @param {number|null} profileId - Optional profile ID
+   * @returns {Promise<Object>} Matching rules
+   */
+  async getJyutpingMatchingRules(userId, profileId = null) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    try {
+      const params = profileId ? { profile_id: profileId } : {};
+      const response = await this.axiosInstance.get(`/jyutping-rules/matching/${userId}`, {
+        headers,
+        params
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Get matching rules error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update Jyutping matching rules for a student
+   * @param {number} userId - Student user ID
+   * @param {Object} rules - Matching rules to update
+   * @param {number|null} profileId - Optional profile ID
+   * @returns {Promise<Object>} Response
+   */
+  async updateJyutpingMatchingRules(userId, rules, profileId = null) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    try {
+      const response = await this.axiosInstance.put(`/jyutping-rules/matching/${userId}`, {
+        ...rules,
+        profile_id: profileId
+      }, { headers });
+      return response.data;
+    } catch (error) {
+      console.error('Update matching rules error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get exception rules for a student
+   * @param {number} userId - Student user ID
+   * @param {number|null} profileId - Optional profile ID
+   * @returns {Promise<Object>} Exception rules
+   */
+  async getJyutpingExceptionRules(userId, profileId = null) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    try {
+      const params = profileId ? { profile_id: profileId } : {};
+      const response = await this.axiosInstance.get(`/jyutping-rules/exceptions/${userId}`, {
+        headers,
+        params
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Get exception rules error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update exception rules for a student
+   * @param {number} userId - Student user ID
+   * @param {Array} rules - Array of {rule_id, enabled}
+   * @param {number|null} profileId - Optional profile ID
+   * @returns {Promise<Object>} Response
+   */
+  async updateJyutpingExceptionRules(userId, rules, profileId = null) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    try {
+      const response = await this.axiosInstance.put(`/jyutping-rules/exceptions/${userId}`, {
+        rules,
+        profile_id: profileId
+      }, { headers });
+      return response.data;
+    } catch (error) {
+      console.error('Update exception rules error:', error);
+      throw error;
     }
   }
 
@@ -758,9 +1485,79 @@ class API {
       Authorization: `Bearer ${authToken}`
     };
 
-    const { data } = await this.axiosInstance.post(`/board`, board, {
-      headers
+    // 在 profile 模型下，「建立 board」等於為 user 建立一個 profile + 初始主板
+    // 這裡假設前端已經準備好 profile 基本資訊在 board.profile 中（若沒有，先用簡單預設）
+    // 優先使用 board.profile，然後使用 board 上的 layout_type/language，最後才用默認值
+    const profilePayload = board.profile || {
+      display_name: board.name || 'New Profile',
+      description: board.description || '',
+      layout_type: board.layout_type || board.layoutType || '4x6',
+      language: board.language || board.locale || 'en',
+      is_public: false
+    };
+
+    console.log('[API CREATE BOARD] Step 1: Creating profile:', {
+      profilePayload,
+      boardId: board.id,
+      boardName: board.name,
+      tilesCount: board.tiles?.filter(t => t && typeof t === 'object').length || 0
     });
+
+    // 1) 先建立 profile
+    const profileRes = await this.axiosInstance.post(
+      `/profiles`,
+      profilePayload,
+      { headers }
+    );
+
+    const createdProfile = profileRes.data || profileRes;
+    const profileId = createdProfile.id;
+    
+    // Validate profileId
+    if (!profileId || (typeof profileId !== 'number' && typeof profileId !== 'string')) {
+      throw new Error(`Invalid profile ID returned from creation: ${profileId}`);
+    }
+    
+    // Ensure profileId is a string for URL construction
+    const profileIdStr = String(profileId);
+    
+    console.log('[API CREATE BOARD] Step 2: Profile created:', {
+      profileId,
+      profileIdStr,
+      profileIdType: typeof profileId,
+      createdProfile,
+      userBound: true // Profile is bound to user via auth token
+    });
+
+    // 2) 再把這次傳進來的 board 結構存成這個 profile 的主板
+    const boardPayload = {
+      ...board,
+      profileId: profileIdStr
+    };
+    
+    console.log('[API CREATE BOARD] Step 3: Saving board data to profile:', {
+      profileId: profileIdStr,
+      boardPayload: {
+        ...boardPayload,
+        tiles: boardPayload.tiles?.slice(0, 3) // Log first 3 tiles only
+      }
+    });
+
+    const { data } = await this.axiosInstance.put(
+      `/profiles/${profileIdStr}/board`,
+      boardPayload,
+      { headers }
+    );
+    
+    console.log('[API CREATE BOARD] Step 4: Board saved successfully:', {
+      profileId,
+      returnedData: {
+        id: data.id,
+        name: data.name,
+        tilesCount: data.tiles?.length || 0
+      }
+    });
+
     return data;
   }
 
@@ -774,8 +1571,58 @@ class API {
       Authorization: `Bearer ${authToken}`
     };
 
-    const { data } = await this.axiosInstance.put(`/board/${board.id}`, board, {
-      headers
+    // 現在從 profile 入口更新主板：board.id 在新的模型下視為 profileId
+    const profileId = board.profileId || board.id;
+    
+    // Check if this is a metadata-only update (no tiles in request)
+    const isMetadataOnlyUpdate = !('tiles' in board);
+    
+    // For metadata-only updates, create a clean payload without tiles
+    let payload = board;
+    if (isMetadataOnlyUpdate) {
+      // Create a clean object with only metadata fields
+      payload = {
+        id: board.id,
+        profileId: board.profileId || board.id,
+        name: board.name,
+        description: board.description,
+        isPublic: board.isPublic,
+        layout_type: board.layout_type || board.layoutType,
+        language: board.language || board.locale,
+        author: board.author,
+        email: board.email,
+        hidden: board.hidden,
+        locale: board.locale
+        // Explicitly exclude tiles, grid, and other board structure fields
+      };
+      // Remove any tiles that might have been accidentally included
+      delete payload.tiles;
+      delete payload.grid;
+      delete payload.tiles_count;
+      delete payload.tilesCount;
+    }
+    
+    console.log('[API updateBoard] Sending update request:', {
+      profileId,
+      boardId: payload.id,
+      isPublic: payload.isPublic,
+      hasIsPublic: 'isPublic' in payload,
+      hasTiles: 'tiles' in payload,
+      tilesCount: payload.tiles?.length || 0,
+      boardKeys: Object.keys(payload),
+      isMetadataOnly: isMetadataOnlyUpdate,
+      originalHasTiles: 'tiles' in board
+    });
+    
+    const { data } = await this.axiosInstance.put(
+      `/profiles/${profileId}/board`,
+      payload,
+      { headers }
+    );
+
+    console.log('[API updateBoard] Update response received:', {
+      profileId: data.id,
+      isPublic: data.isPublic
     });
 
     return data;
@@ -791,11 +1638,26 @@ class API {
       Authorization: `Bearer ${authToken}`
     };
 
-    const { data } = await this.axiosInstance.delete(`/board/${boardId}`, {
-      headers
-    });
-
-    return data;
+    // 在 profile 模型下，刪板 = 刪 profile
+    console.log('[API] deleteBoard called with boardId:', boardId, 'Type:', typeof boardId);
+    console.log('[API] DELETE request to:', `/profiles/${boardId}`);
+    
+    try {
+      const { data } = await this.axiosInstance.delete(`/profiles/${boardId}`, {
+        headers
+      });
+      console.log('[API] deleteBoard success, response:', data);
+      return data;
+    } catch (error) {
+      console.error('[API] deleteBoard error:', {
+        message: error?.message,
+        response: error?.response?.data,
+        status: error?.response?.status,
+        statusText: error?.response?.statusText,
+        url: error?.config?.url
+      });
+      throw error;
+    }
   }
 
   async boardReport(reportedBoardData) {
@@ -808,8 +1670,9 @@ class API {
       Authorization: `Bearer ${authToken}`
     };
 
+    // 報告資料裡仍然帶 board/profile 的 id，後端再決定如何處理
     const { data } = await this.axiosInstance.post(
-      `/board/report`,
+      `/profiles/report`,
       reportedBoardData,
       { headers }
     );
@@ -844,7 +1707,21 @@ class API {
       headers
     });
 
-    return response.data.url;
+    let imageUrl = response.data.url;
+    
+    // Ensure the URL has /api/ prefix if it's an upload path
+    if (imageUrl && typeof imageUrl === 'string') {
+      // If it's a relative path like "uploads/..." or "api/uploads/..."
+      if (imageUrl.startsWith('uploads/') && !imageUrl.startsWith('api/uploads/')) {
+        imageUrl = 'api/' + imageUrl;
+      }
+      // If it's already a full URL without /api/, add it
+      else if (imageUrl.includes('/uploads/') && !imageUrl.includes('/api/uploads/')) {
+        imageUrl = imageUrl.replace('/uploads/', '/api/uploads/');
+      }
+    }
+    
+    return imageUrl;
   }
 
   async generateTextToImage({
@@ -876,6 +1753,60 @@ class API {
     );
 
     return response.data.url;
+  }
+
+  /**
+   * Create a new card from an AI / Photocen suggestion.
+   * This is a thin wrapper around POST /cards, but kept separate for clarity.
+   * @param {Object} payload - { title, label_text, image_path, category, card_data? }
+   */
+  async createCardFromAISuggestion(payload) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`,
+      'Content-Type': 'application/json'
+    };
+
+    const { data } = await this.axiosInstance.post('/cards', payload, {
+      headers
+    });
+
+    return data;
+  }
+
+  /**
+   * Link an existing card to a profile board position (profile_cards).
+   * For AI suggestions we usually just drop it at (0,0,0) on the selected profile.
+   */
+  async addCardToProfile(profileId, cardId, options = {}) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`,
+      'Content-Type': 'application/json'
+    };
+
+    const payload = {
+      profile_id: profileId,
+      card_id: cardId,
+      row_index: options.rowIndex != null ? options.rowIndex : 0,
+      col_index: options.colIndex != null ? options.colIndex : 0,
+      page_index: options.pageIndex != null ? options.pageIndex : 0,
+      is_visible: options.isVisible != null ? options.isVisible : 1
+    };
+
+    const { data } = await this.axiosInstance.post('/profile-cards', payload, {
+      headers
+    });
+
+    return data;
   }
 
   async createCommunicator(communicator) {
@@ -963,8 +1894,26 @@ class API {
   }
 
   async getUserLocation() {
-    const { data } = await this.axiosInstance.get(`/location`);
-    return data;
+    try {
+      // Location is not critical, use timeout and handle errors gracefully
+      const { data } = await this.axiosInstance.get(`/location`, {
+        timeout: 5000 // 5 second timeout for location
+      });
+      return data;
+    } catch (error) {
+      // Location is not critical - fail silently
+      // Network errors are expected and shouldn't block the app
+      const isNetworkError = error.code === 'ERR_NETWORK' || 
+                            error.message === 'Network Error' ||
+                            error.code === 'ECONNABORTED' ||
+                            error.message.includes('timeout');
+      if (isNetworkError) {
+        // Return null for network errors - location is optional
+        return null;
+      }
+      // Re-throw other errors (like 404, 500, etc.)
+      throw error;
+    }
   }
 
   async getSubscriber(userId = getUserData().id, requestOrigin = 'unknown') {
@@ -977,15 +1926,26 @@ class API {
       requestOrigin,
       purchaseVersion: '1.0.0'
     };
-    const { data } = await this.axiosInstance.get(`/subscriber/${userId}`, {
-      headers
-    });
+    
+    try {
+      const response = await this.requestWithOfflineSupport('GET', `/subscriber/${userId}`, { headers }, { enabled: true, maxAge: 5 * 60 * 1000 });
+      const data = response.data || response;
+      
+      if (data && !data.success) {
+        throw data;
+      }
 
-    if (data && !data.success) {
-      throw data;
+      return data;
+    } catch (error) {
+      // If offline, throw a specific error that can be handled
+      if (!isOnline() || error.code === 'ERR_NETWORK') {
+        const networkError = new Error('Network Error');
+        networkError.code = 'ERR_NETWORK';
+        networkError.isNetworkError = true;
+        throw networkError;
+      }
+      throw error;
     }
-
-    return data;
   }
 
   async createSubscriber(subscriber = {}) {
@@ -1066,8 +2026,16 @@ class API {
   }
 
   async listSubscriptions() {
-    const { data } = await this.axiosInstance.get(`/subscription/list`);
-    return data;
+    try {
+      const response = await this.requestWithOfflineSupport('GET', `/subscription/list`, {}, { enabled: true, maxAge: 10 * 60 * 1000 });
+      return response.data || response;
+    } catch (error) {
+      // Return empty subscriptions list if offline
+      if (!isOnline() || error.code === 'ERR_NETWORK') {
+        return [];
+      }
+      throw error;
+    }
   }
 
   async deleteAccount() {
@@ -1381,12 +2349,20 @@ class API {
         }
       });
 
-      const response = await this.axiosInstance.get(
+      const response = await this.requestWithOfflineSupport(
+        'GET',
         `/action-logs?${params.toString()}`,
-        { headers }
+        { headers },
+        { enabled: true, maxAge: 2 * 60 * 1000 } // Cache for 2 minutes
       );
       return response.data;
     } catch (error) {
+      // If offline, return empty logs instead of throwing
+      if (!isOnline() || error.code === 'ERR_NETWORK') {
+        // Suppress error logging for expected offline behavior
+        return { logs: [], total: 0 };
+      }
+      // Only log unexpected errors
       console.error('Get logs error:', error);
       throw error;
     }
@@ -1433,11 +2409,11 @@ class API {
   /**
    * Get AI card suggestions
    * @param {string} context - Context text
-   * @param {number} profileId - Profile ID
+   * @param {string} profileIdOrBoardId - Profile ID (preferred) or Board ID
    * @param {number} limit - Number of suggestions
    * @returns {Promise<Object>} Suggestions data
    */
-  async getAISuggestions(context, profileId, limit = 10) {
+  async getAISuggestions(context, profileIdOrBoardId, limit = 10) {
     const authToken = getAuthToken();
     if (!(authToken && authToken.length)) {
       throw new Error('Need to be authenticated to perform this request');
@@ -1449,11 +2425,27 @@ class API {
     };
 
     try {
+      // IMPORTANT: AI 请求可能很慢，这里单独把超时时间调高（不影响其他 API）
+      console.log('[API] getAISuggestions - sending request with extended timeout (120000 ms)', {
+        contextPreview: typeof context === 'string' ? context.substring(0, 100) : null,
+        profileIdOrBoardId,
+        limit
+      });
+
       const response = await this.axiosInstance.post(
-        '/ai/suggest-cards',
-        { context, profile_id: profileId, limit },
-        { headers }
+        'ai/suggest-cards',
+        // 後端同時支援 profile_id 與 board_id，這裡保持名稱中性
+        { context, profile_id: profileIdOrBoardId, limit },
+        {
+          headers,
+          timeout: 120000 // 120s，确保前端不会在后端完成前先超时
+        }
       );
+      console.log('[API] getAISuggestions - response received', {
+        status: response.status,
+        hasData: !!response.data,
+        suggestionsCount: response.data?.suggestions?.length
+      });
       return response.data;
     } catch (error) {
       console.error('Get AI suggestions error:', error);
@@ -1466,23 +2458,24 @@ class API {
    * @param {string} input - Current typed text
    * @param {string} language - Language code
    * @param {number} limit - Number of predictions
+   * @param {Object} context - Optional context (previous words, user history, etc.)
    * @returns {Promise<Object>} Predictions data
    */
-  async getTypingPredictions(input, language = 'en', limit = 5) {
+  async getTypingPredictions(input, language = 'en', limit = 5, context = {}) {
+    // Typing prediction endpoint supports both authenticated and guest users.
+    // Attach token if available, but do not require it.
     const authToken = getAuthToken();
-    if (!(authToken && authToken.length)) {
-      throw new Error('Need to be authenticated to perform this request');
-    }
-
     const headers = {
-      Authorization: `Bearer ${authToken}`,
       'Content-Type': 'application/json'
     };
+    if (authToken && authToken.length) {
+      headers.Authorization = `Bearer ${authToken}`;
+    }
 
     try {
       const response = await this.axiosInstance.post(
-        '/ai/typing-prediction',
-        { input, language, limit },
+        'ai/typing-prediction',
+        { input, language, limit, context },
         { headers }
       );
       return response.data;
@@ -1511,7 +2504,7 @@ class API {
 
     try {
       const response = await this.axiosInstance.post(
-        '/ai/jyutping-prediction',
+        'ai/jyutping-prediction',
         { input, limit },
         { headers }
       );
@@ -1543,7 +2536,7 @@ class API {
 
     try {
       const response = await this.axiosInstance.post(
-        '/ai/adaptive-learning',
+        'ai/adaptive-learning',
         { profile_id: profileId, card_id: cardId, difficulty, performance },
         { headers }
       );
@@ -1560,6 +2553,167 @@ class API {
    * @returns {Promise<Object>} Learning stats
    */
   async getLearningStats(profileId = null) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    try {
+      const params = profileId ? { profile_id: profileId } : {};
+      const response = await this.axiosInstance.get('ai/learning-stats', {
+        headers,
+        params
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Get learning stats error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get user-level learning model (common mistakes tracking)
+   * @param {number} profileId - Optional profile ID
+   * @param {number} limit - Limit of results (default 20)
+   * @returns {Promise<Object>} Learning model data
+   */
+  async getLearningModel(profileId = null, limit = 20) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    try {
+      const params = { limit };
+      if (profileId) {
+        params.profile_id = profileId;
+      }
+      const response = await this.axiosInstance.get('ai/learning-model', {
+        headers,
+        params
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Get learning model error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get recommended difficulty adjustment for learning games
+   * @param {number} profileId - Optional profile ID
+   * @param {string} gameType - Game type (default 'spelling')
+   * @returns {Promise<Object>} Difficulty adjustment recommendations
+   */
+  async getDifficultyAdjustment(profileId = null, gameType = 'spelling') {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    try {
+      const params = { game_type: gameType };
+      if (profileId) {
+        params.profile_id = profileId;
+      }
+      const response = await this.axiosInstance.get('ai/difficulty-adjustment', {
+        headers,
+        params
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Get difficulty adjustment error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get personalized Jyutping assistant recommendations
+   * @param {number} profileId - Optional profile ID
+   * @param {number} limit - Limit of recommendations (default 10)
+   * @returns {Promise<Object>} Personalized recommendations
+   */
+  async getJyutpingAssistant(profileId = null, limit = 10) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    try {
+      const params = { limit };
+      if (profileId) {
+        params.profile_id = profileId;
+      }
+      const response = await this.axiosInstance.get('ai/jyutping-assistant', {
+        headers,
+        params
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Get Jyutping assistant error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get AI-generated learning suggestions based on common mistakes
+   * @param {string|number|null} profileId - Optional profile ID
+   * @param {string} locale - User's selected language locale (e.g., 'zh-CN', 'zh-TW', 'en')
+   * @returns {Promise<Object>} Learning suggestions with AI-generated advice
+   */
+  async getLearningSuggestions(profileId = null, locale = 'zh-CN') {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    try {
+      const params = new URLSearchParams();
+      if (profileId) {
+        params.append('profile_id', profileId);
+      }
+      if (locale) {
+        params.append('locale', locale);
+      }
+
+      // AI 建議有時需要較長時間生成，單獨提高此請求的 timeout（例如 90 秒）
+      const url = params.toString()
+        ? `ai/learning-suggestions?${params.toString()}`
+        : 'ai/learning-suggestions';
+
+      const response = await this.axiosInstance.get(url, {
+        headers,
+        timeout: 90000 // 90 秒，只影響 learning-suggestions 這一個請求
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Get learning suggestions error:', error);
+      throw error;
+    }
+  }
+
+  // Legacy method - keeping for backward compatibility
+  async getLearningStatsOld(profileId = null) {
     const authToken = getAuthToken();
     if (!(authToken && authToken.length)) {
       throw new Error('Need to be authenticated to perform this request');
@@ -1592,7 +2746,7 @@ class API {
    * @param {number} limit - Number of questions
    * @returns {Promise<Object>} Game questions
    */
-  async getSpellingGame(difficulty = 'medium', limit = 10) {
+  async getSpellingGame(difficulty = 'medium', limit = 10, profileId = null) {
     const authToken = getAuthToken();
     if (!(authToken && authToken.length)) {
       throw new Error('Need to be authenticated to perform this request');
@@ -1603,10 +2757,13 @@ class API {
     };
 
     try {
-      const response = await this.axiosInstance.get(
-        `/games/spelling?difficulty=${difficulty}&limit=${limit}`,
-        { headers }
-      );
+      let url = `/games/spelling?difficulty=${encodeURIComponent(difficulty)}&limit=${encodeURIComponent(
+        String(limit)
+      )}`;
+      if (profileId) {
+        url += `&profile_id=${encodeURIComponent(profileId)}`;
+      }
+      const response = await this.axiosInstance.get(url, { headers });
       return response.data;
     } catch (error) {
       console.error('Get spelling game error:', error);
@@ -1620,7 +2777,7 @@ class API {
    * @param {number} limit - Number of pairs
    * @returns {Promise<Object>} Game data
    */
-  async getMatchingGame(type = 'word-picture', limit = 8) {
+  async getMatchingGame(type = 'word-picture', limit = 8, boardId = null, profileId = null) {
     const authToken = getAuthToken();
     if (!(authToken && authToken.length)) {
       throw new Error('Need to be authenticated to perform this request');
@@ -1631,12 +2788,30 @@ class API {
     };
 
     try {
-      const response = await this.axiosInstance.get(
-        `/games/matching?type=${type}&limit=${limit}`,
-        { headers }
+      let url = `/games/matching?type=${encodeURIComponent(type)}&limit=${encodeURIComponent(
+        String(limit)
+      )}`;
+      if (boardId) {
+        url += `&board_id=${encodeURIComponent(boardId)}`;
+      }
+      if (profileId) {
+        url += `&profile_id=${encodeURIComponent(profileId)}`;
+      }
+      
+      const response = await this.requestWithOfflineSupport(
+        'GET',
+        url,
+        { headers },
+        { enabled: true, maxAge: 5 * 60 * 1000 } // Cache for 5 minutes
       );
       return response.data;
     } catch (error) {
+      // If offline, return empty game data instead of throwing
+      if (!isOnline() || error.code === 'ERR_NETWORK') {
+        // Suppress error logging for expected offline behavior
+        return { pairs: [], options: [] };
+      }
+      // Only log unexpected errors
       console.error('Get matching game error:', error);
       throw error;
     }
@@ -1649,9 +2824,11 @@ class API {
    * @param {number} totalQuestions - Total questions
    * @param {number} timeSpent - Time spent in seconds
    * @param {string} difficulty - Difficulty level
+   * @param {string|number|null} profileId - Optional profile ID to associate the result
+   * @param {Array|null} questions - Optional array of question results for detailed logging
    * @returns {Promise<Object>} Submit result
    */
-  async submitGameResult(gameType, score, totalQuestions, timeSpent, difficulty = 'medium') {
+  async submitGameResult(gameType, score, totalQuestions, timeSpent, difficulty = 'medium', profileId = null, questions = null) {
     const authToken = getAuthToken();
     if (!(authToken && authToken.length)) {
       throw new Error('Need to be authenticated to perform this request');
@@ -1663,9 +2840,22 @@ class API {
     };
 
     try {
+      const payload = {
+        game_type: gameType,
+        score,
+        total_questions: totalQuestions,
+        time_spent: timeSpent,
+        difficulty,
+        profile_id: profileId || undefined
+      };
+      
+      if (questions && Array.isArray(questions)) {
+        payload.questions = questions;
+      }
+      
       const response = await this.axiosInstance.post(
         '/games/submit',
-        { game_type: gameType, score, total_questions: totalQuestions, time_spent: timeSpent, difficulty },
+        payload,
         { headers }
       );
       return response.data;
@@ -1679,9 +2869,10 @@ class API {
    * Get game history
    * @param {string} gameType - Optional game type filter
    * @param {number} limit - Number of records
+   * @param {string|number|null} profileId - Optional profile filter
    * @returns {Promise<Object>} Game history
    */
-  async getGameHistory(gameType = null, limit = 20) {
+  async getGameHistory(gameType = null, limit = 20, profileId = null) {
     const authToken = getAuthToken();
     if (!(authToken && authToken.length)) {
       throw new Error('Need to be authenticated to perform this request');
@@ -1692,9 +2883,12 @@ class API {
     };
 
     try {
-      const params = gameType ? `?game_type=${gameType}&limit=${limit}` : `?limit=${limit}`;
+      const qs = new URLSearchParams();
+      if (gameType) qs.append('game_type', gameType);
+      if (profileId) qs.append('profile_id', profileId);
+      qs.append('limit', limit);
       const response = await this.axiosInstance.get(
-        `/games/history${params}`,
+        `/games/history?${qs.toString()}`,
         { headers }
       );
       return response.data;
@@ -1733,7 +2927,11 @@ class API {
       );
       return response.data;
     } catch (error) {
-      console.error('OCR recognize error:', error);
+      // Suppress error logging for expected network errors (frontend will use client-side OCR)
+      const isNetworkError = error.code === 'ERR_NETWORK' || error.message === 'Network Error';
+      if (!isNetworkError || navigator.onLine) {
+        console.error('OCR recognize error:', error);
+      }
       throw error;
     }
   }
@@ -1821,7 +3019,11 @@ class API {
       );
       return response.data;
     } catch (error) {
-      console.error('Get OCR history error:', error);
+      // Suppress error logging for expected network errors
+      const isNetworkError = error.code === 'ERR_NETWORK' || error.message === 'Network Error';
+      if (!isNetworkError || navigator.onLine) {
+        console.error('Get OCR history error:', error);
+      }
       throw error;
     }
   }
@@ -1848,7 +3050,11 @@ class API {
       );
       return response.data;
     } catch (error) {
-      console.error('Delete OCR history error:', error);
+      // Suppress error logging for expected network errors
+      const isNetworkError = error.code === 'ERR_NETWORK' || error.message === 'Network Error';
+      if (!isNetworkError || navigator.onLine) {
+        console.error('Delete OCR history error:', error);
+      }
       throw error;
     }
   }
@@ -1997,6 +3203,92 @@ class API {
       return response.data;
     } catch (error) {
       console.error('Get admin statistics error:', error);
+      throw error;
+    }
+  }
+
+  // ============================================================================
+  // DATA RETENTION POLICY
+  // ============================================================================
+
+  /**
+   * Get data retention policy settings
+   * @returns {Promise<Object>} Retention settings
+   */
+  async getDataRetentionSettings() {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    try {
+      const response = await this.axiosInstance.get(
+        'data-retention',
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Get data retention settings error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update data retention policy settings
+   * @param {Object} settings - Retention settings (action_logs_retention_days, learning_logs_retention_days, ocr_history_retention_days)
+   * @returns {Promise<Object>} Updated settings
+   */
+  async updateDataRetentionSettings(settings) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`,
+      'Content-Type': 'application/json'
+    };
+
+    try {
+      const response = await this.axiosInstance.put(
+        'data-retention',
+        settings,
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Update data retention settings error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Manually trigger data retention cleanup
+   * @returns {Promise<Object>} Cleanup statistics
+   */
+  async runDataRetentionCleanup() {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    try {
+      const response = await this.axiosInstance.post(
+        'data-retention/cleanup',
+        {},
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Run data retention cleanup error:', error);
       throw error;
     }
   }

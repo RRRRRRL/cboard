@@ -145,10 +145,33 @@ export function updateIsSubscribed(requestOrigin = 'unkwnown') {
         }
 
         const userId = state.app.userData.id;
-        const { status, product, transaction } = await API.getSubscriber(
-          userId,
-          requestOrigin
-        );
+        let subscriberData;
+        try {
+          subscriberData = await API.getSubscriber(userId, requestOrigin);
+        } catch (err) {
+          // Handle network errors gracefully
+          const isNetworkError = err.code === 'ERR_NETWORK' || err.message === 'Network Error' || err.isNetworkError;
+          if (isNetworkError && !navigator.onLine) {
+            // Use cached subscription state when offline
+            const cachedStatus = state.subscription?.status || NOT_SUBSCRIBED;
+            const cachedProduct = state.subscription?.ownedProduct ? {
+              _id: state.subscription.ownedProduct.id,
+              subscriptionId: state.subscription.ownedProduct.subscriptionId,
+              billingPeriod: state.subscription.ownedProduct.billingPeriod,
+              price: state.subscription.ownedProduct.price,
+              title: state.subscription.ownedProduct.title,
+              tag: state.subscription.ownedProduct.tag
+            } : null;
+            subscriberData = {
+              status: cachedStatus,
+              product: cachedProduct,
+              transaction: null
+            };
+          } else {
+            throw err;
+          }
+        }
+        const { status, product, transaction } = subscriberData;
         const getActualProduct = async (product, transaction) => {
           if (
             isIOS() &&
@@ -218,7 +241,11 @@ export function updateIsSubscribed(requestOrigin = 'unkwnown') {
         );
       }
     } catch (err) {
-      console.error(getErrorMessage(err));
+      // Only log non-network errors to reduce console noise
+      const isNetworkError = err.code === 'ERR_NETWORK' || err.message === 'Network Error' || err.isNetworkError;
+      if (!isNetworkError || navigator.onLine) {
+        console.error(getErrorMessage(err));
+      }
 
       isSubscribed = false;
       status = NOT_SUBSCRIBED;
@@ -295,12 +322,13 @@ export function updatePlans() {
   return async (dispatch, getState) => {
     const state = getState();
     try {
-      const { data } = await API.listSubscriptions();
+      const response = await API.listSubscriptions();
+      const data = Array.isArray(response) ? response : (response?.data || []);
       const locationCode = isLogged(state)
         ? state.app.userData?.location?.countryCode
         : state.app.unloggedUserLocation?.countryCode;
       // get just subscriptions with active plans
-      const plans = getActivePlans(data);
+      const plans = getActivePlans(data || []);
       const iosProducts = isIOS() ? window.CdvPurchase.store.products : null;
       const products = plans.map(plan => {
         const price = iosProducts
@@ -324,7 +352,19 @@ export function updatePlans() {
         })
       );
     } catch (err) {
-      console.error(err.message);
+      // Only log non-network errors
+      const isNetworkError = err.code === 'ERR_NETWORK' || err.message === 'Network Error';
+      if (!isNetworkError || navigator.onLine) {
+        console.error('Failed to update plans:', err.message || err);
+      }
+      // Keep existing products if offline
+      if (!state.subscription?.products) {
+        dispatch(
+          updateSubscription({
+            products: []
+          })
+        );
+      }
     }
   };
 

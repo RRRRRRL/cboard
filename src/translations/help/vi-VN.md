@@ -1,6 +1,30 @@
 # Trợ giúp
 
-## Mục lục
+## 🚀 Hướng dẫn Bắt đầu Nhanh
+
+**Mới sử dụng Cboard?** Bắt đầu từ đây để nhanh chóng làm quen:
+
+1. **Xem Video Giới thiệu** - Tìm hiểu Cboard là gì và cách hoạt động:
+   - [Bảng là gì?](#WhatisCboard) (bao gồm video hướng dẫn)
+
+2. **Bắt đầu với Các Kiến thức Cơ bản**:
+   - [Làm thế nào để tôi đăng ký Cboard?](#HowdoIregisterforCboard)
+   - [Làm cách nào để tôi đăng nhập vào Cboard sau khi tôi là người dùng đã đăng ký?](#HowdoIlogintoCboardonceIamaregistereduser)
+   - [Làm cách nào để truy cập cài đặt trong Cboard?](#HowdoIaccesssettingsinCboard)
+
+3. **Tìm hiểu Các Tính năng Cốt lõi**:
+   - [How do I create an empty board?](#HowdoIcreateanemptyboard)
+   - [How do I personalize an existing board in Cboard?](#HowdoIpersonalizeanexistingboardinCboard)
+   - [Cboard có thể đọc to tin nhắn của tôi không?](#CanCboardreadmymessageoutaloud)
+
+4. **Xem Video Hướng dẫn**:
+   - [Ban chỉnh sửa](#BoardEditing) - Tìm hiểu cách tạo và tùy chỉnh bảng
+   - [Đang nói](#Talking) - Tìm hiểu cách thêm bản ghi âm giọng nói
+   - [Cài đặt](#Settings) - Tìm hiểu cách chia sẻ bảng và cấu hình tùy chọn
+
+---
+
+## 📚 Mục lục / Chỉ mục Câu hỏi Thường gặp
 
 * [What is Cboard?](#WhatisCboard)
 * [Registration and login](#Registrationandlogin) 

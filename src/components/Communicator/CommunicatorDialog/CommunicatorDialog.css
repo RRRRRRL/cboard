@@ -70,6 +70,24 @@
   text-transform: uppercase;
 }
 
+.CommunicatorDialog__boards__item--eye-tracking {
+  min-height: 180px !important;
+  padding: 16px !important;
+  margin-bottom: 16px !important;
+  cursor: pointer;
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
+  border-radius: 4px;
+}
+
+.CommunicatorDialog__boards__item--eye-tracking:hover {
+  background-color: rgba(0, 0, 0, 0.04) !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.is-dark .CommunicatorDialog__boards__item--eye-tracking:hover {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+}
+
 .CommunicatorDialog__boards__item__data__title__secondary {
   display: flex;
   align-items: center;

@@ -41,6 +41,8 @@ import InputImage from '../../UI/InputImage';
 import SymbolSearch from '../../Board/SymbolSearch';
 import PremiumFeature from '../../PremiumFeature';
 import Language from '../../Settings/Language/Language.messages';
+import { getEyeTrackingInstance } from '../../../utils/eyeTrackingIntegration';
+import history from '../../../history';
 
 const Transition = React.forwardRef(function Transition(props, ref) {
   return <Slide direction="up" ref={ref} {...props} />;
@@ -87,7 +89,127 @@ class CommunicatorDialogBoardItem extends React.Component {
         : ''
     };
 
+    this._isMounted = false;
     this.handleDialogClose = this.handleDialogClose.bind(this);
+  }
+
+  componentDidMount() {
+    this._isMounted = true;
+    this.setupEyeTrackingForProfile();
+  }
+
+  componentWillUnmount() {
+    this._isMounted = false;
+    this.cleanupEyeTrackingForProfile();
+  }
+
+  setupEyeTrackingForProfile = () => {
+    try {
+      const eyeTrackingInstance = getEyeTrackingInstance();
+      if (eyeTrackingInstance && eyeTrackingInstance.isEnabled) {
+        // Store reference to eye tracking instance
+        this.eyeTrackingInstance = eyeTrackingInstance;
+        
+        // Store original callback
+        this.originalDwellCallback = eyeTrackingInstance.onDwellCallback;
+        
+        // Create a wrapper that checks for profile items first, then falls back to original callback
+        const profileDwellWrapper = ({ tileId, x, y, dwellDuration }) => {
+          if (!this._isMounted || !this.props.board) {
+            // Component unmounted or no board, use original callback
+            if (this.originalDwellCallback) {
+              this.originalDwellCallback({ tileId, x, y, dwellDuration });
+            }
+            return;
+          }
+
+          try {
+            // Find the element at gaze point
+            const elementAtPoint = document.elementFromPoint(x, y);
+            if (!elementAtPoint) {
+              // No element at point, use original callback
+              if (this.originalDwellCallback) {
+                this.originalDwellCallback({ tileId, x, y, dwellDuration });
+              }
+              return;
+            }
+
+            // Check if gaze is on this profile item
+            const profileItem = elementAtPoint.closest('[data-profile-id]');
+            if (!profileItem) {
+              // Not a profile item, use original callback
+              if (this.originalDwellCallback) {
+                this.originalDwellCallback({ tileId, x, y, dwellDuration });
+              }
+              return;
+            }
+
+            const profileId = profileItem.getAttribute('data-profile-id');
+            if (String(profileId) !== String(this.props.board.id)) {
+              // Not this profile item, use original callback
+              if (this.originalDwellCallback) {
+                this.originalDwellCallback({ tileId, x, y, dwellDuration });
+              }
+              return;
+            }
+
+            // Found this profile item, select it
+            console.log('[CommunicatorDialogBoardItem] Eye tracking selected profile:', profileId);
+            
+            // If this is in COMMUNICATOR_BOARDS tab, we can switch to it
+            if (this.props.selectedTab === TAB_INDEXES.COMMUNICATOR_BOARDS) {
+              // Navigate to this profile
+              if (history) {
+                history.push(`/profile/${profileId}`);
+              }
+            } else if (this.props.selectedTab === TAB_INDEXES.MY_BOARDS) {
+              // Add to communicator if not already added
+              if (this.props.addOrRemoveBoard) {
+                this.props.addOrRemoveBoard(this.props.board);
+              }
+            } else if (this.props.selectedTab === TAB_INDEXES.PUBLIC_BOARDS) {
+              // Copy the board
+              if (this.props.copyBoard) {
+                this.props.copyBoard(this.props.board);
+              }
+            }
+            // Don't call original callback for profile selection
+            return;
+          } catch (error) {
+            console.warn('[CommunicatorDialogBoardItem] Error in profile dwell handler:', error);
+          }
+
+          // Fallback to original callback if profile selection failed
+          if (this.originalDwellCallback) {
+            this.originalDwellCallback({ tileId, x, y, dwellDuration });
+          }
+        };
+
+        // Set the wrapper as the new callback
+        eyeTrackingInstance.onDwellCallback = profileDwellWrapper;
+      }
+    } catch (error) {
+      console.warn('[CommunicatorDialogBoardItem] Failed to setup eye tracking:', error);
+    }
+  }
+
+  cleanupEyeTrackingForProfile = () => {
+    try {
+      if (this.eyeTrackingInstance && this.originalDwellCallback !== undefined) {
+        // Restore original dwell callback
+        this.eyeTrackingInstance.onDwellCallback = this.originalDwellCallback;
+        this.originalDwellCallback = undefined;
+      }
+      this.eyeTrackingInstance = null;
+    } catch (error) {
+      console.warn('[CommunicatorDialogBoardItem] Failed to cleanup eye tracking:', error);
+    }
+  }
+
+  safeSetState(updater, callback) {
+    if (this._isMounted) {
+      this.setState(updater, callback);
+    }
   }
 
   openMenu(e) {
@@ -137,11 +259,11 @@ class CommunicatorDialogBoardItem extends React.Component {
 
   async handleBoardPublishOpen(board) {
     if (!board.isPublic && !board.description) {
-      this.setState({
+      this.safeSetState({
         openPublishBoard: true
       });
     } else {
-      this.setState({ loading: true });
+      this.safeSetState({ loading: true });
       try {
         if (this.state.editBoardDescriptionDialogValue) {
           board.description = this.state.editBoardDescriptionDialogValue;
@@ -149,7 +271,7 @@ class CommunicatorDialogBoardItem extends React.Component {
         await this.props.publishBoard(board);
       } catch (err) {
       } finally {
-        this.setState({
+        this.safeSetState({
           loading: false
         });
       }
@@ -163,14 +285,20 @@ class CommunicatorDialogBoardItem extends React.Component {
   }
 
   async handleBoardCopy(board) {
-    this.setState({
+    this.safeSetState({
       loading: true
     });
     try {
       await this.props.copyBoard(board);
+      // Close dialog on success
+      this.safeSetState({
+        openCopyBoard: false,
+        loading: false
+      });
     } catch (err) {
-    } finally {
-      this.setState({
+      console.error('Handle board copy error:', err);
+      // Stop loading and close dialog on error
+      this.safeSetState({
         openCopyBoard: false,
         loading: false
       });
@@ -178,15 +306,28 @@ class CommunicatorDialogBoardItem extends React.Component {
   }
 
   async handleBoardDelete(board) {
-    this.setState({
+    console.log('[CommunicatorDialogBoardItem] handleBoardDelete called for board:', board.id, board);
+    this.safeSetState({
       openDeleteBoard: false,
       loading: true
     });
     try {
       await this.props.deleteMyBoard(board);
+      console.log('[CommunicatorDialogBoardItem] handleBoardDelete completed successfully for board:', board.id);
     } catch (err) {
+      console.error('[CommunicatorDialogBoardItem] handleBoardDelete error for board:', board.id, err);
+      // Show error notification to user
+      if (this._isMounted && this.props.showNotification) {
+        this.props.showNotification(
+          this.props.intl.formatMessage({
+            id: 'cboard.components.CommunicatorDialog.boardDeleteError',
+            defaultMessage: 'Failed to delete board'
+          }),
+          'error'
+        );
+      }
     } finally {
-      this.setState({
+      this.safeSetState({
         loading: false
       });
     }
@@ -219,12 +360,12 @@ class CommunicatorDialogBoardItem extends React.Component {
       whistleblower
     };
 
-    this.setState({
+    this.safeSetState({
       reportDialogState: { ...reportDialogState, loading: true }
     });
     try {
       await boardReport(reportData);
-      this.setState({
+      this.safeSetState({
         reportDialogState: {
           ...reportDialogState,
           error: false,
@@ -233,7 +374,7 @@ class CommunicatorDialogBoardItem extends React.Component {
         }
       });
     } catch (error) {
-      this.setState({
+      this.safeSetState({
         reportDialogState: {
           ...reportDialogState,
           error: true,
@@ -259,7 +400,7 @@ class CommunicatorDialogBoardItem extends React.Component {
   };
 
   async handleBoardImage(board) {
-    this.setState({
+    this.safeSetState({
       openImageBoard: false,
       loading: true
     });
@@ -274,7 +415,7 @@ class CommunicatorDialogBoardItem extends React.Component {
       }
     } catch (err) {
     } finally {
-      this.setState({
+      this.safeSetState({
         imageBoard: null,
         loading: false
       });
@@ -282,7 +423,7 @@ class CommunicatorDialogBoardItem extends React.Component {
   }
 
   async handleBoardTitleDesc(board) {
-    this.setState({
+    this.safeSetState({
       openEditBoardTitle: false,
       loading: true
     });
@@ -300,7 +441,7 @@ class CommunicatorDialogBoardItem extends React.Component {
     } catch (err) {
       console.log(err.message);
     } finally {
-      this.setState({
+      this.safeSetState({
         editBoardDescriptionDialogValue: board.description,
         editBoardTitleDialogValue: board.name,
         loading: false
@@ -444,7 +585,25 @@ class CommunicatorDialogBoardItem extends React.Component {
               </Typography>
               <Typography variant="body1" gutterBottom>
                 <b>{intl.formatMessage(messages.boardInfoTiles)}:</b>{' '}
-                {board.tiles?.length || 0}
+                {(() => {
+                  // 優先使用真正的 tiles 陣列（有物件的）
+                  if (board.tiles && Array.isArray(board.tiles)) {
+                    const realTiles = board.tiles.filter(
+                      tile => tile && typeof tile === 'object'
+                    );
+                    if (realTiles.length > 0) {
+                      return realTiles.length;
+                    }
+                  }
+                  // 對於 /board/public /board/my 這類只返回 tiles_count 的虛擬列表，直接用 tiles_count
+                  if (typeof board.tiles_count === 'number') {
+                    return board.tiles_count;
+                  }
+                  if (typeof board.tilesCount === 'number') {
+                    return board.tilesCount;
+                  }
+                  return 0;
+                })()}
               </Typography>
               <Typography variant="body1" gutterBottom>
                 <b>{intl.formatMessage(messages.boardInfoId)}:</b> {board.id}
@@ -593,7 +752,10 @@ class CommunicatorDialogBoardItem extends React.Component {
     };
 
     return (
-      <div className="CommunicatorDialog__boards__item">
+      <div 
+        className="CommunicatorDialog__boards__item CommunicatorDialog__boards__item--eye-tracking"
+        data-profile-id={board.id}
+      >
         <div className="CommunicatorDialog__boards__item__image">
           {!!boardCaption && (
             <div className="CommunicatorDialog__boards__item__image_container">
@@ -704,7 +866,25 @@ class CommunicatorDialogBoardItem extends React.Component {
                     className="CommunicatorDialog__boards__item__data__title__secondary"
                   >
                     {intl.formatMessage(messages.tilesQty, {
-                      qty: board.tiles?.length || 0
+                      qty: (() => {
+                        // 優先使用 tiles_count（來自 /board/my 等列表接口）
+                        if (typeof board.tiles_count === 'number') {
+                          return board.tiles_count;
+                        }
+                        if (typeof board.tilesCount === 'number') {
+                          return board.tilesCount;
+                        }
+                        // 如果沒有 tiles_count，計算真實 tiles 數量
+                        if (board.tiles && Array.isArray(board.tiles)) {
+                          const realTiles = board.tiles.filter(
+                            tile => tile !== null && tile !== undefined && typeof tile === 'object'
+                          );
+                          if (realTiles.length > 0) {
+                            return realTiles.length;
+                          }
+                        }
+                        return 0;
+                      })()
                     })}
                     <span style={{ marginLeft: '1em' }} />
                     <LanguageIcon fontSize="small" />
@@ -774,7 +954,7 @@ class CommunicatorDialogBoardItem extends React.Component {
             </DialogActions>
           </Dialog>
           <div className="CommunicatorDialog__boards__item__data__author">
-            {intl.formatMessage(messages.author, { author: board.author })}
+            {intl.formatMessage(messages.author, { author: board.author || 'Unknown' })}
           </div>
           <div className="CommunicatorDialog__boards__item__data__date">
             {moment(board.lastEdited).format('DD/MM/YYYY')}
@@ -797,7 +977,7 @@ class CommunicatorDialogBoardItem extends React.Component {
                 <KeyIcon />
               </Tooltip>
             )}
-            {communicator.rootBoard === board.id && (
+            {communicator.rootBoard && String(communicator.rootBoard) === String(board.id) && (
               <Tooltip
                 title={intl.formatMessage(messages.rootBoard)}
                 name="CommunicatorDialog__PropertyOption"
@@ -805,7 +985,7 @@ class CommunicatorDialogBoardItem extends React.Component {
                 <HomeIcon />
               </Tooltip>
             )}
-            {activeBoardId === board.id && (
+            {activeBoardId && String(activeBoardId) === String(board.id) && (
               <Tooltip
                 title={intl.formatMessage(messages.activeBoard)}
                 name="CommunicatorDialog__PropertyOption"
@@ -825,7 +1005,7 @@ class CommunicatorDialogBoardItem extends React.Component {
                 <div>
                   <IconButton
                     disabled={
-                      communicator.rootBoard === board.id || !userData.authToken
+                      (communicator.rootBoard && String(communicator.rootBoard) === String(board.id)) || !userData.authToken
                     }
                     label={intl.formatMessage(messages.removeBoard)}
                     onClick={() => {
@@ -835,7 +1015,7 @@ class CommunicatorDialogBoardItem extends React.Component {
                     <ClearIcon />
                   </IconButton>
                   <IconButton
-                    disabled={communicator.rootBoard === board.id}
+                    disabled={communicator.rootBoard && String(communicator.rootBoard) === String(board.id)}
                     onClick={() => {
                       this.setRootBoard(board);
                     }}
@@ -849,7 +1029,7 @@ class CommunicatorDialogBoardItem extends React.Component {
                 <div>
                   <IconButton
                     disabled={
-                      (Array.isArray(communicator.boards) && communicator.boards.includes(board.id)) ||
+                      (Array.isArray(communicator.boards) && communicator.boards.some(id => String(id) === String(board.id))) ||
                       (userData && userData.email === board.email)
                     }
                     onClick={this.handleBoardCopyOpen.bind(this)}
@@ -922,9 +1102,9 @@ class CommunicatorDialogBoardItem extends React.Component {
               {selectedTab === TAB_INDEXES.MY_BOARDS && (
                 <div>
                   <IconButton
-                    disabled={communicator.rootBoard === board.id}
+                    disabled={communicator.rootBoard && String(communicator.rootBoard) === String(board.id)}
                     label={
-                      (Array.isArray(communicator.boards) && communicator.boards.includes(board.id))
+                      (Array.isArray(communicator.boards) && communicator.boards.some(id => String(id) === String(board.id)))
                         ? intl.formatMessage(messages.removeBoard)
                         : intl.formatMessage(messages.addBoard)
                     }
@@ -932,7 +1112,7 @@ class CommunicatorDialogBoardItem extends React.Component {
                       addOrRemoveBoard(board);
                     }}
                   >
-                    {(Array.isArray(communicator.boards) && communicator.boards.includes(board.id)) ? (
+                    {(Array.isArray(communicator.boards) && communicator.boards.some(id => String(id) === String(board.id))) ? (
                       <ClearIcon />
                     ) : (
                       <InputIcon />
@@ -993,8 +1173,8 @@ class CommunicatorDialogBoardItem extends React.Component {
                   </Dialog>
                   <IconButton
                     disabled={
-                      communicator.rootBoard === board.id ||
-                      activeBoardId === board.id
+                      (communicator.rootBoard && String(communicator.rootBoard) === String(board.id)) ||
+                      (activeBoardId && String(activeBoardId) === String(board.id))
                     }
                     label={intl.formatMessage(messages.deleteBoard)}
                     onClick={() => {

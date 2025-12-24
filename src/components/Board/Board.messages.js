@@ -52,17 +52,17 @@ export default defineMessages({
   },
   scannerHowToDeactivate: {
     id: 'cboard.components.Board.scannerHowToDeactivate',
-    defaultMessage: 'Press Escape 4 times to deactivate Scanner.'
+    defaultMessage: 'Press Escape 4 times to deactivate scanning, or disable it in Eye Tracking & Scanning settings.'
   },
   scannerManualStrategy: {
     id: 'cboard.components.Board.scannerManualStrategy',
     defaultMessage:
-      'Scanner advances with space bar key, press enter to select an item.'
+      'Eye tracking scanning is active. Look at items to highlight them, then keep looking to select.'
   },
   scannerAutomaticStrategy: {
     id: 'cboard.components.Board.scannerAutomaticStrategy',
     defaultMessage:
-      'Scanner will iterate over elements, press any key to select them.'
+      'Eye tracking scanning is active. Look at items to highlight them, then keep looking to select.'
   },
   userProfileLocked: {
     id: 'cboard.components.Board.userProfileLocked',
@@ -232,5 +232,29 @@ export default defineMessages({
     id: 'cboard.components.Board.loginToImport',
     defaultMessage:
       'To import a CBuilder board, you must be logged in with the same account that was used to create the board.'
+  },
+  deviceStatusEyeTrackingConnected: {
+    id: 'cboard.components.Board.deviceStatusEyeTrackingConnected',
+    defaultMessage: 'Eye Tracking: Connected'
+  },
+  deviceStatusEyeTrackingDisconnected: {
+    id: 'cboard.components.Board.deviceStatusEyeTrackingDisconnected',
+    defaultMessage: 'Eye Tracking: Not connected'
+  },
+  deviceStatusSwitchConnected: {
+    id: 'cboard.components.Board.deviceStatusSwitchConnected',
+    defaultMessage: 'Switch: Connected'
+  },
+  deviceStatusSwitchDisconnected: {
+    id: 'cboard.components.Board.deviceStatusSwitchDisconnected',
+    defaultMessage: 'Switch: Not connected'
+  },
+  keyboardLocked: {
+    id: 'cboard.components.Board.keyboardLocked',
+    defaultMessage: 'Please unlock to use keyboard'
+  },
+  jyutpingKeyboard: {
+    id: 'cboard.components.Board.jyutpingKeyboard',
+    defaultMessage: 'Jyutping Keyboard'
   }
 });

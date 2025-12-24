@@ -43,11 +43,21 @@ export const UserIcon = ({ intl, user, classes, ...other }) => {
       hasPhotos = true;
       avatar = photos[0];
     } else {
-      const [first, second = ''] = user.name
+      // Handle case where user.name might be missing or empty
+      const userName = user.name || user.email || 'U';
+      const nameParts = userName
         .toUpperCase()
         .split(' ')
+        .filter(part => part.length > 0)
         .slice(0, 2);
-      avatar = `${first.slice(0, 1)}${second.slice(0, 1)}`;
+      
+      if (nameParts.length === 0) {
+        avatar = 'U';
+      } else if (nameParts.length === 1) {
+        avatar = nameParts[0].slice(0, 1);
+      } else {
+        avatar = `${nameParts[0].slice(0, 1)}${nameParts[1].slice(0, 1)}`;
+      }
     }
   }
 

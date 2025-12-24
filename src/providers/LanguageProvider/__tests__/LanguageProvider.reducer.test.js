@@ -1,13 +1,14 @@
 import languageProviderReducer from '../LanguageProvider.reducer';
 import { CHANGE_LANG, SET_LANGS } from '../LanguageProvider.constants';
 import { LOGIN_SUCCESS } from '../../../components/Account/Login/Login.constants';
-import { DEFAULT_LANG } from '../../../components/App/App.constants';
+import { APP_LANGS } from '../../../components/App/App.constants';
+import { getDefaultLang } from '../../../i18n';
 let mockLanguage, initialState;
 
 describe('reducer', () => {
   beforeEach(() => {
     initialState = {
-      lang: DEFAULT_LANG,
+      lang: getDefaultLang(APP_LANGS),
       dir: 'ltr',
       langs: [],
       localLangs: [],

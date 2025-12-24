@@ -62,5 +62,25 @@ export default defineMessages({
     id: 'cboard.components.BoardShare.cannotShare',
     defaultMessage:
       'Cannot share the board on facebook. Please try again later.'
+  },
+  shareTab: {
+    id: 'cboard.components.BoardShare.shareTab',
+    defaultMessage: 'Share'
+  },
+  boardPublished: {
+    id: 'cboard.components.BoardShare.boardPublished',
+    defaultMessage: 'Board published successfully! It will now appear in the Public Boards tab.'
+  },
+  boardUnpublished: {
+    id: 'cboard.components.BoardShare.boardUnpublished',
+    defaultMessage: 'Board unpublished successfully. It will no longer appear in the Public Boards tab.'
+  },
+  publishError: {
+    id: 'cboard.components.BoardShare.publishError',
+    defaultMessage: 'Failed to publish board. Please try again.'
+  },
+  emptyBoardWarning: {
+    id: 'cboard.components.BoardShare.emptyBoardWarning',
+    defaultMessage: 'Warning: This board has no cards. It will not appear in the Public Boards list until you add cards.'
   }
 });

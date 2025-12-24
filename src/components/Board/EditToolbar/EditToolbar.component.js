@@ -11,7 +11,7 @@ import DashboardIcon from '@material-ui/icons/Dashboard';
 import DashboardOutlinedIcon from '@material-ui/icons/DashboardOutlined';
 import EditIcon from '@material-ui/icons/Edit';
 import AddBoxIcon from '@material-ui/icons/AddBox';
-import KeyboardIcon from '@material-ui/icons/Keyboard';
+import SettingsIcon from '@material-ui/icons/Settings';
 import { MdContentCopy } from 'react-icons/md';
 import { MdContentPaste } from 'react-icons/md';
 
@@ -78,7 +78,8 @@ EditToolbar.propTypes = {
   onAddClick: PropTypes.func,
   onBoardTypeChange: PropTypes.func,
   copiedTiles: PropTypes.arrayOf(PropTypes.object),
-  onJyutpingKeyboardClick: PropTypes.func
+  isLocked: PropTypes.bool,
+  onJyutpingRulesClick: PropTypes.func
 };
 
 function EditToolbar({
@@ -102,7 +103,8 @@ function EditToolbar({
   onCopyTiles,
   onPasteTiles,
   copiedTiles,
-  onJyutpingKeyboardClick
+  isLocked,
+  onJyutpingRulesClick
 }) {
   const isItemsSelected = !!selectedItemsCount;
   const isFixed = !!isFixedBoard;
@@ -259,23 +261,24 @@ function EditToolbar({
               <IconButton
                 label={intl.formatMessage(messages.addTileButton)}
                 onClick={onAddClick}
-                disabled={isSaving}
+                disabled={isSaving || isLocked}
                 color="inherit"
               >
                 <AddBoxIcon />
               </IconButton>
             </div>
-            {onJyutpingKeyboardClick && (
-              <IconButton
-                label="Jyutping Keyboard"
-                onClick={onJyutpingKeyboardClick}
-                disabled={isSaving}
-                color="inherit"
-              >
-                <KeyboardIcon />
-              </IconButton>
-            )}
           </Fragment>
+        )}
+        {/* Jyutping Rules - Visible when unlocked (in edit mode) */}
+        {!isLocked && onJyutpingRulesClick && (
+          <IconButton
+            label="Jyutping Rules"
+            onClick={onJyutpingRulesClick}
+            disabled={isSaving}
+            color="inherit"
+          >
+            <SettingsIcon />
+          </IconButton>
         )}
       </div>
     </div>

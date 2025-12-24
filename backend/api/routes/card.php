@@ -127,10 +127,26 @@ function handleCardRoutes($method, $pathParts, $data, $authToken) {
             
             $cardId = $db->lastInsertId();
             
-            // Fetch created card
+            // Fetch created card first to get actual created_at from database
             $stmt = $db->prepare("SELECT * FROM cards WHERE id = ?");
             $stmt->execute([$cardId]);
             $card = $stmt->fetch();
+            
+            // Log card creation to action_logs using actual database timestamps
+            try {
+                require_once __DIR__ . '/action-log.php';
+                $metadata = json_encode([
+                    'card_title' => $title,
+                    'label_text' => $labelText,
+                    'category' => $category,
+                    'created_at' => $card['created_at'] ?? date('Y-m-d H:i:s'),
+                    'updated_at' => $card['updated_at'] ?? null
+                ]);
+                insertActionLog($db, $user['id'], null, $cardId, 'card_create', $metadata);
+            } catch (Exception $e) {
+                // Log error but don't fail card creation
+                error_log("Failed to log card creation: " . $e->getMessage());
+            }
             
             return successResponse($card, 201);
             
@@ -202,11 +218,40 @@ function handleCardRoutes($method, $pathParts, $data, $authToken) {
             $updates[] = "updated_at = NOW()";
             $params[] = $cardId;
             
+            // Get card before update to compare changes (include created_at and updated_at)
+            $stmt = $db->prepare("SELECT id, title, created_at, updated_at FROM cards WHERE id = ?");
+            $stmt->execute([$cardId]);
+            $oldCard = $stmt->fetch();
+            
+            if (!$oldCard) {
+                return errorResponse('Card not found', 404);
+            }
+            
             $sql = "UPDATE cards SET " . implode(', ', $updates) . " WHERE id = ?";
             $stmt = $db->prepare($sql);
             $stmt->execute($params);
             
-            // Fetch updated card
+            // Fetch updated card (include created_at and updated_at)
+            $stmt = $db->prepare("SELECT id, title, created_at, updated_at FROM cards WHERE id = ?");
+            $stmt->execute([$cardId]);
+            $updatedCardMeta = $stmt->fetch();
+            
+            // Log card update to action_logs using actual database timestamps
+            try {
+                require_once __DIR__ . '/action-log.php';
+                $metadata = json_encode([
+                    'card_title' => $updatedCardMeta['title'] ?? $oldCard['title'],
+                    'created_at' => $oldCard['created_at'] ?? null,
+                    'updated_at' => $updatedCardMeta['updated_at'] ?? null,
+                    'changes' => array_keys($data)
+                ]);
+                insertActionLog($db, $user['id'], null, $cardId, 'card_update', $metadata);
+            } catch (Exception $e) {
+                // Log error but don't fail card update
+                error_log("Failed to log card update: " . $e->getMessage());
+            }
+            
+            // Fetch full updated card for response
             $stmt = $db->prepare("SELECT * FROM cards WHERE id = ?");
             $stmt->execute([$cardId]);
             $updatedCard = $stmt->fetch();

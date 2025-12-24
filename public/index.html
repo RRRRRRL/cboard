@@ -14,8 +14,10 @@
       blob:
       gap:
       data:;
-  img-src * data:  filesystem:  blob:  ;
-  connect-src 'self' https://* http://* localhost:* 127.0.0.1:* api.localhost:* http://192.168.62.37:* http://192.168.62.37:8000 http://192.168.62.37:80 wss: ws: blob:;
+  img-src * data: filesystem: blob:;
+  connect-src 'self' https://* http://* localhost:* 127.0.0.1:* api.localhost:* wss: ws: blob: data:;
+  script-src 'self' 'unsafe-inline' 'unsafe-eval' https://* http://* data: blob:;
+  worker-src 'self' blob: data:;
   ">
 
   <!--
@@ -47,8 +49,112 @@
   <link rel="apple-touch-icon" sizes="180x180" href="%PUBLIC_URL%/images/touch/touch-icon-iphone-retina.png">
   <link rel="apple-touch-icon" sizes="167x167" href="%PUBLIC_URL%/images/touch/touch-icon-ipad-retina.png">
 
+  <!-- Intercept fetch API BEFORE WebGazer loads to redirect model requests to local files -->
+  <script>
+    // This must run BEFORE webgazer.js loads
+    (function() {
+      if (typeof window === 'undefined') return;
+      
+      const originalFetch = window.fetch;
+      window.fetch = function(url, options) {
+        let urlString = '';
+        let isRequestObject = false;
+        
+        if (typeof url === 'string') {
+          urlString = url;
+        } else if (url instanceof Request) {
+          urlString = url.url;
+          isRequestObject = true;
+        } else {
+          urlString = url.toString();
+        }
+        
+        // Intercept TensorFlow model requests
+        // Match ANY storage.googleapis.com URL that contains model IDs or kagglesdsdata
+        if (urlString && (
+          urlString.includes('tfhub.dev') ||
+          urlString.includes('storage.googleapis.com') ||
+          urlString.includes('kagglesdsdata') ||
+          urlString.includes('kaggleusercontent') ||
+          urlString.includes('googleusercontent') ||
+          urlString.includes('mediapipe/tfjs-model') ||
+          urlString.includes('tensorflow/tfjs-model') ||
+          urlString.includes('models/2341') || // facemesh model ID
+          urlString.includes('models/2379') || // blazeface model ID
+          urlString.includes('models/2479') || // iris model ID
+          (urlString.includes('storage.googleapis.com') && (
+            urlString.includes('models/2341') || // facemesh
+            urlString.includes('models/2379') || // blazeface
+            urlString.includes('models/2479')    // iris
+          ))
+        )) {
+          const isBinFile = urlString.includes('group1-shard') || urlString.includes('.bin');
+          let localUrl = urlString;
+          let redirected = false;
+          
+          // Check for facemesh model (ID 2341)
+          if (urlString.includes('mediapipe/tfjs-model/facemesh') || 
+              urlString.includes('facemesh') || 
+              urlString.includes('models/2341') || 
+              urlString.includes('2341/3130') ||
+              (urlString.includes('kagglesdsdata') && urlString.includes('2341')) ||
+              (urlString.includes('storage.googleapis.com') && urlString.includes('2341'))) {
+            localUrl = window.location.origin + '/models/facemesh/' + (isBinFile ? 'group1-shard1of1.bin' : 'model.json');
+            redirected = true;
+          } 
+          // Check for iris model (ID 2479)
+          else if (urlString.includes('mediapipe/tfjs-model/iris') || 
+                   urlString.includes('iris') || 
+                   urlString.includes('models/2479') || 
+                   urlString.includes('2479/3326') ||
+                   (urlString.includes('kagglesdsdata') && urlString.includes('2479')) ||
+                   (urlString.includes('storage.googleapis.com') && urlString.includes('2479'))) {
+            localUrl = window.location.origin + '/models/iris/' + (isBinFile ? 'group1-shard1of1.bin' : 'model.json');
+            redirected = true;
+          } 
+          // Check for blazeface model (ID 2379)
+          else if (urlString.includes('tensorflow/tfjs-model/blazeface') || 
+                   urlString.includes('blazeface') || 
+                   urlString.includes('models/2379') || 
+                   urlString.includes('2379/3196') ||
+                   (urlString.includes('kagglesdsdata') && urlString.includes('2379')) ||
+                   (urlString.includes('storage.googleapis.com') && urlString.includes('2379'))) {
+            localUrl = window.location.origin + '/models/blazeface/' + (isBinFile ? 'group1-shard1of1.bin' : 'model.json');
+            redirected = true;
+          }
+          
+          if (redirected) {
+            console.log('[ModelInterceptor] Redirecting:', urlString.substring(0, 100), '->', localUrl);
+            if (typeof url === 'string') {
+              return originalFetch.call(this, localUrl, options);
+            } else if (isRequestObject) {
+              const newRequest = new Request(localUrl, {
+                method: url.method || options.method || 'GET',
+                headers: url.headers || options.headers || {},
+                body: url.body || options.body,
+                mode: url.mode || options.mode || 'cors',
+                credentials: url.credentials || options.credentials || 'same-origin',
+                cache: url.cache || options.cache || 'default',
+                redirect: url.redirect || options.redirect || 'follow',
+                referrer: url.referrer || options.referrer || 'client',
+                integrity: url.integrity || options.integrity
+              });
+              return originalFetch.call(this, newRequest, options);
+            }
+          }
+        }
+        
+        return originalFetch.apply(this, arguments);
+      };
+      
+      console.log('[ModelInterceptor] Fetch API interception configured (inline script)');
+    })();
+  </script>
+  
   <!-- WebGazer.js for camera-based eye tracking -->
-  <script src="https://webgazer.cs.brown.edu/webgazer.js" defer></script>
+    <script src="%PUBLIC_URL%/webgazer.js" defer></script>
+    <!-- jsQR library for QR code scanning fallback -->
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
   
   <!-- Tesseract.js for client-side OCR -->
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/tesseract.min.js" defer></script>

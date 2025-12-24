@@ -116,26 +116,179 @@ export class Board extends Component {
     scannerSettings: { active: false, delay: 2000, strategy: 'automatic' },
     selectedTileIds: [],
     emptyVoiceAlert: false,
-    userData: {}
+    userData: {},
+    // Scanning highlight audio guide mode: 'off' | 'beep' | 'card_audio'
+    audioGuideMode: 'off'
   };
 
   constructor(props) {
     super(props);
 
+    // Ensure titleDialogValue is always a string, never undefined
+    const boardName = (props.board && props.board.name) ? props.board.name : '';
     this.state = {
       openTitleDialog: false,
-      titleDialogValue: props.board && props.board.name ? props.board.name : ''
+      titleDialogValue: boardName
     };
 
     this.boardContainerRef = React.createRef();
     this.fixedBoardContainerRef = React.createRef();
+
+    // Track last scanner‑focused element to avoid repeating sounds
+    this.lastScannerFocusedElement = null;
   }
 
   componentDidMount() {
-    if (this.props.scannerSettings.active) {
+    if (this.props.scannerSettings.active && this.props.onScannerActive) {
       this.props.onScannerActive();
     }
+
+    // Initial check for scanner highlight audio feedback
+    this.handleScannerHighlightAudio();
   }
+
+  componentDidUpdate(prevProps) {
+    // When scanner activation state or audio guide mode changes,
+    // re‑evaluate highlight audio feedback
+    const scannerJustActivated =
+      !prevProps.scannerSettings.active && this.props.scannerSettings.active;
+    const audioGuideChanged =
+      prevProps.audioGuideMode !== this.props.audioGuideMode;
+
+    if (
+      scannerJustActivated ||
+      audioGuideChanged ||
+      this.props.scannerSettings.active
+    ) {
+      this.handleScannerHighlightAudio();
+    }
+  }
+
+  /**
+   * Play audio feedback when scanner highlight moves to a new item.
+   * Modes:
+   * - off: no sound
+   * - beep: short confirmation tone
+   * - card_audio: speak tile label or use recorded sound if available
+   */
+  handleScannerHighlightAudio = () => {
+    const { scannerSettings, audioGuideMode, board } = this.props;
+    if (!scannerSettings || !scannerSettings.active) {
+      this.lastScannerFocusedElement = null;
+      return;
+    }
+    if (!audioGuideMode || audioGuideMode === 'off') {
+      return;
+    }
+
+    let focusedElement = null;
+    try {
+      focusedElement =
+        document.querySelector('.Tile.scanner__focused') ||
+        document.querySelector('.scanner__focused');
+    } catch (e) {
+      // DOM errors are non‑critical
+      return;
+    }
+
+    if (!focusedElement || focusedElement === this.lastScannerFocusedElement) {
+      return;
+    }
+
+    this.lastScannerFocusedElement = focusedElement;
+
+    if (audioGuideMode === 'beep') {
+      this.playScannerBeep();
+      return;
+    }
+
+    if (audioGuideMode === 'card_audio' && board && Array.isArray(board.tiles)) {
+      const tileId =
+        focusedElement.dataset?.tileId || focusedElement.id || null;
+      if (!tileId) {
+        return;
+      }
+      const tile = board.tiles.find(
+        t => t && String(t.id) === String(tileId)
+      );
+      if (tile) {
+        this.playScannerTileAudio(tile);
+      }
+    }
+  };
+
+  playScannerBeep = () => {
+    try {
+      const AudioContextImpl =
+        window.AudioContext || window.webkitAudioContext || null;
+      if (!AudioContextImpl) {
+        return;
+      }
+      const ctx = new AudioContextImpl();
+      const oscillator = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(880, ctx.currentTime); // A5 tone
+
+      gainNode.gain.setValueAtTime(0.001, ctx.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(
+        0.25,
+        ctx.currentTime + 0.01
+      );
+      gainNode.gain.exponentialRampToValueAtTime(
+        0.001,
+        ctx.currentTime + 0.15
+      );
+
+      oscillator.connect(gainNode);
+      gainNode.connect(ctx.destination);
+
+      oscillator.start();
+      oscillator.stop(ctx.currentTime + 0.18);
+
+      oscillator.onended = () => {
+        try {
+          ctx.close();
+        } catch (e) {
+          // ignore
+        }
+      };
+    } catch (e) {
+      // Fallback: do nothing if Web Audio is unavailable
+    }
+  };
+
+  playScannerTileAudio = tile => {
+    // Prefer recorded sound if available
+    if (tile.sound) {
+      try {
+        const audio = new Audio(tile.sound);
+        audio.play().catch(() => {
+          // Ignore playback errors (e.g., user gesture required)
+        });
+        return;
+      } catch (e) {
+        // Fallback to TTS below
+      }
+    }
+
+    // Fallback: speak tile label using browser TTS
+    if (!tile.label || !('speechSynthesis' in window)) {
+      return;
+    }
+    try {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(tile.label);
+      utterance.lang = 'zh-HK';
+      utterance.rate = 0.9;
+      utterance.pitch = 1.0;
+      utterance.volume = 1.0;
+      window.speechSynthesis.speak(utterance);
+    } catch (e) {
+      // Non‑critical
+    }
+  };
 
   handleTileClick = tile => {
     const { onTileClick, isSelecting } = this.props;
@@ -166,15 +319,17 @@ export class Board extends Component {
     if (!this.props.userData.email) {
       return false;
     }
+    const boardName = (this.props.board && this.props.board.name) ? this.props.board.name : '';
     this.setState({
       openTitleDialog: true,
-      titleDialogValue: this.props.board.name
+      titleDialogValue: boardName
     });
   };
 
   handleBoardTitleChange = event => {
     const { value: titleDialogValue } = event.target;
-    this.setState({ titleDialogValue });
+    // Ensure value is always a string, never undefined
+    this.setState({ titleDialogValue: titleDialogValue || '' });
   };
 
   handleBoardTitleSubmit = async () => {
@@ -187,9 +342,11 @@ export class Board extends Component {
   };
 
   handleBoardTitleClose = () => {
+    const boardName = (this.props.board && this.props.board.name) ? this.props.board.name : '';
+    const boardId = (this.props.board && this.props.board.id) ? this.props.board.id : '';
     this.setState({
       openTitleDialog: false,
-      titleDialogValue: this.props.board.name || this.props.board.id || ''
+      titleDialogValue: boardName || boardId || ''
     });
   };
 
@@ -201,16 +358,28 @@ export class Board extends Component {
       displaySettings
     } = this.props;
 
-    return tiles.map(tileToRender => {
-      const tile = {
-        ...tileToRender,
-        label: resolveTileLabel(tileToRender, this.props.intl)
-      };
-      const isSelected = selectedTileIds.includes(tile.id);
-      const variant = Boolean(tile.loadBoard) ? 'folder' : 'button';
+    // Ensure tiles is an array
+    if (!tiles || !Array.isArray(tiles)) {
+      return null;
+    }
 
-      return (
-        <div key={tile.id}>
+    // Filter out null/undefined tiles (virtual tiles from list view)
+    const validTiles = tiles.filter(tile => 
+      tile !== null && tile !== undefined && typeof tile === 'object' && tile.id
+    );
+
+    return validTiles
+      .filter(tileToRender => tileToRender && tileToRender.id) // Additional safety check
+      .map(tileToRender => {
+        const tile = {
+          ...tileToRender,
+          label: resolveTileLabel(tileToRender, this.props.intl)
+        };
+        const isSelected = selectedTileIds && Array.isArray(selectedTileIds) && selectedTileIds.includes(tile.id);
+        const variant = Boolean(tile.loadBoard) ? 'folder' : 'button';
+
+        return (
+          <div key={tile.id}>
           <Tile
             backgroundColor={tile.backgroundColor}
             borderColor={tile.borderColor}
@@ -340,7 +509,7 @@ export class Board extends Component {
       speak
     } = this.props;
 
-    const tiles = this.renderTiles(board.tiles);
+    const tiles = this.renderTiles(board?.tiles || []);
     const cols = DISPLAY_SIZE_GRID_COLS[this.props.displaySettings.uiSize];
     const isLoggedIn = !!userData.email;
     const isNavigationButtonsOnTheSide =
@@ -368,15 +537,14 @@ export class Board extends Component {
             intl={intl}
             onDefaultBoardOptionClick={changeDefaultBoard}
           />
-          <Scannable>
-            <div
-              className={classNames('Board__output', {
-                hidden: this.props.displaySettings.hideOutputActive
-              })}
-            >
-              <OutputContainer />
-            </div>
-          </Scannable>
+          <div
+            className={classNames('Board__output', {
+              hidden: this.props.displaySettings.hideOutputActive
+            })}
+            data-output-section="true"
+          >
+            <OutputContainer />
+          </div>
 
           <Navbar
             className="Board__navbar"
@@ -392,6 +560,12 @@ export class Board extends Component {
             userData={userData}
             publishBoard={publishBoard}
             showNotification={this.props.showNotification}
+            profiles={this.props.profiles || []}
+            onGenerateQR={this.props.onGenerateQR}
+            onGenerateCloudCode={this.props.onGenerateCloudCode}
+            onGenerateEmail={this.props.onGenerateEmail}
+            onRedeemCode={this.props.onRedeemCode}
+            onJyutpingKeyboardClick={this.props.onJyutpingKeyboardClick}
           />
           {emptyVoiceAlert && (
             <Alert variant="filled" severity="error">
@@ -429,9 +603,9 @@ export class Board extends Component {
             className="Board__edit-toolbar"
             isSelectAll={isSelectAll}
             isSelecting={isSelecting}
-            onJyutpingKeyboardClick={this.props.onJyutpingKeyboardClick}
             isSaving={isSaving}
             isLoggedIn={isLoggedIn}
+            isLocked={isLocked}
             onAddClick={onAddClick}
             isFixedBoard={isFixedBoard}
             onDeleteClick={onDeleteClick}
@@ -444,6 +618,7 @@ export class Board extends Component {
             onCopyTiles={onCopyTiles}
             onPasteTiles={onPasteTiles}
             copiedTiles={this.props.copiedTiles}
+            onJyutpingRulesClick={this.props.onJyutpingRulesClick}
           />
           <div className="BoardSideButtonsContainer">
             {navigationSettings.caBackButtonActive && (
@@ -570,7 +745,7 @@ export class Board extends Component {
                 label={intl.formatMessage(messages.boardTitle)}
                 type="text"
                 fullWidth
-                value={this.state.titleDialogValue}
+                value={this.state.titleDialogValue || ''}
                 onChange={this.handleBoardTitleChange}
               />
             </DialogContent>

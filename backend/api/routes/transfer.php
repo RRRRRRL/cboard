@@ -35,7 +35,7 @@ function handleTransferRoutes($method, $pathParts, $data, $authToken) {
         
         try {
             // Verify profile ownership
-            $stmt = $db->prepare("SELECT id, display_name, description, layout_type, language, root_board_id, user_id FROM profiles WHERE id = ? AND user_id = ?");
+            $stmt = $db->prepare("SELECT id, display_name, description, layout_type, language, user_id FROM profiles WHERE id = ? AND user_id = ?");
             $stmt->execute([$profileId, $user['id']]);
             $profile = $stmt->fetch();
             
@@ -43,17 +43,8 @@ function handleTransferRoutes($method, $pathParts, $data, $authToken) {
                 return errorResponse('Profile not found or access denied', 404);
             }
             
-            // Get all boards for this profile
-            $stmt = $db->prepare("
-                SELECT b.id, b.board_id, b.name, b.description, b.board_data, b.is_public, b.last_edited
-                FROM boards b
-                INNER JOIN profile_cards pc ON b.id = pc.board_id
-                WHERE pc.profile_id = ?
-                GROUP BY b.id
-                ORDER BY b.last_edited DESC
-            ");
-            $stmt->execute([$profileId]);
-            $boards = $stmt->fetchAll();
+            // Profile board data is now constructed from profile_cards + cards, not from boards table
+            // We'll get the board data using the profile board endpoint logic
             
             // Get all cards for this profile
             $stmt = $db->prepare("
@@ -68,6 +59,24 @@ function handleTransferRoutes($method, $pathParts, $data, $authToken) {
             $stmt->execute([$profileId]);
             $cards = $stmt->fetchAll();
             
+            // Build tiles from cards for root_board export
+            $tiles = [];
+            foreach ($cards as $card) {
+                $tiles[] = [
+                    'id' => 'card_' . $card['id'],
+                    'label' => $card['label_text'] ?: $card['title'],
+                    'image' => $card['image_path'],
+                    'sound' => $card['audio_path'],
+                    'textColor' => $card['text_color'],
+                    'backgroundColor' => $card['background_color'],
+                    'category' => $card['category'],
+                    'row' => (int)$card['row_index'],
+                    'col' => (int)$card['col_index'],
+                    'page' => (int)$card['page_index'],
+                    'isVisible' => (bool)$card['is_visible']
+                ];
+            }
+            
             // Build export data
             $exportData = [
                 'version' => '1.0',
@@ -80,21 +89,15 @@ function handleTransferRoutes($method, $pathParts, $data, $authToken) {
                     'layout_type' => $profile['layout_type'],
                     'language' => $profile['language']
                 ],
-                'boards' => [],
+                'root_board' => [
+                    'id' => (string)$profile['id'],
+                    'name' => $profile['display_name'],
+                    'description' => $profile['description'],
+                    'is_public' => false,
+                    'tiles' => $tiles
+                ],
                 'cards' => []
             ];
-            
-            // Process boards
-            foreach ($boards as $board) {
-                $boardData = json_decode($board['board_data'], true) ?? [];
-                $exportData['boards'][] = [
-                    'id' => $board['board_id'],
-                    'name' => $board['name'],
-                    'description' => $board['description'],
-                    'is_public' => (bool)$board['is_public'],
-                    'tiles' => $boardData['tiles'] ?? []
-                ];
-            }
             
             // Process cards
             foreach ($cards as $card) {
@@ -156,13 +159,13 @@ function handleTransferRoutes($method, $pathParts, $data, $authToken) {
             }
             
             $profileData = $importData['profile'];
-            $boardsData = $importData['boards'] ?? [];
+            $rootBoardData = $importData['root_board'] ?? null;
             $cardsData = $importData['cards'] ?? [];
             
             // Create new profile
             $stmt = $db->prepare("
-                INSERT INTO profiles (user_id, display_name, description, layout_type, language, is_default, created_at)
-                VALUES (?, ?, ?, ?, ?, 0, NOW())
+                INSERT INTO profiles (user_id, display_name, description, layout_type, language, created_at)
+                VALUES (?, ?, ?, ?, ?, NOW())
             ");
             $stmt->execute([
                 $user['id'],
@@ -173,27 +176,50 @@ function handleTransferRoutes($method, $pathParts, $data, $authToken) {
             ]);
             $newProfileId = $db->lastInsertId();
             
-            // Import boards
-            $importedBoards = [];
-            foreach ($boardsData as $boardData) {
-                $stmt = $db->prepare("
-                    INSERT INTO boards (user_id, board_id, name, description, board_data, is_public, created_at, last_edited)
-                    VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())
-                ");
-                $boardJson = json_encode(['tiles' => $boardData['tiles'] ?? []]);
-                $stmt->execute([
-                    $user['id'],
-                    $boardData['id'] ?? uniqid('board_'),
-                    $boardData['name'] ?? 'Imported Board',
-                    $boardData['description'] ?? '',
-                    $boardJson,
-                    $boardData['is_public'] ?? false
-                ]);
-                $newBoardId = $db->lastInsertId();
-                $importedBoards[$boardData['id']] = $newBoardId;
+            // Import cards and link to profile (from root_board tiles if provided, or from cards array)
+            $tilesToImport = [];
+            if ($rootBoardData && isset($rootBoardData['tiles']) && is_array($rootBoardData['tiles'])) {
+                $tilesToImport = $rootBoardData['tiles'];
             }
             
-            // Import cards and link to profile
+            // If we have tiles from root_board, import them as cards
+            foreach ($tilesToImport as $tile) {
+                if (!is_array($tile) || empty($tile)) {
+                    continue;
+                }
+                
+                // Create card from tile data
+                $stmt = $db->prepare("
+                    INSERT INTO cards (title, label_text, image_path, audio_path, text_color, background_color, category, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
+                ");
+                $stmt->execute([
+                    $tile['label'] ?? $tile['title'] ?? '',
+                    $tile['label'] ?? $tile['title'] ?? '',
+                    $tile['image'] ?? $tile['image_path'] ?? null,
+                    $tile['sound'] ?? $tile['audio_path'] ?? null,
+                    $tile['textColor'] ?? $tile['text_color'] ?? '#000000',
+                    $tile['backgroundColor'] ?? $tile['background_color'] ?? '#FFFFFF',
+                    $tile['category'] ?? null
+                ]);
+                $newCardId = $db->lastInsertId();
+                
+                // Link card to profile with position from tile
+                $stmt = $db->prepare("
+                    INSERT INTO profile_cards (profile_id, card_id, row_index, col_index, page_index, is_visible, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, NOW())
+                ");
+                $stmt->execute([
+                    $newProfileId,
+                    $newCardId,
+                    $tile['row'] ?? 0,
+                    $tile['col'] ?? 0,
+                    $tile['page'] ?? 0,
+                    ($tile['isVisible'] ?? $tile['is_visible'] ?? true) ? 1 : 0
+                ]);
+            }
+            
+            // Import cards from cards array
             foreach ($cardsData as $cardData) {
                 // Create card
                 $stmt = $db->prepare("
@@ -214,20 +240,16 @@ function handleTransferRoutes($method, $pathParts, $data, $authToken) {
                 // Link card to profile
                 $position = $cardData['position'] ?? [];
                 $stmt = $db->prepare("
-                    INSERT INTO profile_cards (profile_id, card_id, board_id, row_index, col_index, page_index, is_visible, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
+                    INSERT INTO profile_cards (profile_id, card_id, row_index, col_index, page_index, is_visible, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, NOW())
                 ");
-                $boardId = isset($cardData['board_id']) && isset($importedBoards[$cardData['board_id']]) 
-                    ? $importedBoards[$cardData['board_id']] 
-                    : null;
                 $stmt->execute([
                     $newProfileId,
                     $newCardId,
-                    $boardId,
                     $position['row'] ?? 0,
                     $position['col'] ?? 0,
                     $position['page'] ?? 0,
-                    $position['visible'] ?? true ? 1 : 0
+                    ($position['visible'] ?? true) ? 1 : 0
                 ]);
             }
             
@@ -235,8 +257,7 @@ function handleTransferRoutes($method, $pathParts, $data, $authToken) {
                 'success' => true,
                 'profile_id' => $newProfileId,
                 'message' => 'Profile imported successfully',
-                'imported_boards' => count($importedBoards),
-                'imported_cards' => count($cardsData)
+                'imported_cards' => count($cardsData) + count($tilesToImport)
             ]);
             
         } catch (Exception $e) {
@@ -376,28 +397,88 @@ function handleTransferRoutes($method, $pathParts, $data, $authToken) {
                 return errorResponse('Invalid or expired cloud code', 400);
             }
             
+            // Import profile (reuse import logic from QR code)
+            $sourceProfileId = $token['profile_id'];
+            $sourceUserId = $token['user_id'];
+            
+            // Get source profile data
+            $stmt = $db->prepare("SELECT * FROM profiles WHERE id = ?");
+            $stmt->execute([$sourceProfileId]);
+            $sourceProfile = $stmt->fetch();
+            
+            if (!$sourceProfile) {
+                return errorResponse('Source profile not found', 404);
+            }
+            
+            // Get source profile's cards
+            $stmt = $db->prepare("
+                SELECT c.*, pc.row_index, pc.col_index, pc.page_index, pc.is_visible
+                FROM cards c
+                INNER JOIN profile_cards pc ON c.id = pc.card_id
+                WHERE pc.profile_id = ?
+            ");
+            $stmt->execute([$sourceProfileId]);
+            $sourceCards = $stmt->fetchAll();
+            
+            // Create new profile for current user
+            $newProfileName = $sourceProfile['display_name'] . ' (Imported)';
+            $stmt = $db->prepare("
+                INSERT INTO profiles (user_id, display_name, description, layout_type, language, created_at)
+                VALUES (?, ?, ?, ?, ?, NOW())
+            ");
+            $stmt->execute([
+                $user['id'],
+                $newProfileName,
+                $sourceProfile['description'],
+                $sourceProfile['layout_type'],
+                $sourceProfile['language']
+            ]);
+            $newProfileId = $db->lastInsertId();
+            
+            // Import cards and link to new profile
+            $importedCardsCount = 0;
+            foreach ($sourceCards as $card) {
+                // Create new card
+                $stmt = $db->prepare("
+                    INSERT INTO cards (title, label_text, image_path, audio_path, text_color, background_color, category, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
+                ");
+                $stmt->execute([
+                    $card['title'] ?? '',
+                    $card['label_text'] ?? '',
+                    $card['image_path'] ?? null,
+                    $card['audio_path'] ?? null,
+                    $card['text_color'] ?? '#000000',
+                    $card['background_color'] ?? '#FFFFFF',
+                    $card['category'] ?? null
+                ]);
+                $newCardId = $db->lastInsertId();
+                
+                // Link card to new profile
+                $stmt = $db->prepare("
+                    INSERT INTO profile_cards (profile_id, card_id, row_index, col_index, page_index, is_visible, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, NOW())
+                ");
+                $stmt->execute([
+                    $newProfileId,
+                    $newCardId,
+                    $card['row_index'] ?? 0,
+                    $card['col_index'] ?? 0,
+                    $card['page_index'] ?? 0,
+                    ($card['is_visible'] ?? true) ? 1 : 0
+                ]);
+                $importedCardsCount++;
+            }
+            
             // Mark token as used
             $stmt = $db->prepare("UPDATE profile_transfer_tokens SET used_at = NOW() WHERE id = ?");
             $stmt->execute([$token['id']]);
             
-            // Import profile (reuse import logic)
-            $importData = [
-                'profile' => [
-                    'display_name' => $token['display_name'] . ' (Imported)',
-                    'description' => $token['description'],
-                    'layout_type' => $token['layout_type'],
-                    'language' => $token['language']
-                ],
-                'boards' => [],
-                'cards' => []
-            ];
-            
-            // Get profile data and import
-            // (This would call the import function, simplified here)
             return successResponse([
                 'success' => true,
-                'message' => 'Profile imported via cloud code',
-                'profile_id' => $token['profile_id']
+                'message' => 'Profile imported successfully via cloud code',
+                'profile_id' => $newProfileId,
+                'imported_cards' => $importedCardsCount
             ]);
             
         } catch (Exception $e) {
@@ -418,7 +499,7 @@ function handleTransferRoutes($method, $pathParts, $data, $authToken) {
         try {
             // Find valid token
             $stmt = $db->prepare("
-                SELECT pt.*, p.display_name, p.description, p.layout_type, p.language
+                SELECT pt.*, p.display_name, p.description, p.layout_type, p.language, p.user_id as source_user_id
                 FROM profile_transfer_tokens pt
                 INNER JOIN profiles p ON pt.profile_id = p.id
                 WHERE pt.token = ? 
@@ -433,19 +514,94 @@ function handleTransferRoutes($method, $pathParts, $data, $authToken) {
                 return errorResponse('Invalid or expired QR token', 400);
             }
             
+            // Import profile (reuse import logic from cloud code)
+            $sourceProfileId = $tokenData['profile_id'];
+            $sourceUserId = $tokenData['source_user_id'];
+            
+            // Get source profile data
+            $stmt = $db->prepare("SELECT * FROM profiles WHERE id = ?");
+            $stmt->execute([$sourceProfileId]);
+            $sourceProfile = $stmt->fetch();
+            
+            if (!$sourceProfile) {
+                return errorResponse('Source profile not found', 404);
+            }
+            
+            // Get source profile's cards
+            $stmt = $db->prepare("
+                SELECT c.*, pc.row_index, pc.col_index, pc.page_index, pc.is_visible
+                FROM cards c
+                INNER JOIN profile_cards pc ON c.id = pc.card_id
+                WHERE pc.profile_id = ?
+            ");
+            $stmt->execute([$sourceProfileId]);
+            $sourceCards = $stmt->fetchAll();
+            
+            // Create new profile for current user
+            $newProfileName = $sourceProfile['display_name'] . ' (Imported)';
+            $stmt = $db->prepare("
+                INSERT INTO profiles (user_id, display_name, description, layout_type, language, created_at)
+                VALUES (?, ?, ?, ?, ?, NOW())
+            ");
+            $stmt->execute([
+                $user['id'],
+                $newProfileName,
+                $sourceProfile['description'],
+                $sourceProfile['layout_type'],
+                $sourceProfile['language']
+            ]);
+            $newProfileId = $db->lastInsertId();
+            
+            // Import cards and link to new profile
+            $importedCardsCount = 0;
+            foreach ($sourceCards as $card) {
+                // Create new card
+                $stmt = $db->prepare("
+                    INSERT INTO cards (title, label_text, image_path, audio_path, text_color, background_color, category, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
+                ");
+                $stmt->execute([
+                    $card['title'] ?? '',
+                    $card['label_text'] ?? '',
+                    $card['image_path'] ?? null,
+                    $card['audio_path'] ?? null,
+                    $card['text_color'] ?? '#000000',
+                    $card['background_color'] ?? '#FFFFFF',
+                    $card['category'] ?? null
+                ]);
+                $newCardId = $db->lastInsertId();
+                
+                // Link card to new profile
+                $stmt = $db->prepare("
+                    INSERT INTO profile_cards (profile_id, card_id, row_index, col_index, page_index, is_visible, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, NOW())
+                ");
+                $stmt->execute([
+                    $newProfileId,
+                    $newCardId,
+                    $card['row_index'] ?? 0,
+                    $card['col_index'] ?? 0,
+                    $card['page_index'] ?? 0,
+                    ($card['is_visible'] ?? true) ? 1 : 0
+                ]);
+                $importedCardsCount++;
+            }
+            
             // Mark token as used
             $stmt = $db->prepare("UPDATE profile_transfer_tokens SET used_at = NOW() WHERE id = ?");
             $stmt->execute([$tokenData['id']]);
             
             return successResponse([
                 'success' => true,
-                'message' => 'QR token validated. Profile can be imported.',
-                'profile_id' => $tokenData['profile_id']
+                'message' => 'Profile imported successfully via QR code',
+                'profile_id' => $newProfileId,
+                'imported_cards' => $importedCardsCount
             ]);
             
         } catch (Exception $e) {
             error_log("QR token redeem error: " . $e->getMessage());
-            return errorResponse('Failed to redeem QR token', 500);
+            error_log("Stack trace: " . $e->getTraceAsString());
+            return errorResponse('Failed to redeem QR token: ' . $e->getMessage(), 500);
         }
     }
     
@@ -487,21 +643,11 @@ function handleTransferRoutes($method, $pathParts, $data, $authToken) {
             $tokenId = $db->lastInsertId();
             
             // Get profile data for export
-            $stmt = $db->prepare("SELECT id, display_name, description, layout_type, language, root_board_id FROM profiles WHERE id = ?");
+            $stmt = $db->prepare("SELECT id, display_name, description, layout_type, language FROM profiles WHERE id = ?");
             $stmt->execute([$profileId]);
             $profileData = $stmt->fetch();
             
-            // Get all boards and cards for this profile
-            $stmt = $db->prepare("
-                SELECT b.id, b.board_id, b.name, b.description, b.board_data, b.is_public
-                FROM boards b
-                INNER JOIN profile_cards pc ON b.id = pc.board_id
-                WHERE pc.profile_id = ?
-                GROUP BY b.id
-            ");
-            $stmt->execute([$profileId]);
-            $boards = $stmt->fetchAll();
-            
+            // Get cards for this profile
             $stmt = $db->prepare("
                 SELECT c.id, c.title, c.label_text, c.image_path, c.audio_path, 
                        c.text_color, c.background_color, c.category,
@@ -513,10 +659,34 @@ function handleTransferRoutes($method, $pathParts, $data, $authToken) {
             $stmt->execute([$profileId]);
             $cards = $stmt->fetchAll();
             
+            // Build tiles from cards for root_board export
+            $tiles = [];
+            foreach ($cards as $card) {
+                $tiles[] = [
+                    'id' => 'card_' . $card['id'],
+                    'label' => $card['label_text'] ?: $card['title'],
+                    'image' => $card['image_path'],
+                    'sound' => $card['audio_path'],
+                    'textColor' => $card['text_color'],
+                    'backgroundColor' => $card['background_color'],
+                    'category' => $card['category'],
+                    'row' => (int)$card['row_index'],
+                    'col' => (int)$card['col_index'],
+                    'page' => (int)$card['page_index'],
+                    'isVisible' => (bool)$card['is_visible']
+                ];
+            }
+            
             // Build export data
             $exportData = [
                 'profile' => $profileData,
-                'boards' => $boards,
+                'root_board' => [
+                    'id' => (string)$profileData['id'],
+                    'name' => $profileData['display_name'],
+                    'description' => $profileData['description'],
+                    'is_public' => false,
+                    'tiles' => $tiles
+                ],
                 'cards' => $cards,
                 'token' => $token
             ];

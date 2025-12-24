@@ -22,6 +22,7 @@ export class ClearButton extends Component {
           className={
             increaseOutputButtons ? 'Output__button__lg' : 'Output__button__sm'
           }
+          data-output-action="clear"
           {...other}
         >
           <ClearIcon

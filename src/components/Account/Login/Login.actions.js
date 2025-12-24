@@ -1,6 +1,7 @@
 import API from '../../../api';
 import { LOGIN_SUCCESS, LOGOUT } from './Login.constants';
 import { addBoards, switchBoard } from '../../Board/Board.actions';
+import { updateScannerSettings } from '../../../providers/ScannerProvider/ScannerProvider.actions';
 import {
   changeVoice,
   changePitch,
@@ -18,6 +19,7 @@ import {
 import { getVoiceURI } from '../../../i18n';
 import { isCordova, isElectron } from '../../../cordova-util';
 import tts from '../../../providers/SpeechProvider/tts';
+import { getEyeTrackingInstance } from '../../../utils/eyeTrackingIntegration';
 
 export function loginSuccess(payload) {
   return dispatch => {
@@ -49,6 +51,17 @@ async function firstLoginActions(dispatch, payload) {
 }
 
 export function logout() {
+  // Cleanup eye tracking immediately on logout
+  try {
+    const eyeTrackingInstance = getEyeTrackingInstance();
+    if (eyeTrackingInstance) {
+      console.log('[Logout] Cleaning up eye tracking...');
+      eyeTrackingInstance.cleanup();
+    }
+  } catch (err) {
+    console.warn('[Logout] Error cleaning up eye tracking:', err);
+  }
+
   if (isCordova() && !isElectron())
     try {
       window.FirebasePlugin.setUserId(undefined);
@@ -61,6 +74,13 @@ export function logout() {
   }
 
   return async dispatch => {
+    // Ensure scanning is fully disabled on logout
+    try {
+      dispatch(updateScannerSettings({ active: false }));
+    } catch (e) {
+      console.warn('[Logout] Failed to reset scanner settings:', e);
+    }
+
     dispatch(updateNavigationSettings({ improvePhraseActive: false }));
     dispatch(setUnloggedUserLocation(null));
     dispatch(updateUnloggedUserLocation());
@@ -176,34 +196,50 @@ export function login({ email, password, activatedData }, type = 'local') {
 
       const localBoardsIds = [];
       // Ensure currentCommunicator exists and has boards array
+      // Convert all IDs to strings for consistent comparison
       if (currentCommunicator && currentCommunicator.boards) {
+        const communicatorBoardIds = (currentCommunicator.boards || []).map(id => String(id || ''));
         board.boards.forEach(board => {
-          if (currentCommunicator.boards.indexOf(board.id) >= 0) {
-            localBoardsIds.push(board.id);
+          const boardIdStr = String(board.id || '');
+          if (communicatorBoardIds.includes(boardIdStr)) {
+            localBoardsIds.push(boardIdStr);
           }
         });
       }
 
       const apiBoardsIds =
         currentCommunicator && currentCommunicator.boards
-          ? currentCommunicator.boards.filter(
-              id => localBoardsIds.indexOf(id) < 0
-            )
+          ? currentCommunicator.boards
+              .map(id => String(id || ''))
+              .filter(id => id && !localBoardsIds.includes(id))
           : [];
 
       // Also check loginData.boards for board IDs
       // Extract board IDs from loginData.boards (they have both 'id' and 'board_id' fields)
+      // In profile-centric model, loginData.boards contains profiles (which are boards)
       const loginBoardsIds = loginData.boards && Array.isArray(loginData.boards)
         ? loginData.boards
             .map(b => {
-              // Try board_id first, then id
+              // Try board_id first, then id (both should be profile IDs now)
               const boardId = b.board_id || b.id;
-              return boardId;
+              return boardId ? String(boardId) : null;
             })
-            .filter(id => id && typeof id === 'string' && id.length > 0)
-            .filter(id => localBoardsIds.indexOf(id) < 0 && apiBoardsIds.indexOf(id) < 0)
+            .filter(id => id && id.length > 0)
+            .filter(id => !localBoardsIds.includes(id) && !apiBoardsIds.includes(id))
         : [];
 
+      // Verify login was successful and authToken exists
+      if (!loginData || !loginData.authToken) {
+        console.error('Login - No authToken in loginData, cannot fetch boards');
+        // Still dispatch loginSuccess even if no token (for error handling)
+        dispatch(loginSuccess(loginData || {}));
+        return;
+      }
+      
+      // Dispatch loginSuccess FIRST to ensure authToken is available in Redux state
+      // This is needed because getBoard() reads authToken from Redux state
+      dispatch(loginSuccess(loginData));
+      
       const allApiBoardsIds = [...new Set([...apiBoardsIds, ...loginBoardsIds])];
       
       console.log('Login - Loading boards:', {
@@ -213,47 +249,111 @@ export function login({ email, password, activatedData }, type = 'local') {
         loginBoardsIds,
         allApiBoardsIds,
         loginDataBoards: loginData.boards,
-        loginDataBoardsCount: loginData.boards ? loginData.boards.length : 0
+        loginDataBoardsCount: loginData.boards ? loginData.boards.length : 0,
+        hasAuthToken: !!loginData.authToken
       });
       
       if (allApiBoardsIds.length === 0) {
         console.warn('Login - No boards to load! This might be a problem.');
       }
 
+      // Only fetch boards if we have authToken
       const apiBoards = await Promise.all(
         allApiBoardsIds
           .map(async id => {
             let board = null;
             try {
-              console.log('Login - Fetching board:', id);
-              board = await API.getBoard(id);
+              console.log('Login - Fetching board/profile:', id, 'with authToken:', !!loginData.authToken);
+              // Pass loginData.authToken directly to getBoard since Redux state might not be updated yet
+              board = await API.getBoard(id, loginData.authToken);
+              
+              // Normalize tiles: 移除 null/undefined，但不再因「全為 null」就標記為損壞
+              // 在 profile-centric 架構下，某些列表接口可能暫時返回虛擬 tiles（全 null），
+              // 這種情況會在進入板面時由 BoardContainer 再次從後端補齊真實 tiles。
+              if (board && board.tiles && Array.isArray(board.tiles)) {
+                const validTiles = board.tiles.filter(tile => 
+                  tile !== null && tile !== undefined && typeof tile === 'object'
+                );
+                board.tiles = validTiles;
+              }
+              
               console.log('Login - Board fetched:', { id, name: board?.name, tilesCount: board?.tiles?.length || 0 });
             } catch (e) {
               console.error('Login - Error fetching board:', id, e);
+              // If board not found (404), skip it
+              if (e?.response?.status === 404) {
+                console.warn('Login - Board not found (404), skipping:', id);
+                return null;
+              }
             }
             return board;
           })
-          .filter(b => b !== null)
+          .filter(b => b !== null && b !== undefined)
       );
 
       console.log('Login - Loaded boards:', apiBoards.length, apiBoards.map(b => ({ id: b.id, name: b.name, tilesCount: b.tiles?.length || 0 })));
       dispatch(addBoards(apiBoards));
       
-      // Dispatch loginSuccess first (but it won't override activeBoardId if we set it next)
-      dispatch(loginSuccess(loginData));
-      
-      // If we have user boards, set the most recently edited one as active
-      // This happens AFTER loginSuccess to ensure it takes precedence
+      // loginSuccess was already dispatched above to ensure authToken is available for getBoard()
+      // 登錄後應該使用用戶設置的 rootBoard 作為活動板
       if (apiBoards.length > 0) {
-        // Sort by lastEdited (most recent first) and use the first one
-        const sortedBoards = [...apiBoards].sort((a, b) => {
-          const aDate = a.lastEdited ? new Date(a.lastEdited) : new Date(0);
-          const bDate = b.lastEdited ? new Date(b.lastEdited) : new Date(0);
-          return bDate - aDate;
-        });
-        const mostRecentBoard = sortedBoards[0];
-        console.log('Login - Setting active board to most recent user board:', mostRecentBoard.id, 'with', mostRecentBoard.tiles?.length || 0, 'tiles');
-        dispatch(switchBoard(mostRecentBoard.id));
+        const { board: boardState, communicator } = getState();
+        const currentActiveBoardId = boardState.activeBoardId;
+        const activeCommunicatorId = communicator.activeCommunicatorId;
+        const currentCommunicator = communicator.communicators.find(
+          c => c.id === activeCommunicatorId
+        );
+        const rootBoardId = currentCommunicator?.rootBoard;
+        
+        // 如果 communicator 有設置 rootBoard，優先使用它
+        if (rootBoardId) {
+          const rootBoardExists = apiBoards.some(b => String(b.id) === String(rootBoardId));
+          if (rootBoardExists) {
+            console.log(
+              'Login - Setting active board to rootBoard:',
+              rootBoardId
+            );
+            dispatch(switchBoard(rootBoardId));
+            return; // 使用 rootBoard，不需要其他邏輯
+          } else {
+            console.warn('Login - rootBoard not found in loaded boards:', rootBoardId);
+          }
+        }
+        
+        // 如果沒有 rootBoard 或 rootBoard 不存在，檢查當前活動板是否有效
+        const activeBoardStillDefault =
+          !currentActiveBoardId ||
+          currentActiveBoardId === 'root' ||
+          !apiBoards.some(b => String(b.id) === String(currentActiveBoardId));
+        
+        if (activeBoardStillDefault) {
+          // 如果沒有 rootBoard，選擇最早建立的板作為默認
+          const sortedBoards = [...apiBoards].sort((a, b) => {
+            const getCreated = board => {
+              if (board.created_at) return new Date(board.created_at);
+              if (board.createdAt) return new Date(board.createdAt);
+              const idNum = parseInt(String(board.id), 10);
+              return isNaN(idNum) ? new Date(0) : new Date(idNum * 1000);
+            };
+            const aDate = getCreated(a);
+            const bDate = getCreated(b);
+            return aDate - bDate;
+          });
+          
+          const oldestBoard = sortedBoards[0];
+          if (oldestBoard && oldestBoard.id) {
+            console.log(
+              'Login - No rootBoard set, using oldest user board:',
+              oldestBoard.id
+            );
+            dispatch(switchBoard(oldestBoard.id));
+          }
+        } else {
+          console.log(
+            'Login - Keeping existing activeBoardId after login:',
+            currentActiveBoardId
+          );
+        }
       }
       if (type === 'local') {
         dispatch(

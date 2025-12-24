@@ -59,4 +59,36 @@
 
 .CommunicatorToolbar__menuitem {
   max-width: 360px;
+  min-height: 64px !important;
+  padding: 12px 16px !important;
+}
+
+.CommunicatorToolbar__menuitem--eye-tracking {
+  min-height: 80px !important;
+  padding: 16px 20px !important;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.CommunicatorToolbar__menuitem--eye-tracking:hover {
+  background-color: rgba(0, 0, 0, 0.04);
+}
+
+.CommunicatorToolbar__menuitem--eye-tracking .MuiListItemAvatar-root {
+  min-width: 56px !important;
+}
+
+.CommunicatorToolbar__menuitem--eye-tracking .MuiAvatar-root {
+  width: 48px !important;
+  height: 48px !important;
+}
+
+.CommunicatorToolbar__menuitem--eye-tracking .MuiListItemText-primary {
+  font-size: 16px !important;
+  line-height: 1.5 !important;
+}
+
+.CommunicatorToolbar__menuitem--eye-tracking .MuiListItemText-secondary {
+  font-size: 14px !important;
+  margin-top: 4px;
 }

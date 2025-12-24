@@ -1,8 +1,8 @@
 <?php
 /**
  * Seed Preset Profiles Script
- * Sprint 4: Creates ≥10 public preset profiles
- * 
+ * Sprint 4: Creates ≥10 preset communication profiles (system templates, NOT public by default)
+ *
  * Usage: php seed-preset-profiles.php
  */
 
@@ -37,7 +37,7 @@ if (!$systemUser) {
 
 echo "\n";
 
-// Preset profiles to create
+// Preset profiles to create (system-level templates)
 $presetProfiles = [
     ['display_name' => 'Basic Communication', 'description' => 'Essential communication cards for daily needs', 'layout_type' => '4x6', 'language' => 'en'],
     ['display_name' => 'Food & Drinks', 'description' => 'Cards for ordering food and drinks', 'layout_type' => '4x6', 'language' => 'en'],
@@ -57,19 +57,19 @@ $created = 0;
 $skipped = 0;
 
 foreach ($presetProfiles as $profile) {
-    // Check if already exists
-    $stmt = $db->prepare("SELECT id FROM profiles WHERE display_name = ? AND language = ? AND is_public = 1");
-    $stmt->execute([$profile['display_name'], $profile['language']]);
+    // Check if already exists for this system user (do not rely on is_public flag)
+    $stmt = $db->prepare("SELECT id FROM profiles WHERE user_id = ? AND display_name = ? AND language = ?");
+    $stmt->execute([$systemUserId, $profile['display_name'], $profile['language']]);
     if ($stmt->fetch()) {
         echo "⏭️  Skipped: {$profile['display_name']} (already exists)\n";
         $skipped++;
         continue;
     }
     
-    // Create profile
+    // Create profile as a system template (NOT public by default)
     $stmt = $db->prepare("
         INSERT INTO profiles (user_id, display_name, name, description, layout_type, language, is_public, is_default, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, 1, 0, NOW(), NOW())
+        VALUES (?, ?, ?, ?, ?, ?, 0, 0, NOW(), NOW())
     ");
     $stmt->execute([
         $systemUserId,
@@ -89,12 +89,12 @@ echo "\n========================================\n";
 echo "Summary:\n";
 echo "  ✅ Created: $created profiles\n";
 echo "  ⏭️  Skipped: $skipped profiles\n";
-echo "  📊 Total preset profiles: " . ($created + $skipped) . "\n";
+echo "  📊 Total preset profiles (this run): " . ($created + $skipped) . "\n";
 echo "========================================\n";
 
-// Verify
-$stmt = $db->prepare("SELECT COUNT(*) as total FROM profiles WHERE is_public = 1");
-$stmt->execute();
+// Verify total number of system preset profiles
+$stmt = $db->prepare("SELECT COUNT(*) as total FROM profiles WHERE user_id = ?");
+$stmt->execute([$systemUserId]);
 $total = $stmt->fetch()['total'];
-echo "\n✅ Total public profiles in database: $total\n";
+echo "\n✅ Total system preset profiles in database (user_id = $systemUserId): $total\n";
 

@@ -46,6 +46,7 @@ function LogViewer({
   loading,
   onLoadLogs,
   onExportLogs,
+  userData,
   classes,
   intl
 }) {
@@ -53,6 +54,27 @@ function LogViewer({
   const [actionType, setActionType] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  
+  // Get user creation date - minimum date for start date
+  const getUserCreationDate = () => {
+    if (userData && userData.createdAt) {
+      const date = new Date(userData.createdAt);
+      return date.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+    }
+    // If no creation date, use a reasonable default (e.g., 1 year ago)
+    const oneYearAgo = new Date();
+    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+    return oneYearAgo.toISOString().split('T')[0];
+  };
+  
+  // Get today's date - maximum date for end date
+  const getTodayDate = () => {
+    return new Date().toISOString().split('T')[0];
+  };
+  
+  const minStartDate = getUserCreationDate();
+  const maxEndDate = getTodayDate();
+  const minEndDate = startDate || minStartDate; // End date must be >= start date
 
   useEffect(() => {
     loadLogs();
@@ -163,6 +185,18 @@ function LogViewer({
                 <MenuItem value="eyetracking_select">
                   <FormattedMessage {...messages['actionType.eyetracking_select']} />
                 </MenuItem>
+                <MenuItem value="profile_create">
+                  <FormattedMessage {...messages['actionType.profile_create']} />
+                </MenuItem>
+                <MenuItem value="profile_update">
+                  <FormattedMessage {...messages['actionType.profile_update']} />
+                </MenuItem>
+                <MenuItem value="card_create">
+                  <FormattedMessage {...messages['actionType.card_create']} />
+                </MenuItem>
+                <MenuItem value="card_update">
+                  <FormattedMessage {...messages['actionType.card_update']} />
+                </MenuItem>
               </Select>
             </FormControl>
 
@@ -170,8 +204,19 @@ function LogViewer({
               label={<FormattedMessage {...messages.startDate} />}
               type="date"
               value={startDate}
-              onChange={e => setStartDate(e.target.value)}
+              onChange={e => {
+                const newStartDate = e.target.value;
+                setStartDate(newStartDate);
+                // If end date is before new start date, reset end date
+                if (endDate && newStartDate && endDate < newStartDate) {
+                  setEndDate('');
+                }
+              }}
               InputLabelProps={{ shrink: true }}
+              inputProps={{
+                min: minStartDate,
+                max: maxEndDate
+              }}
               className={classes.formControl}
             />
 
@@ -181,6 +226,10 @@ function LogViewer({
               value={endDate}
               onChange={e => setEndDate(e.target.value)}
               InputLabelProps={{ shrink: true }}
+              inputProps={{
+                min: minEndDate,
+                max: maxEndDate
+              }}
               className={classes.formControl}
             />
 
@@ -217,6 +266,10 @@ function LogViewer({
                 <TableRow>
                   <TableCell><FormattedMessage {...messages.dateTime} /></TableCell>
                   <TableCell><FormattedMessage {...messages.actionType} /></TableCell>
+                  <TableCell><FormattedMessage {...messages.profileName} /></TableCell>
+                  <TableCell><FormattedMessage {...messages.cardTitle} /></TableCell>
+                  <TableCell><FormattedMessage {...messages.createdAt} /></TableCell>
+                  <TableCell><FormattedMessage {...messages.updatedAt} /></TableCell>
                   <TableCell><FormattedMessage {...messages.sentence} /></TableCell>
                   <TableCell><FormattedMessage {...messages.device} /></TableCell>
                   <TableCell><FormattedMessage {...messages.score} /></TableCell>
@@ -226,7 +279,7 @@ function LogViewer({
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={6} align="center">
+                    <TableCell colSpan={10} align="center">
                       <CircularProgress />
                     </TableCell>
                   </TableRow>
@@ -235,6 +288,18 @@ function LogViewer({
                     <TableRow key={log.id}>
                       <TableCell>{formatDate(log.created_at)}</TableCell>
                       <TableCell>{translateActionType(log.action_type)}</TableCell>
+                      <TableCell>{log.profile_name || '-'}</TableCell>
+                      <TableCell>{log.card_title || '-'}</TableCell>
+                      <TableCell>
+                        {log.profile_created_at || log.card_created_at 
+                          ? formatDate(log.profile_created_at || log.card_created_at)
+                          : '-'}
+                      </TableCell>
+                      <TableCell>
+                        {log.profile_updated_at || log.card_updated_at 
+                          ? formatDate(log.profile_updated_at || log.card_updated_at)
+                          : '-'}
+                      </TableCell>
                       <TableCell>{log.sentence || '-'}</TableCell>
                       <TableCell>{log.device || '-'}</TableCell>
                       <TableCell>
@@ -247,7 +312,7 @@ function LogViewer({
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={6} align="center">
+                    <TableCell colSpan={10} align="center">
                       <FormattedMessage {...messages.noLogs} />
                     </TableCell>
                   </TableRow>
@@ -268,8 +333,13 @@ LogViewer.propTypes = {
   loading: PropTypes.bool.isRequired,
   onLoadLogs: PropTypes.func.isRequired,
   onExportLogs: PropTypes.func.isRequired,
+  userData: PropTypes.object,
   classes: PropTypes.object.isRequired,
   intl: intlShape.isRequired
+};
+
+LogViewer.defaultProps = {
+  userData: {}
 };
 
 export default withStyles(styles)(LogViewer);

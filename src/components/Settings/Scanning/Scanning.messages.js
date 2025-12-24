@@ -43,17 +43,17 @@ export default defineMessages({
   },
   scannerHowToDeactivate: {
     id: 'cboard.components.Settings.Scanning.scannerHowToDeactivate',
-    defaultMessage: 'Press Escape 4 times to deactivate Scanner.'
+    defaultMessage: 'Press Escape 4 times to deactivate scanning, or disable it in settings.'
   },
   scannerManualStrategy: {
     id: 'cboard.components.Settings.Scanning.scannerManualStrategy',
     defaultMessage:
-      'Scanner advances with space bar key, press enter to select an item.'
+      'Eye tracking scanning is active. Look at items to highlight them, then keep looking to select.'
   },
   scannerAutomaticStrategy: {
     id: 'cboard.components.Settings.Scanning.scannerAutomaticStrategy',
     defaultMessage:
-      'Scanner will iterate over elements, press any key to select them.'
+      'Eye tracking scanning is active. Look at items to highlight them, then keep looking to select.'
   },
   mode: {
     id: 'cboard.components.Settings.Scanning.mode',

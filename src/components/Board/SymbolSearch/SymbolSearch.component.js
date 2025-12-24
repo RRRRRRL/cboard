@@ -454,12 +454,14 @@ export class SymbolSearch extends PureComponent {
       ) : null;
     const skinOptions = this.showInclusivityOptions ? (
       <SkinToneSelect
+        source="arasaac"
         selectedColor={this.state.skin}
         onChange={this.handleSkinToneChange}
       />
     ) : null;
     const hairOptions = this.showInclusivityOptions ? (
       <HairColorSelect
+        source="arasaac"
         selectedColor={this.state.hair}
         onChange={this.handleHairColorChange}
       />

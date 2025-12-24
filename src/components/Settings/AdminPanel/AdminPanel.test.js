@@ -41,10 +41,12 @@ const COMPONENT_PROPS = {
     formatMessage: msg => msg.defaultMessage || msg.id
   },
   classes: {
-    filters: 'filters',
     tableContainer: 'tableContainer',
+    filterSection: 'filterSection',
+    statsSection: 'statsSection',
     statCard: 'statCard',
-    roleChip: 'roleChip'
+    roleChip: 'roleChip',
+    formControl: 'formControl'
   }
 };
 

@@ -1,10 +1,12 @@
 import React from 'react';
 import PropTypes from 'prop-types';
+import { injectIntl } from 'react-intl';
 import Chip from '@material-ui/core/Chip';
 import CircularProgress from '@material-ui/core/CircularProgress';
 import './JyutpingKeyboard.css';
+import messages from './JyutpingKeyboard.messages';
 
-const WordSuggestions = ({ suggestions, onSelect, isLoading, title = 'Suggestions' }) => {
+const WordSuggestions = ({ suggestions, onSelect, isLoading, title, intl }) => {
   // Debug logging
   console.log('WordSuggestions render:', { 
     suggestionsCount: suggestions?.length || 0, 
@@ -17,7 +19,9 @@ const WordSuggestions = ({ suggestions, onSelect, isLoading, title = 'Suggestion
     return (
       <div className="WordSuggestions WordSuggestions__loading">
         <CircularProgress size={24} />
-        <span className="WordSuggestions__loading-text">Searching...</span>
+        <span className="WordSuggestions__loading-text">
+          {intl.formatMessage(messages.searching)}
+        </span>
       </div>
     );
   }
@@ -66,12 +70,14 @@ WordSuggestions.propTypes = {
   ),
   onSelect: PropTypes.func.isRequired,
   isLoading: PropTypes.bool,
-  title: PropTypes.string
+  title: PropTypes.string,
+  intl: PropTypes.object.isRequired
 };
 
 WordSuggestions.defaultProps = {
   suggestions: [],
-  isLoading: false
+  isLoading: false,
+  title: null
 };
 
-export default WordSuggestions;
+export default injectIntl(WordSuggestions);

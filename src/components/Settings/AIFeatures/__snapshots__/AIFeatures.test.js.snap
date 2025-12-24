@@ -1,0 +1,168 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`AIFeatures tests default renderer 1`] = `
+<AIFeatures
+  classes={
+    Object {
+      "formControl": "AIFeatures-formControl-2 formControl",
+      "predictionChip": "AIFeatures-predictionChip-4 predictionChip",
+      "suggestionCard": "AIFeatures-suggestionCard-3 suggestionCard",
+      "tabPanel": "AIFeatures-tabPanel-1 tabPanel",
+    }
+  }
+  intl={
+    Object {
+      "formatMessage": [Function],
+    }
+  }
+  learningStats={null}
+  loading={false}
+  onClose={[MockFunction]}
+  onGetLearningStats={[MockFunction]}
+  onGetPredictions={[MockFunction]}
+  onGetSuggestions={[MockFunction]}
+  predictions={Array []}
+  profiles={
+    Array [
+      Object {
+        "id": 1,
+        "name": "Test Profile",
+      },
+    ]
+  }
+  suggestions={Array []}
+/>
+`;
+
+exports[`AIFeatures tests renders with learning stats 1`] = `
+<AIFeatures
+  classes={
+    Object {
+      "formControl": "AIFeatures-formControl-2 formControl",
+      "predictionChip": "AIFeatures-predictionChip-4 predictionChip",
+      "suggestionCard": "AIFeatures-suggestionCard-3 suggestionCard",
+      "tabPanel": "AIFeatures-tabPanel-1 tabPanel",
+    }
+  }
+  intl={
+    Object {
+      "formatMessage": [Function],
+    }
+  }
+  learningStats={
+    Object {
+      "avg_accuracy": 85.5,
+      "avg_difficulty": 2.3,
+      "total_attempts": 500,
+      "total_cards": 100,
+    }
+  }
+  loading={false}
+  onClose={[MockFunction]}
+  onGetLearningStats={[MockFunction]}
+  onGetPredictions={[MockFunction]}
+  onGetSuggestions={[MockFunction]}
+  predictions={Array []}
+  profiles={
+    Array [
+      Object {
+        "id": 1,
+        "name": "Test Profile",
+      },
+    ]
+  }
+  suggestions={Array []}
+/>
+`;
+
+exports[`AIFeatures tests renders with predictions 1`] = `
+<AIFeatures
+  classes={
+    Object {
+      "formControl": "AIFeatures-formControl-2 formControl",
+      "predictionChip": "AIFeatures-predictionChip-4 predictionChip",
+      "suggestionCard": "AIFeatures-suggestionCard-3 suggestionCard",
+      "tabPanel": "AIFeatures-tabPanel-1 tabPanel",
+    }
+  }
+  intl={
+    Object {
+      "formatMessage": [Function],
+    }
+  }
+  learningStats={null}
+  loading={false}
+  onClose={[MockFunction]}
+  onGetLearningStats={[MockFunction]}
+  onGetPredictions={[MockFunction]}
+  onGetSuggestions={[MockFunction]}
+  predictions={
+    Array [
+      Object {
+        "confidence": 0.9,
+        "text": "hello",
+      },
+      Object {
+        "confidence": 0.8,
+        "text": "help",
+      },
+    ]
+  }
+  profiles={
+    Array [
+      Object {
+        "id": 1,
+        "name": "Test Profile",
+      },
+    ]
+  }
+  suggestions={Array []}
+/>
+`;
+
+exports[`AIFeatures tests renders with suggestions 1`] = `
+<AIFeatures
+  classes={
+    Object {
+      "formControl": "AIFeatures-formControl-2 formControl",
+      "predictionChip": "AIFeatures-predictionChip-4 predictionChip",
+      "suggestionCard": "AIFeatures-suggestionCard-3 suggestionCard",
+      "tabPanel": "AIFeatures-tabPanel-1 tabPanel",
+    }
+  }
+  intl={
+    Object {
+      "formatMessage": [Function],
+    }
+  }
+  learningStats={null}
+  loading={false}
+  onClose={[MockFunction]}
+  onGetLearningStats={[MockFunction]}
+  onGetPredictions={[MockFunction]}
+  onGetSuggestions={[MockFunction]}
+  predictions={Array []}
+  profiles={
+    Array [
+      Object {
+        "id": 1,
+        "name": "Test Profile",
+      },
+    ]
+  }
+  suggestions={
+    Array [
+      Object {
+        "category": "Greetings",
+        "id": 1,
+        "title": "Hello",
+      },
+      Object {
+        "category": "Greetings",
+        "id": 2,
+        "title": "Goodbye",
+      },
+    ]
+  }
+/>
+`;

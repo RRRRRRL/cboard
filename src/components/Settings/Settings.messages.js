@@ -87,7 +87,7 @@ export default defineMessages({
   },
   userHelp: {
     id: 'cboard.components.Settings.userHelp',
-    defaultMessage: 'User Help'
+    defaultMessage: 'User Guide & FAQ'
   },
   walkthroughEndTour: {
     id: 'cboard.components.Settings.walkthroughEndTour',
@@ -178,7 +178,7 @@ export default defineMessages({
   },
   enableScanningTitle: {
     id: 'cboard.components.Settings.enableScanningTitle',
-    defaultMessage: 'Scanning'
+    defaultMessage: 'Scanning and Eye Tracking'
   },
   enableScanningDescrip: {
     id: 'cboard.components.Settings.enableScanningDescrip',
@@ -246,5 +246,13 @@ export default defineMessages({
   aiFeatures: {
     id: 'cboard.components.Settings.aiFeatures',
     defaultMessage: 'AI Features'
+  },
+  news: {
+    id: 'cboard.components.Settings.news',
+    defaultMessage: 'News & Updates'
+  },
+  intro: {
+    id: 'cboard.components.Settings.intro',
+    defaultMessage: 'Introduction'
   }
 });

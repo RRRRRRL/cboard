@@ -15,7 +15,17 @@ jest.mock('./FormDialog.messages', () => {
   };
 });
 
-const COMPONENT_PROPS = {};
+const COMPONENT_PROPS = {
+  open: false,
+  title: null,
+  description: null,
+  onClose: () => {},
+  onSubmit: () => {},
+  disableSubmit: false,
+  classes: '',
+  className: '',
+  fullScreen: false
+};
 
 describe('FormDialog tests', () => {
   test('default renderer', () => {
@@ -23,7 +33,7 @@ describe('FormDialog tests', () => {
   });
   test('props renderer', () => {
     const props = {
-      disableSubmit: () => {},
+      disableSubmit: false,
       open: true,
       title: 'oooo',
       description: 'dddd',

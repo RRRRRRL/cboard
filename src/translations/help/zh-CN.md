@@ -1,6 +1,30 @@
 # 白板帮助
 
-## 目录
+## 🚀 快速上手指南
+
+**初次使用 Cboard？** 从这里开始快速入门：
+
+1. **观看介绍视频** - 了解 Cboard 是什么以及如何使用：
+   - [什么是棋盘？](#WhatisCboard) (包含视频教程)
+
+2. **基础入门**：
+   - [如何注册棋盘？](#HowdoIregisterforCboard)
+   - [一旦我是注册用户，我如何登录到棋盘？](#HowdoIlogintoCboardonceIamaregistereduser)
+   - [如何访问板上的设置？](#HowdoIaccesssettingsinCboard)
+
+3. **学习核心功能**：
+   - [如何创建一个空看板？](#HowdoIcreateanemptyboard)
+   - [我如何将现有的板块个性化？](#HowdoIpersonalizeanexistingboardinCboard)
+   - [板是否可以朗读我的消息？](#CanCboardreadmymessageoutaloud)
+
+4. **观看视频教程**：
+   - [编辑看板](#BoardEditing) - 学习如何创建和自定义看板
+   - [说话中](#Talking) - 学习如何添加语音录制
+   - [设置](#Settings) - 学习如何共享看板和配置选项
+
+---
+
+## 📚 目录 / 常见问题索引
 
 * [什么是棋盘？](#WhatisCboard)
 * [注册和登录](#Registrationandlogin) 

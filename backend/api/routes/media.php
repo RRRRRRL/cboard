@@ -45,8 +45,9 @@ function handleMediaRoutes($method, $pathParts, $data, $authToken) {
             $fileType = strpos($mimeType, 'image/') === 0 ? 'image' : 
                        (strpos($mimeType, 'audio/') === 0 ? 'audio' : 'other');
             
-            // Generate URL (relative to backend root, without leading slash)
-            $fileUrl = 'uploads/user_' . $userId . '/' . $filename;
+            // Generate URL with /api/ prefix to ensure it works through nginx proxy
+            // Frontend will handle URL construction properly
+            $fileUrl = 'api/uploads/user_' . $userId . '/' . $filename;
             
             // Save to database
             $stmt = $db->prepare("
@@ -364,7 +365,7 @@ function handleMediaRoutes($method, $pathParts, $data, $authToken) {
                 
                 // Provide more helpful error message
                 if ($curlError && (strpos($curlError, 'timeout') !== false || strpos($curlError, 'timed out') !== false)) {
-                    return errorResponse('The image search service (photocen.com) is currently unavailable or taking too long to respond. The API may be down, blocked, or require authentication. Please try again later or contact support if the issue persists.', 503);
+                    return errorResponse('Server busy, maybe try again or try other word', 503);
                 } elseif ($httpCode === 0) {
                     return errorResponse('Unable to connect to image search service. The service may be down, unreachable, or blocked by firewall. Please check your network connection and try again.', 503);
                 } else {

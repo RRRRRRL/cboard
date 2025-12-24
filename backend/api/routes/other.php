@@ -22,9 +22,13 @@ function handleSubscriberRoutes($method, $pathParts, $data, $authToken) {
     
     // GET /subscriber/{userId}
     if ($method === 'GET' && count($pathParts) === 2) {
+        // Frontend expects: {success: true, status, product, transaction}
+        // Return default values for not subscribed user
         return successResponse([
             'success' => true,
-            'subscriber' => null
+            'status' => null,
+            'product' => null,
+            'transaction' => null
         ]);
     }
     
@@ -55,9 +59,8 @@ function handleSubscriptionRoutes($method, $pathParts, $data, $authToken) {
     // GET /subscription/list (public endpoint - no auth required)
     if ($method === 'GET' && count($pathParts) === 2 && $pathParts[1] === 'list') {
         // TODO: Fetch subscription plans from database
-        return successResponse([
-            'subscriptions' => []
-        ]);
+        // Frontend expects an array directly, not wrapped in 'subscriptions' key
+        return successResponse([]);
     }
     return errorResponse('Subscription route not found', 404);
 }
@@ -75,12 +78,36 @@ function handleAnalyticsRoutes($method, $pathParts, $data, $authToken) {
 function handleGPTRoutes($method, $pathParts, $data, $authToken) {
     $user = requireAuth($authToken);
     
-    // POST /gpt/edit
+    // Load Ollama helper
+    require_once __DIR__ . '/../helpers/ollama.php';
+    
+    // POST /gpt/edit - Improve phrase using AI
     if ($method === 'POST' && count($pathParts) === 2 && $pathParts[1] === 'edit') {
-        // TODO: Implement AI phrase improvement
-        return successResponse([
-            'phrase' => $data['phrase'] ?? ''
-        ]);
+        $phrase = $data['phrase'] ?? '';
+        $language = $data['language'] ?? 'en';
+        
+        if (empty($phrase)) {
+            return errorResponse('Phrase is required', 400);
+        }
+        
+        try {
+            $improvedPhrase = improvePhrase($phrase, $language);
+            
+            return successResponse([
+                'phrase' => $improvedPhrase,
+                'original' => $phrase,
+                'improved' => $improvedPhrase !== $phrase
+            ]);
+        } catch (Exception $e) {
+            error_log("GPT phrase improvement error: " . $e->getMessage());
+            // Return original phrase if AI fails
+            return successResponse([
+                'phrase' => $phrase,
+                'original' => $phrase,
+                'improved' => false,
+                'error' => 'AI service unavailable, returning original phrase'
+            ]);
+        }
     }
     return errorResponse('GPT route not found', 404);
 }

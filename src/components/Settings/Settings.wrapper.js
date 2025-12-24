@@ -10,17 +10,17 @@ import Export from './Export';
 import Import from './Import';
 import Display from './Display';
 import About from './About';
-import Scanning from './Scanning';
 import Navigation from './Navigation';
 import Help from './Help';
 import Symbols from './Symbols';
 import EyeTracking from './EyeTracking';
-import Transfer from './Transfer';
 import LogViewer from './LogViewer';
 import AdminPanel from './AdminPanel';
 import LearningGames from './LearningGames';
 import OCRTranslator from './OCRTranslator';
 import AIFeatures from './AIFeatures';
+import News from './News/News.component';
+import Intro from './Intro';
 
 const SettingsWrapper = ({ match }) => (
   <Fragment>
@@ -34,12 +34,12 @@ const SettingsWrapper = ({ match }) => (
       <Route path={`${match.url}/import`} component={Import} />
       <Route path={`${match.url}/display`} component={Display} />
       <Route path={`${match.url}/about`} component={About} />
+      <Route path={`${match.url}/intro`} component={Intro} />
       <Route path={`${match.url}/help`} component={Help} />
-      <Route path={`${match.url}/scanning`} component={Scanning} />
+      <Route path={`${match.url}/news`} component={News} />
       <Route path={`${match.url}/navigation`} component={Navigation} />
       <Route path={`${match.url}/symbols`} component={Symbols} />
       <Route path={`${match.url}/eyetracking`} component={EyeTracking} />
-      <Route path={`${match.url}/transfer`} component={Transfer} />
       <Route path={`${match.url}/log-viewer`} component={LogViewer} />
       <Route path={`${match.url}/admin`} component={AdminPanel} />
       <Route path={`${match.url}/learning-games`} component={LearningGames} />

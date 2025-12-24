@@ -3,7 +3,7 @@ import { defineMessages } from 'react-intl';
 export default defineMessages({
   eyeTracking: {
     id: 'cboard.components.Settings.EyeTracking.eyeTracking',
-    defaultMessage: 'Eye Tracking'
+    defaultMessage: 'Eye Tracking & Scanning'
   },
   enable: {
     id: 'cboard.components.Settings.EyeTracking.enable',
@@ -81,9 +81,33 @@ export default defineMessages({
     id: 'cboard.components.Settings.EyeTracking.calibrationFailed',
     defaultMessage: 'Calibration failed'
   },
+  calibrationNeeded: {
+    id: 'cboard.components.Settings.EyeTracking.calibrationNeeded',
+    defaultMessage: 'Calibration needed to improve accuracy'
+  },
+  calibrationRequiresDevice: {
+    id: 'cboard.components.Settings.EyeTracking.calibrationRequiresDevice',
+    defaultMessage: 'Please register a device first to calibrate'
+  },
   startCalibration: {
     id: 'cboard.components.Settings.EyeTracking.startCalibration',
     defaultMessage: 'Start Calibration'
+  },
+  calibrating: {
+    id: 'cboard.components.Settings.EyeTracking.calibrating',
+    defaultMessage: 'Calibrating...'
+  },
+  calibrationInstructions: {
+    id: 'cboard.components.Settings.EyeTracking.calibrationInstructions',
+    defaultMessage: 'Look at the blue dot. Step {step} of {total}'
+  },
+  startPointCalibration: {
+    id: 'cboard.components.Settings.EyeTracking.startPointCalibration',
+    defaultMessage: 'Start Calibration'
+  },
+  pointComplete: {
+    id: 'cboard.components.Settings.EyeTracking.pointComplete',
+    defaultMessage: 'Point Complete'
   },
   deviceId: {
     id: 'cboard.components.Settings.EyeTracking.deviceId',
@@ -100,6 +124,38 @@ export default defineMessages({
   deviceRegisterFailed: {
     id: 'cboard.components.Settings.EyeTracking.deviceRegisterFailed',
     defaultMessage: 'Failed to register device'
+  },
+  deviceNotConnected: {
+    id: 'cboard.components.Settings.EyeTracking.deviceNotConnected',
+    defaultMessage: 'Device not connected or accessible'
+  },
+  cancel: {
+    id: 'cboard.components.Settings.EyeTracking.cancel',
+    defaultMessage: 'Cancel'
+  },
+  selectDevice: {
+    id: 'cboard.components.Settings.EyeTracking.selectDevice',
+    defaultMessage: 'Select Device'
+  },
+  selectDeviceSecondary: {
+    id: 'cboard.components.Settings.EyeTracking.selectDeviceSecondary',
+    defaultMessage: 'Choose from registered devices'
+  },
+  scanningMethod: {
+    id: 'cboard.components.Settings.EyeTracking.scanningMethod',
+    defaultMessage: 'Scanning Method'
+  },
+  scanningMethodSecondary: {
+    id: 'cboard.components.Settings.EyeTracking.scanningMethodSecondary',
+    defaultMessage: 'Choose how scanning highlight moves: automatically or follow eye gaze'
+  },
+  scanningMethodAutomatic: {
+    id: 'cboard.components.Settings.EyeTracking.scanningMethodAutomatic',
+    defaultMessage: 'Automatic'
+  },
+  scanningMethodEyeTracking: {
+    id: 'cboard.components.Settings.EyeTracking.scanningMethodEyeTracking',
+    defaultMessage: 'Eye Tracking'
   }
 });
 

@@ -114,21 +114,23 @@ function handleScanningRoutes($method, $pathParts, $data, $authToken) {
                 }
             }
             
-            // Verify board_id exists if provided
+            // Verify board_id exists if provided (board_id is now profile_id)
             if ($boardId) {
-                $checkStmt = $db->prepare("SELECT id FROM boards WHERE id = ?");
+                // Check if it's a profile_id
+                $checkStmt = $db->prepare("SELECT id FROM profiles WHERE id = ?");
                 $checkStmt->execute([$boardId]);
-                if (!$checkStmt->fetch()) {
+                if ($checkStmt->fetch()) {
+                    // It's a profile_id, convert to profile_id
+                    $profileId = $boardId;
+                    $boardId = null;
+                } else {
                     $boardId = null; // Set to null if doesn't exist
                 }
             }
             
-            // Insert action log (foreign keys can be null)
-            $stmt = $db->prepare("
-                INSERT INTO action_logs (user_id, profile_id, board_id, card_id, action_type, metadata, created_at)
-                VALUES (?, ?, ?, ?, 'scan_start', ?, NOW())
-            ");
-            $stmt->execute([$userId, $profileId, $boardId, null, $metadata]);
+            // Insert action log using helper function (handles board_id column existence)
+            require_once __DIR__ . '/action-log.php';
+            insertActionLog($db, $userId, $profileId, null, 'scan_start', $metadata);
             
             return successResponse([
                 'success' => true,
@@ -216,11 +218,9 @@ function handleScanningRoutes($method, $pathParts, $data, $authToken) {
                 'profile_id' => $profileId
             ]);
             
-            $stmt = $db->prepare("
-                INSERT INTO action_logs (user_id, profile_id, board_id, card_id, action_type, metadata, created_at)
-                VALUES (?, ?, ?, ?, 'scan_stop', ?, NOW())
-            ");
-            $stmt->execute([$userId, $profileId, null, null, $metadata]);
+            // Insert action log using helper function
+            require_once __DIR__ . '/action-log.php';
+            insertActionLog($db, $userId, $profileId, null, 'scan_stop', $metadata);
             
             return successResponse([
                 'success' => true,
@@ -274,11 +274,9 @@ function handleScanningRoutes($method, $pathParts, $data, $authToken) {
                 'board_id' => $boardId
             ]);
             
-            $stmt = $db->prepare("
-                INSERT INTO action_logs (user_id, profile_id, board_id, card_id, action_type, metadata, created_at)
-                VALUES (?, ?, ?, ?, 'scan_select', ?, NOW())
-            ");
-            $stmt->execute([$userId, $profileId, $boardId, $cardId, $metadata]);
+            // Insert action log using helper function
+            require_once __DIR__ . '/action-log.php';
+            insertActionLog($db, $userId, $profileId, $cardId, 'scan_select', $metadata);
             
             return successResponse([
                 'success' => true,

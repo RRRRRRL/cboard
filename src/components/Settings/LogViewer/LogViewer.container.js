@@ -5,30 +5,56 @@ import { injectIntl } from 'react-intl';
 import { showNotification } from '../../Notifications/Notifications.actions';
 import LogViewer from './LogViewer.component';
 import API from '../../../api';
+import messages from './LogViewer.messages';
 
 export class LogViewerContainer extends PureComponent {
   static propTypes = {
-    profiles: PropTypes.array.isRequired,
     history: PropTypes.object.isRequired,
     intl: PropTypes.object.isRequired,
     showNotification: PropTypes.func.isRequired
   };
 
   state = {
+    profiles: [],
     logs: [],
     loading: false
   };
+
+  async componentDidMount() {
+    // Load communication profiles for filtering logs
+    try {
+      const profiles = await API.getProfiles();
+      this.setState({ profiles });
+    } catch (error) {
+      console.error('Get profiles error (LogViewer):', error);
+    }
+  }
 
   handleLoadLogs = async (filters = {}) => {
     this.setState({ loading: true });
     try {
       const result = await API.getLogs(filters);
       this.setState({ logs: result.logs || [] });
+      
+      // Show offline message if no logs and offline
+      if ((!result.logs || result.logs.length === 0) && !navigator.onLine) {
+        this.props.showNotification(
+          this.props.intl.formatMessage(messages.offlineMode),
+          'info'
+        );
+      }
     } catch (error) {
       console.error('Load logs error:', error);
-      this.props.showNotification(
-        this.props.intl.formatMessage({ id: 'cboard.components.Settings.LogViewer.loadError', defaultMessage: 'Failed to load logs' })
-      );
+      const isNetworkError = error.code === 'ERR_NETWORK' || error.message === 'Network Error';
+      const message = isNetworkError && !navigator.onLine
+        ? this.props.intl.formatMessage(messages.offlineMode)
+        : this.props.intl.formatMessage(messages.loadError);
+      this.props.showNotification(message, isNetworkError ? 'warning' : 'error');
+      
+      // Set empty logs on network error to prevent UI issues
+      if (isNetworkError) {
+        this.setState({ logs: [] });
+      }
     } finally {
       this.setState({ loading: false });
     }
@@ -58,8 +84,8 @@ export class LogViewerContainer extends PureComponent {
   };
 
   render() {
-    const { profiles, history, intl } = this.props;
-    const { logs, loading } = this.state;
+    const { history, intl, userData } = this.props;
+    const { profiles, logs, loading } = this.state;
 
     return (
       <LogViewer
@@ -69,14 +95,15 @@ export class LogViewerContainer extends PureComponent {
         loading={loading}
         onLoadLogs={this.handleLoadLogs}
         onExportLogs={this.handleExportLogs}
+        userData={userData}
         intl={intl}
       />
     );
   }
 }
 
-const mapStateToProps = state => ({
-  profiles: state.communicator.communicators || []
+const mapStateToProps = (state) => ({
+  userData: state.app.userData || {}
 });
 
 const mapDispatchToProps = {

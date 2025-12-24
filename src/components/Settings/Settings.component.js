@@ -25,6 +25,7 @@ import AdminPanelIcon from '@material-ui/icons/Security';
 import GamesIcon from '@material-ui/icons/Games';
 import CameraAltIcon from '@material-ui/icons/CameraAlt';
 import MemoryIcon from '@material-ui/icons/Memory';
+import InfoIcon from '@material-ui/icons/Info';
 
 import messages from './Settings.messages';
 import SettingsSection from './SettingsSection.component';
@@ -133,11 +134,6 @@ export class Settings extends PureComponent {
         url: '/settings/display'
       },
       {
-        icon: <ScanningIcon />,
-        text: messages.scanning,
-        url: '/settings/scanning'
-      },
-      {
         icon: <NavigationIcon />,
         text: messages.navigation,
         url: '/settings/navigation'
@@ -146,11 +142,6 @@ export class Settings extends PureComponent {
         icon: <RemoveRedEyeIcon />,
         text: messages.eyeTracking,
         url: '/settings/eyetracking'
-      },
-      {
-        icon: <SwapHorizIcon />,
-        text: messages.transfer,
-        url: '/settings/transfer'
       },
       {
         icon: <ListIcon />,
@@ -212,9 +203,19 @@ export class Settings extends PureComponent {
         subheader: messages.help,
         settings: [
           {
+            icon: <InfoIcon />,
+            text: messages.intro,
+            url: '/settings/intro'
+          },
+          {
             icon: <HelpIcon />,
             text: messages.userHelp,
             url: '/settings/help'
+          },
+          {
+            icon: <ListIcon />,
+            text: messages.news,
+            url: '/settings/news'
           },
           {
             icon: <InfoOutlinedIcon />,

@@ -30,19 +30,27 @@ var speakQueue = [];
 var platformVoices = [];
 
 const getStateVoices = () => {
-  const store = getStore();
-  const {
-    speech: { voices }
-  } = store.getState();
-  return voices;
+  const store = typeof getStore === 'function' ? getStore() : null;
+  if (!store || typeof store.getState !== 'function') {
+    // In test or non-Redux environments, return an empty array to avoid crashes
+    console.warn('[TTS] getStateVoices: store is not available, returning empty voices list');
+    return [];
+  }
+  const state = store.getState() || {};
+  const speech = state.speech || {};
+  return speech.voices || [];
 };
 
 const getConnectionStatus = () => {
-  const store = getStore();
-  const {
-    app: { isConnected }
-  } = store.getState();
-  return isConnected;
+  const store = typeof getStore === 'function' ? getStore() : null;
+  if (!store || typeof store.getState !== 'function') {
+    // In test environments without a store, assume online to avoid blocking
+    console.warn('[TTS] getConnectionStatus: store is not available, assuming connected');
+    return true;
+  }
+  const state = store.getState() || {};
+  const appState = state.app || {};
+  return !!appState.isConnected;
 };
 
 const initAzureSynthesizer = () => {

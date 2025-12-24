@@ -396,10 +396,20 @@ function Transfer({
             onClose={() => setShowQRScanner(false)}
             onScan={async (token) => {
               setShowQRScanner(false);
-              setRedeemCode(token);
-              // Auto-redeem if token is valid format
               if (token && token.length > 0) {
-                await handleRedeemCode();
+                setRedeemCode(token);
+                // Auto-redeem the token
+                setLoading(true);
+                setError(null);
+                try {
+                  await onRedeemCode(token);
+                  alert(intl.formatMessage(messages.profileImported));
+                  setRedeemCode('');
+                } catch (err) {
+                  setError(err.message || intl.formatMessage(messages.invalidCode));
+                } finally {
+                  setLoading(false);
+                }
               }
             }}
           />

@@ -61,6 +61,15 @@
   color: #fff;
 }
 
+.jyutping__keyboard {
+  display: flex;
+  align-items: center;
+}
+
+.jyutping__keyboard button {
+  color: #fff !important;
+}
+
 .Navbar__group {
   align-items: center;
 }

@@ -47,6 +47,21 @@ if (Get-Command pscp -ErrorAction SilentlyContinue) {
 Write-Host ""
 Write-Host "[*] Preparing deployment..." -ForegroundColor Cyan
 
+# If this is a React project, ensure the production build is up to date
+if ((Test-Path "package.json") -and (Test-Path "src")) {
+    Write-Host "   Detected React frontend. Building production bundle (npm run build)..." -ForegroundColor Gray
+    try {
+        if (-not (Test-Path "node_modules")) {
+            Write-Host "   node_modules not found, running npm install (this may take a while)..." -ForegroundColor Yellow
+            npm install
+        }
+        npm run build
+        Write-Host "   [OK] Frontend build completed." -ForegroundColor Green
+    } catch {
+        Write-Host "   [!] Frontend build failed. Deployment will continue with existing build (if any)." -ForegroundColor Yellow
+    }
+}
+
 # Create temporary directory
 $TEMP_DIR = New-TemporaryFile | ForEach-Object { Remove-Item $_; New-Item -ItemType Directory -Path $_ }
 
@@ -65,7 +80,8 @@ if (Test-Path ".deployignore") {
 }
 
 # Standard exclusions
-$excludeDirs = @('node_modules', '.git', 'build', 'dist', 'backend/uploads', 'backend/vendor', 
+# NOTE: we intentionally do NOT exclude 'build' so the built frontend is deployed.
+$excludeDirs = @('node_modules', '.git', 'dist', 'backend/uploads', 'backend/vendor', 
                  '.vscode', '.idea', '.vs', '__pycache__', '.pytest_cache', 'tmp', 'temp', 'coverage', 
                  'tests', '__tests__', '.nyc_output', 'bin', 'obj', 'Debug', 'Release', 'x64', 'x86', 'ARM')
 $excludeFiles = @('*.log', '.DS_Store', 'Welcome.*', 'welcome.ico', 'VisualStudio.png', 

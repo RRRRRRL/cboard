@@ -4,6 +4,43 @@
 
 .JyutpingKeyboard__dialog .MuiDialog-paper {
   transition: all 0.3s ease;
+  max-width: 95vw !important;
+  width: 95vw !important;
+}
+
+@media (min-width: 960px) {
+  .JyutpingKeyboard__dialog .MuiDialog-paper {
+    max-width: 90vw !important;
+    width: 90vw !important;
+  }
+}
+
+@media (min-width: 768px) {
+  .JyutpingKeyboard__dialog .MuiDialog-paper {
+    max-width: 95vw !important;
+    width: 95vw !important;
+    max-height: 95vh !important;
+  }
+  
+  .JyutpingKeyboard__content {
+    max-height: calc(95vh - 120px);
+    overflow-y: auto;
+    padding: 20px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .JyutpingKeyboard__dialog .MuiDialog-paper {
+    max-width: 1400px !important;
+    width: 1400px !important;
+  }
+}
+
+@media (min-width: 1280px) {
+  .JyutpingKeyboard__dialog .MuiDialog-paper {
+    max-width: 1600px !important;
+    width: 1600px !important;
+  }
 }
 
 .JyutpingKeyboard__header {
@@ -36,6 +73,35 @@
 .JyutpingKeyboard__content {
   padding: 24px;
   min-height: 500px;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+@media (min-width: 768px) {
+  .JyutpingKeyboard__content {
+    padding: 20px;
+    max-height: calc(95vh - 120px);
+    overflow-y: auto;
+  }
+}
+
+/* Ensure input and output boxes are always visible */
+.JyutpingTextEditor {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background-color: white;
+  padding: 12px 0;
+  margin-bottom: 16px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+@media (max-width: 767px) {
+  .JyutpingTextEditor {
+    position: relative;
+    padding: 8px 0;
+  }
 }
 
 .JyutpingKeyboard__tabs {
@@ -96,8 +162,32 @@
   margin-left: 8px;
 }
 
+.JyutpingTextEditor__output-wrapper {
+  position: relative;
+  margin-bottom: 8px;
+}
+
 .JyutpingTextEditor__output {
   margin-bottom: 8px;
+}
+
+.JyutpingTextEditor__playback-button {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 1;
+  background-color: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.JyutpingTextEditor__playback-button:hover {
+  background-color: rgba(255, 255, 255, 1);
+}
+
+.JyutpingTextEditor__playback-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .JyutpingTextEditor__output-input {
@@ -155,29 +245,120 @@
   transform: translateY(-2px);
 }
 
+.JyutpingKeyboard__voice-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 4px 0 8px;
+  gap: 12px;
+}
+
+.JyutpingKeyboard__voice-label {
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.JyutpingKeyboard__voice-select-input {
+  padding: 2px 4px;
+  font-size: 0.8rem;
+}
+
+.JyutpingKeyboard__rate-slider {
+  margin: 0 6px;
+}
+
+.JyutpingKeyboard__rate-value {
+  font-size: 0.75rem;
+  min-width: 40px;
+  display: inline-block;
+}
+
 /* Keyboard Layout Styles */
 .JyutpingKeyboardLayout {
   margin-top: 16px;
+  width: 100%;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .JyutpingKeyboardLayout__keys {
   margin-bottom: 16px;
+  width: 100%;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .JyutpingKeyboardLayout__row {
   display: flex;
   justify-content: center;
-  gap: 8px;
-  margin-bottom: 8px;
+  align-items: center;
+  width: 100%;
+  flex-wrap: nowrap;
+  gap: 4px;
+  margin-bottom: 6px;
+  padding: 0 8px;
+}
+
+@media (min-width: 768px) {
+  .JyutpingKeyboardLayout__row {
+    gap: 6px;
+    margin-bottom: 8px;
+    padding: 0 12px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .JyutpingKeyboardLayout__row {
+    gap: 8px;
+    padding: 0 16px;
+  }
 }
 
 .JyutpingKeyboardLayout__key {
-  min-width: 50px;
-  height: 50px;
-  font-size: 0.875rem;
+  min-width: 48px;
+  width: auto;
+  height: 48px;
+  font-size: 0.8rem;
   font-weight: 500;
   text-transform: none;
   transition: all 0.1s;
+  flex: 1 1 auto;
+  max-width: 80px;
+  padding: 4px 8px;
+}
+
+@media (min-width: 768px) {
+  .JyutpingKeyboardLayout__key {
+    min-width: 52px;
+    height: 50px;
+    font-size: 0.85rem;
+    padding: 4px 10px;
+  }
+}
+
+@media (min-width: 960px) {
+  .JyutpingKeyboardLayout__key {
+    min-width: 56px;
+    height: 52px;
+    font-size: 0.9rem;
+    padding: 4px 12px;
+    max-width: 90px;
+  }
+}
+
+@media (min-width: 1280px) {
+  .JyutpingKeyboardLayout__key {
+    min-width: 60px;
+    height: 54px;
+    font-size: 0.95rem;
+    max-width: 100px;
+  }
 }
 
 .JyutpingKeyboardLayout__key:hover {
@@ -214,7 +395,8 @@
 /* Large screens (desktop) - 1200px and above */
 @media (min-width: 1200px) {
   .JyutpingKeyboard__dialog .MuiDialog-paper {
-    max-width: 900px;
+    max-width: 1600px !important;
+    width: 1600px !important;
   }
 }
 
@@ -222,6 +404,8 @@
 @media (max-width: 1199px) and (min-width: 768px) {
   .JyutpingKeyboard__content {
     padding: 20px;
+    max-height: calc(95vh - 120px);
+    overflow-y: auto;
   }
 
   .JyutpingKeyboardLayout__key {

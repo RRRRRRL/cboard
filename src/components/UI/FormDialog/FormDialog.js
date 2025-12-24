@@ -7,7 +7,8 @@ import DialogContent from '@material-ui/core/DialogContent';
 import DialogContentText from '@material-ui/core/DialogContentText';
 import DialogTitle from '@material-ui/core/DialogTitle';
 import Button from '@material-ui/core/Button';
-import withMobileDialog from '@material-ui/core/withMobileDialog';
+import useMediaQuery from '@material-ui/core/useMediaQuery';
+import { useTheme } from '@material-ui/core/styles';
 import messages from './FormDialog.messages';
 
 import './FormDialog.css';
@@ -40,8 +41,11 @@ function FormDialog(props) {
     disableSubmit,
     onClose,
     onSubmit,
-    fullScreen
+    fullScreen: fullScreenProp
   } = props;
+
+  const theme = useTheme();
+  const fullScreen = useMediaQuery(theme.breakpoints.down('sm')) || fullScreenProp;
 
   return (
     <Dialog
@@ -73,4 +77,4 @@ function FormDialog(props) {
   );
 }
 
-export default withMobileDialog()(FormDialog);
+export default FormDialog;

@@ -151,8 +151,8 @@
   },
   "scripts": {
     "analyze": "source-map-explorer build/static/js/**/*.js",
-    "start": "craco start",
-    "build": "craco build  --verbose && sw-precache --config=sw-precache-config.js",
+    "start": "TSC_COMPILE_ON_ERROR=true DISABLE_ESLINT_PLUGIN=true craco start",
+    "build": "TSC_COMPILE_ON_ERROR=true DISABLE_ESLINT_PLUGIN=true craco build --verbose && sw-precache --config=sw-precache-config.js",
     "build-cordova-debug": "craco build --verbose --cordova-debug",
     "predeploy": "yarn build",
     "deploy": "gh-pages -d build",

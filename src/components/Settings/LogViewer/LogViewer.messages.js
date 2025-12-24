@@ -77,6 +77,18 @@ export default defineMessages({
     id: 'cboard.components.Settings.LogViewer.exportError',
     defaultMessage: 'Failed to export logs'
   },
+  loadError: {
+    id: 'cboard.components.Settings.LogViewer.loadError',
+    defaultMessage: 'Failed to load logs'
+  },
+  networkError: {
+    id: 'cboard.components.Settings.LogViewer.networkError',
+    defaultMessage: 'Network error. Please check your connection.'
+  },
+  offlineMode: {
+    id: 'cboard.components.Settings.LogViewer.offlineMode',
+    defaultMessage: 'You are currently offline. Logs will be loaded when connection is restored.'
+  },
   // Action type translations
   'actionType.card_click': {
     id: 'cboard.components.Settings.LogViewer.actionType.card_click',
@@ -109,6 +121,38 @@ export default defineMessages({
   'actionType.eyetracking_select': {
     id: 'cboard.components.Settings.LogViewer.actionType.eyetracking_select',
     defaultMessage: 'Eye Tracking Select'
+  },
+  'actionType.profile_create': {
+    id: 'cboard.components.Settings.LogViewer.actionType.profile_create',
+    defaultMessage: 'Profile Created'
+  },
+  'actionType.profile_update': {
+    id: 'cboard.components.Settings.LogViewer.actionType.profile_update',
+    defaultMessage: 'Profile Updated'
+  },
+  'actionType.card_create': {
+    id: 'cboard.components.Settings.LogViewer.actionType.card_create',
+    defaultMessage: 'Card Created'
+  },
+  'actionType.card_update': {
+    id: 'cboard.components.Settings.LogViewer.actionType.card_update',
+    defaultMessage: 'Card Updated'
+  },
+  profileName: {
+    id: 'cboard.components.Settings.LogViewer.profileName',
+    defaultMessage: 'Profile Name'
+  },
+  cardTitle: {
+    id: 'cboard.components.Settings.LogViewer.cardTitle',
+    defaultMessage: 'Card Title'
+  },
+  createdAt: {
+    id: 'cboard.components.Settings.LogViewer.createdAt',
+    defaultMessage: 'Created At'
+  },
+  updatedAt: {
+    id: 'cboard.components.Settings.LogViewer.updatedAt',
+    defaultMessage: 'Updated At'
   }
 });
 

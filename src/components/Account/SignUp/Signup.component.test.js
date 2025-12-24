@@ -1,5 +1,6 @@
 import React from 'react';
 import { mount } from 'enzyme';
+import { shallowMatchSnapshot } from '../../../common/test_utils';
 import SignUp from './SignUp.component';
 
 jest.mock('./SignUp.messages', () => {
@@ -42,8 +43,7 @@ describe('SignUp tests', () => {
   };
 
   test('default renderer', () => {
-    const wrapper = mount(<SignUp {...props} />);
-    expect(wrapper).toMatchSnapshot();
+    shallowMatchSnapshot(<SignUp {...props} />);
   });
 
   test('check with submit', () => {

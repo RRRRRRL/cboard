@@ -27,8 +27,10 @@ $allowedOrigins = [
     'http://localhost:3001',
     'http://127.0.0.1:3000',
     'http://127.0.0.1:3001',
-    'http://192.168.62.37',
-    'http://192.168.62.37:3000',
+    'http://192.168.62.45',
+    'http://192.168.62.45:3000',
+    'http://192.168.62.50',
+    'http://192.168.62.50:3000',
     'https://aac.uplifor.org',
     'https://www.aac.uplifor.org'
 ];

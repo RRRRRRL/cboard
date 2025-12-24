@@ -92,6 +92,7 @@ class SymbolOutput extends PureComponent {
       phrase,
       isLiveMode,
       increaseOutputButtons,
+      onClick: onOutputClick,
       ...other
     } = this.props;
 
@@ -122,6 +123,8 @@ class SymbolOutput extends PureComponent {
                   : 'SymbolOutput__value'
               }
               key={index}
+              data-output-action="play"
+              onClick={!isLiveMode ? onOutputClick : undefined}
             >
               <Symbol
                 className="SymbolOutput__symbol"
@@ -140,6 +143,7 @@ class SymbolOutput extends PureComponent {
                   onClick={onRemoveClick(index)}
                   disabled={!navigationSettings.removeOutputActive}
                   style={removeButtonStyle}
+                  data-output-action="remove"
                 >
                   <ClearIcon />
                 </IconButton>
@@ -177,6 +181,7 @@ class SymbolOutput extends PureComponent {
               style={backspaceButtonStyle}
               hidden={navigationSettings.removeOutputActive}
               increaseOutputButtons={increaseOutputButtons}
+              data-output-action="backspace"
             />
           )}
           <div
@@ -208,6 +213,7 @@ class SymbolOutput extends PureComponent {
               style={clearButtonStyle}
               hidden={!symbols.length}
               increaseOutputButtons={increaseOutputButtons}
+              data-output-action="clear"
             />
           </div>
         </div>

@@ -93,10 +93,21 @@ describe('actions', () => {
     const expectedAction = {
       type: types.CHANGE_VOICE,
       voiceURI,
-      lang
+      lang,
+      isCloud: false
     };
 
-    expect(actions.changeVoice(voiceURI, lang)).toEqual(expectedAction);
+    const dispatch = jest.fn();
+    const getState = () => ({
+      speech: {
+        voices,
+        options: initialState.speech.options
+      }
+    });
+
+    actions.changeVoice(voiceURI, lang)(dispatch, getState);
+
+    expect(dispatch).toHaveBeenCalledWith(expectedAction);
   });
 
   it('should create an action to change pitch', () => {

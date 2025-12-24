@@ -44,9 +44,33 @@ function SignUp(props) {
 
     try {
       const res = await signUp(formValues);
-      setSignUpStatus(res);
+      // Backend returns { data: { success: true, user: {...} } } or { data: { success: false, message: '...' } }
+      const responseData = res?.data || res;
+      
+      if (responseData?.success && responseData?.user) {
+        // Registration successful
+        setSignUpStatus({
+          success: true,
+          message: intl.formatMessage({
+            id: 'cboard.components.SignUp.registrationSuccess',
+            defaultMessage: 'Account created successfully! You can now log in.'
+          })
+        });
+      } else if (responseData?.success === false) {
+        // Registration failed with error message
+        setSignUpStatus({
+          success: false,
+          message: responseData?.message || intl.formatMessage(messages.noConnection)
+        });
+      } else {
+        // Unexpected response format
+        setSignUpStatus({
+          success: false,
+          message: intl.formatMessage(messages.noConnection)
+        });
+      }
     } catch (err) {
-      const responseMessage = err?.response?.data?.message;
+      const responseMessage = err?.response?.data?.message || err?.response?.data?.data?.message;
       const message = responseMessage
         ? responseMessage
         : intl.formatMessage(messages.noConnection);

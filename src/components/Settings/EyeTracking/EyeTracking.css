@@ -69,3 +69,24 @@
   font-size: 18px;
 }
 
+/* Responsive tweaks for smaller screens (tablets/phones) */
+@media (max-width: 768px) {
+  .EyeTracking {
+    padding: 8px;
+  }
+
+  .EyeTracking__section {
+    margin-bottom: 16px;
+  }
+
+  .EyeTracking__calibration-instructions {
+    font-size: 16px;
+    margin-bottom: 16px;
+  }
+
+  .EyeTracking__calibration-point {
+    width: 16px;
+    height: 16px;
+  }
+}
+

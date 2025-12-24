@@ -322,42 +322,8 @@ class Scanning extends React.Component {
                 </ListItemSecondaryAction>
               </ListItem>
 
-              {/* Legacy: Scan Method (for backward compatibility) */}
-              <ListItem divider>
-                <ListItemText
-                  className="Scanning__ListItemText"
-                  primary={<FormattedMessage {...messages.method} />}
-                  secondary={<FormattedMessage {...messages.methodSecondary} />}
-                />
-                <ListItemSecondaryAction>
-                  <Select
-                    value={strategy}
-                    onChange={this.changeSelect('strategy')}
-                    inputProps={{
-                      name: 'strategy',
-                      id: 'scanning-strategy'
-                    }}
-                  >
-                    <MenuItem value={SCANNING_METHOD_AUTOMATIC}>
-                      <FormattedMessage {...messages.automatic} />
-                    </MenuItem>
-                    <MenuItem value={SCANNING_METHOD_MANUAL}>
-                      <FormattedMessage {...messages.manual} />
-                    </MenuItem>
-                  </Select>
-                </ListItemSecondaryAction>
-              </ListItem>
+              {/* Legacy: Scan Method removed - only eye tracking and automatic mode now */}
             </List>
-            <div className="Scanning__HelpText">
-              <div>
-                <FormattedMessage
-                  {...SCANNER_MESSAGES_KEYMAP[strategy]}
-                />
-              </div>
-              <div>
-                <FormattedMessage {...messages.scannerHowToDeactivate} />
-              </div>
-            </div>
           </Paper>
         </FullScreenDialog>
       </div>

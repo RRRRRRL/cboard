@@ -3,8 +3,21 @@ import * as types from '../Board.constants';
 import configureMockStore from 'redux-mock-store';
 import thunk from 'redux-thunk';
 import defaultBoards from '../../../api/boards.json';
+import API from '../../../api/api';
 
-jest.mock('../../../api/api');
+jest.mock('../../../api/api', () => ({
+  updateBoard: jest.fn(),
+  createBoard: jest.fn(),
+  deleteBoard: jest.fn(),
+  getMyBoards: jest.fn(),
+  getBoard: jest.fn(),
+  getProfiles: jest.fn(),
+  createCommunicator: jest.fn().mockResolvedValue({ id: 'cboard_default' })
+}));
+
+// Board.actions.js imports API from '../../api' (which re-exports './api'),
+// so we also need to mock that module to point to the same mocked API.
+jest.mock('../../api', () => require('../../../api/api'));
 
 const mockStore = configureMockStore([thunk]);
 
@@ -63,7 +76,8 @@ describe('actions', () => {
     const boards = {};
     const expectedAction = {
       type: types.ADD_BOARDS,
-      boards
+      boards,
+      isCompleteRefresh: false
     };
     expect(actions.addBoards(boards)).toEqual(expectedAction);
   });
@@ -323,152 +337,146 @@ describe('actions', () => {
     };
     expect(actions.deleteApiBoardFailure(message)).toEqual(expectedAction);
   });
-  it('check getApiObjects', () => {
+  it('check getApiObjects', async () => {
+    API.getMyBoards.mockResolvedValue([]);
     const store = mockStore(initialState);
-    store.dispatch(actions.getApiObjects()).then(data => {
-      expect(data).toEqual();
+    const data = await store.dispatch(actions.getApiObjects());
+    // current implementation does not return a value, just ensure no error is thrown
+    expect(data).toBeUndefined();
+  });
+  it('check updateApiMarkedBoards', async () => {
+    API.updateBoard.mockResolvedValue(mockBoard);
+    const store = mockStore(initialState);
+    await store.dispatch(actions.updateApiMarkedBoards());
+    // Test passes if no error is thrown
+  });
+  it('check getApiMyBoards', async () => {
+    API.getMyBoards.mockResolvedValue([mockBoard]);
+    const store = mockStore(initialState);
+    await store.dispatch(actions.getApiMyBoards());
+    const dispatchedActions = store.getActions();
+    expect(dispatchedActions[0]).toEqual({ type: types.GET_API_MY_BOARDS_STARTED });
+  });
+  it('check createApiBoard', async () => {
+    API.createBoard.mockResolvedValue(mockBoard);
+    const store = mockStore(initialState);
+    
+    const data = await store.dispatch(actions.createApiBoard(mockBoard, '12345678901234567'));
+    const dispatchedActions = store.getActions();
+    const dataResp = {
+      board: mockBoard,
+      boardId: '12345678901234567',
+      type: 'cboard/Board/CREATE_API_BOARD_SUCCESS'
+    };
+    expect(dispatchedActions[1]).toEqual(dataResp);
+    expect(data).toEqual(mockBoard);
+  });
+  it('check createApiBoard error', async () => {
+    const error = { message: 'error' };
+    API.createBoard.mockRejectedValue(error);
+    const store = mockStore(initialState);
+    
+    try {
+      await store.dispatch(actions.createApiBoard({ error: 'error' }, '12345678901234567'));
+      throw new Error('An error was expected');
+    } catch (e) {
+      const dispatchedActions = store.getActions();
+      const dataResp = {
+        message: 'error',
+        type: 'cboard/Board/CREATE_API_BOARD_FAILURE'
+      };
+      expect(dispatchedActions[1]).toEqual(dataResp);
+    }
+  });
+  it('check updateApiBoard', async () => {
+    API.updateBoard.mockResolvedValue(mockBoard);
+    const store = mockStore(initialState);
+    
+    const result = await store.dispatch(actions.updateApiBoard(mockBoard));
+    expect(result).toEqual(mockBoard);
+    
+    const dispatchedActions = store.getActions();
+    expect(dispatchedActions[0]).toEqual({ type: types.UPDATE_API_BOARD_STARTED });
+    expect(dispatchedActions[1]).toEqual({
+      type: types.UPDATE_API_BOARD_SUCCESS,
+      boardData: mockBoard
     });
   });
-  it('check updateApiMarkedBoards', () => {
+  it('check updateApiBoard error', async () => {
+    const error = { message: 'error' };
+    API.updateBoard.mockRejectedValue(error);
     const store = mockStore(initialState);
-    store.dispatch(actions.updateApiMarkedBoards());
-  });
-  it('check getApiMyBoards', () => {
-    const store = mockStore(initialState);
-    store.dispatch(actions.getApiMyBoards());
-  });
-  it('check createApiBoard', () => {
-    const store = mockStore(initialState);
-    store
-      .dispatch(actions.createApiBoard(mockBoard, '12345678901234567'))
-      .then(data => {
-        const actions = store.getActions();
-        const dataResp = {
-          board: mockBoard,
-          boardId: '12345678901234567',
-          type: 'cboard/Board/CREATE_API_BOARD_SUCCESS'
-        };
-        expect(actions[1]).toEqual(dataResp);
-        expect(data).toEqual(mockBoard);
-      })
-      .catch(e => {
-        throw new Error(e.message);
+    
+    try {
+      await store.dispatch(actions.updateApiBoard({ error: 'error' }));
+      throw new Error('An error was expected');
+    } catch (e) {
+      const dispatchedActions = store.getActions();
+      expect(dispatchedActions[0]).toEqual({ type: types.UPDATE_API_BOARD_STARTED });
+      expect(dispatchedActions[1]).toEqual({
+        type: types.UPDATE_API_BOARD_FAILURE,
+        message: 'error'
       });
+    }
   });
-  it('check createApiBoard error', () => {
+  it('check deleteApiBoard', async () => {
+    API.deleteBoard.mockResolvedValue(mockBoard);
     const store = mockStore(initialState);
-    store
-      .dispatch(actions.createApiBoard({ error: 'error' }, '12345678901234567'))
-      .then(() => {
-        throw new Error('An error was expected');
-      })
-      .catch(e => {
-        const actions = store.getActions();
-        const dataResp = {
-          message: '[object Object]',
-          type: 'cboard/Board/CREATE_API_BOARD_FAILURE'
-        };
-        expect(actions[1]).toEqual(dataResp);
-      });
+    
+    const data = await store.dispatch(actions.deleteApiBoard('12345678901234567'));
+    expect(data).toEqual(mockBoard);
   });
-  it('check updateApiBoard', () => {
+  it('check deleteApiBoard error', async () => {
+    const error = { message: 'error' };
+    API.deleteBoard.mockRejectedValue(error);
     const store = mockStore(initialState);
-    store
-      .dispatch(actions.updateApiBoard(mockBoard))
-      .then(data => {
-        expect(data).toEqual(mockBoard);
-      })
-      .catch(e => {
-        throw new Error(e.message);
-      });
+    
+    try {
+      await store.dispatch(actions.deleteApiBoard('error'));
+      throw new Error('An error was expected');
+    } catch (e) {
+      const dispatchedActions = store.getActions();
+      const dataResp = {
+        message: 'error',
+        type: 'cboard/Board/DELETE_API_BOARD_FAILURE'
+      };
+      expect(dispatchedActions[1]).toEqual(dataResp);
+    }
   });
-  it('check updateApiBoard error', () => {
+  it('check updateApiObjectsNoChild', async () => {
+    API.updateBoard.mockResolvedValue(mockBoard);
     const store = mockStore(initialState);
-    store
-      .dispatch(actions.updateApiBoard({ error: 'error' }))
-      .then(() => {
-        throw new Error('An error was expected');
-      })
-      .catch(e => {
-        const actions = store.getActions();
-        const dataResp = {
-          message: '[object Object]',
-          type: 'cboard/Board/UPDATE_API_BOARD_FAILURE'
-        };
-        expect(actions[1]).toEqual(dataResp);
-      });
+    const data = await store.dispatch(actions.updateApiObjectsNoChild(mockBoard));
+    expect(data).toEqual('12345678901234567');
   });
-  it('check deleteApiBoard', () => {
+  it('check updateApiObjectsNoChild true / false', async () => {
+    API.updateBoard.mockResolvedValue(mockBoard);
     const store = mockStore(initialState);
-    store
-      .dispatch(actions.deleteApiBoard('12345678901234567'))
-      .then(data => {
-        expect(data).toEqual(mockBoard);
-      })
-      .catch(e => {
-        throw new Error(e.message);
-      });
+    const data = await store.dispatch(actions.updateApiObjectsNoChild(mockBoard, true));
+    expect(data).toEqual('12345678901234567');
   });
-  it('check deleteApiBoard error', () => {
+  it('check updateApiObjectsNoChild true / true', async () => {
+    API.updateBoard.mockResolvedValue(mockBoard);
     const store = mockStore(initialState);
-    store
-      .dispatch(actions.deleteApiBoard('error'))
-      .then(() => {
-        throw new Error('An error was expected');
-      })
-      .catch(e => {
-        const actions = store.getActions();
-        const dataResp = {
-          message: '[object Object]',
-          type: 'cboard/Board/DELETE_API_BOARD_FAILURE'
-        };
-        expect(actions[1]).toEqual(dataResp);
-      });
+    const data = await store.dispatch(actions.updateApiObjectsNoChild(mockBoard, true, true));
+    expect(data).toEqual('12345678901234567');
   });
-  it('check updateApiObjectsNoChild', () => {
+  it('check updateApiObjects', async () => {
+    API.updateBoard.mockResolvedValue(mockBoard);
     const store = mockStore(initialState);
-    store.dispatch(actions.updateApiObjectsNoChild(mockBoard)).then(data => {
-      expect(data).toEqual('12345678901234567');
-    });
+    const data = await store.dispatch(actions.updateApiObjects(mockBoard, mockBoard));
+    expect(data).toEqual('12345678901234567');
   });
-  it('check updateApiObjectsNoChild true / false', () => {
+  it('check updateApiObjects true / false', async () => {
+    API.updateBoard.mockResolvedValue(mockBoard);
     const store = mockStore(initialState);
-    store
-      .dispatch(actions.updateApiObjectsNoChild(mockBoard, true))
-      .then(data => {
-        expect(data).toEqual('12345678901234567');
-      });
+    const data = await store.dispatch(actions.updateApiObjects(mockBoard, mockBoard, true));
+    expect(data).toEqual('12345678901234567');
   });
-  it('check updateApiObjectsNoChild true / true', () => {
+  it('check updateApiObjects true / true', async () => {
+    API.updateBoard.mockResolvedValue(mockBoard);
     const store = mockStore(initialState);
-    store
-      .dispatch(actions.updateApiObjectsNoChild(mockBoard, true, true))
-      .then(data => {
-        expect(data).toEqual('12345678901234567');
-      });
-  });
-  it('check updateApiObjectsNoChild', () => {
-    const store = mockStore(initialState);
-    store
-      .dispatch(actions.updateApiObjects(mockBoard, mockBoard))
-      .then(data => {
-        expect(data).toEqual('12345678901234567');
-      });
-  });
-  it('check updateApiObjectsNoChild true / false', () => {
-    const store = mockStore(initialState);
-    store
-      .dispatch(actions.updateApiObjects(mockBoard, mockBoard, true))
-      .then(data => {
-        expect(data).toEqual('12345678901234567');
-      });
-  });
-  it('check updateApiObjectsNoChild true / true', () => {
-    const store = mockStore(initialState);
-    store
-      .dispatch(actions.updateApiObjects(mockBoard, mockBoard, true, true))
-      .then(data => {
-        expect(data).toEqual('12345678901234567');
-      });
+    const data = await store.dispatch(actions.updateApiObjects(mockBoard, mockBoard, true, true));
+    expect(data).toEqual('12345678901234567');
   });
 });

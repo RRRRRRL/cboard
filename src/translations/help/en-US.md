@@ -1,6 +1,30 @@
 # Cboard Help
 
-## Table of contents
+## 🚀 Quick Start Guide
+
+**New to Cboard?** Start here to get up and running quickly:
+
+1. **Watch the Introduction Video** - Learn what Cboard is and how it works:
+   - [What is Cboard?](#WhatisCboard) (includes video tutorial)
+
+2. **Get Started with Basics**:
+   - [How do I register for Cboard?](#HowdoIregisterforCboard)
+   - [How do I log in to Cboard once I am a registered user?](#HowdoIlogintoCboardonceIamaregistereduser)
+   - [How do I access settings in Cboard?](#HowdoIaccesssettingsinCboard)
+
+3. **Learn Core Features**:
+   - [How do I create an empty board?](#HowdoIcreateanemptyboard)
+   - [How do I personalize an existing board in Cboard?](#HowdoIpersonalizeanexistingboardinCboard)
+   - [Can Cboard read my message out aloud?](#CanCboardreadmymessageoutaloud)
+
+4. **Watch Video Tutorials**:
+   - [Board Editing](#BoardEditing) - Learn how to create and customize boards
+   - [Talking](#Talking) - Learn how to add voice recordings
+   - [Settings](#Settings) - Learn how to share boards and configure options
+
+---
+
+## 📚 Table of Contents / FAQ Index
 
 * [What is Cboard?](#WhatisCboard)
 * [Registration and login](#Registrationandlogin) 

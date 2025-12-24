@@ -1,0 +1,22 @@
+.News {
+  padding: 16px;
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.News h1,
+.News h2,
+.News h3 {
+  margin-top: 16px;
+  margin-bottom: 8px;
+}
+
+.News p {
+  line-height: 1.6;
+}
+
+.News ul {
+  padding-left: 20px;
+}
+
+

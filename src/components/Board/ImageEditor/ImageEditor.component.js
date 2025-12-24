@@ -7,7 +7,6 @@ import DialogTitle from '@material-ui/core/DialogTitle';
 import DialogActions from '@material-ui/core/DialogActions';
 import IconButton from '../../UI/IconButton';
 import CloseIcon from '@material-ui/icons/Close';
-import withMobileDialog from '@material-ui/core/withMobileDialog';
 import messages from './ImageEditor.messages';
 import RotateRightIcon from '@material-ui/icons/RotateRight';
 import DoneIcon from '@material-ui/icons/Done';
@@ -195,4 +194,4 @@ class ImageEditor extends PureComponent {
   }
 }
 
-export default withMobileDialog()(ImageEditor);
+export default ImageEditor;

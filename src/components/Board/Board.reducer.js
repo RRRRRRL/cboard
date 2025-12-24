@@ -59,7 +59,26 @@ const initialState = {
   improvedPhrase: ''
 };
 
+function hasRealTiles(board) {
+  if (!board || !Array.isArray(board.tiles)) return false;
+  if (board.tiles.length === 0) return false;
+  // 視為「有真實 tiles」的前提：至少有一個元素是 object（而不是純 null / primitive）
+  return board.tiles.some(tile => tile && typeof tile === 'object');
+}
+
 function reconcileBoards(localBoard, remoteBoard) {
+  // 別把「全是 null 的虛擬 tiles（列表用）」當成有 tiles
+  const localHasTiles = hasRealTiles(localBoard);
+  const remoteHasTiles = hasRealTiles(remoteBoard);
+  
+  if (localHasTiles && !remoteHasTiles) {
+    return localBoard;
+  }
+  if (!localHasTiles && remoteHasTiles) {
+    return remoteBoard;
+  }
+  
+  // If both have tiles or both don't have tiles, use lastEdited to decide
   if (localBoard.lastEdited && remoteBoard.lastEdited) {
     if (moment(localBoard.lastEdited).isSameOrAfter(remoteBoard.lastEdited)) {
       return localBoard;
@@ -68,6 +87,16 @@ function reconcileBoards(localBoard, remoteBoard) {
       return remoteBoard;
     }
   }
+  
+  // If remote board has more tiles, prefer it (for cases where tiles were added)
+  if (remoteHasTiles && localHasTiles) {
+    const localTilesCount = localBoard.tiles.length;
+    const remoteTilesCount = remoteBoard.tiles.length;
+    if (remoteTilesCount > localTilesCount) {
+      return remoteBoard;
+    }
+  }
+  
   return localBoard;
 }
 
@@ -134,7 +163,15 @@ function boardReducer(state = initialState, action) {
       };
 
     case LOGOUT:
-      return { ...initialState, boards: deepCopy(initialBoardsState) };
+      // On logout, reset to initial state and ensure we only have default boards
+      // This prevents issues where user-modified root boards (with numeric IDs like 59)
+      // remain in the boards array after logout, causing data corruption
+      return { 
+        ...initialState, 
+        boards: deepCopy(initialBoardsState),
+        activeBoardId: null,
+        navHistory: []
+      };
 
     case IMPORT_BOARDS:
       return {
@@ -142,31 +179,91 @@ function boardReducer(state = initialState, action) {
         boards: action.boards
       };
     case ADD_BOARDS:
+      // Support both a single board object or an array of boards
+      const incoming = action.boards;
+      const newBoardsArray = Array.isArray(incoming) ? incoming : (incoming ? [incoming] : []);
+
       // Reconcile boards: replace existing boards with same ID, add new ones
       const existingBoards = [...state.boards];
-      const newBoards = action.boards || [];
+      const newBoards = newBoardsArray;
+
+      // Determine if this is a complete refresh of user boards
+      // If all new boards have the same user_id (and it's not a system user), 
+      // we should remove user boards that are no longer in the new list
+      const newBoardUserIds = new Set(
+        newBoards
+          .filter(Boolean)
+          .map(b => b.user_id || b.email)
+          .filter(id => id && id !== 'support@cboard.io' && id !== 1)
+      );
+      // Also check if action explicitly indicates this is a complete refresh
+      const isCompleteUserRefresh = (action.isCompleteRefresh === true) || 
+        (newBoardUserIds.size === 1 && newBoardUserIds.size > 0);
       
       // For each new board, either replace existing or add new
+      // Ensure all IDs are strings for consistent comparison
+      const newBoardIds = new Set();
       newBoards.forEach(newBoard => {
-        const existingIndex = existingBoards.findIndex(b => b.id === newBoard.id);
+        if (!newBoard) return;
+        const newBoardId = String(newBoard.id || '');
+        if (!newBoardId) {
+          return;
+        }
+        newBoardIds.add(newBoardId);
+        const existingIndex = existingBoards.findIndex(b => String(b.id || '') === newBoardId);
         if (existingIndex >= 0) {
           // Replace existing board with new one (which has tiles from server)
           existingBoards[existingIndex] = reconcileBoards(existingBoards[existingIndex], newBoard);
         } else {
-          // Add new board
-          existingBoards.push(newBoard);
+          // Add new board only if it doesn't already exist (prevent duplicates)
+          const alreadyExists = existingBoards.some(b => String(b.id || '') === newBoardId);
+          if (!alreadyExists) {
+            existingBoards.push(newBoard);
+          }
         }
       });
       
+      // If this is a complete refresh of user boards, remove user boards that are no longer in the API response
+      // But keep system boards and public profiles
+      let finalBoards = existingBoards;
+      if (isCompleteUserRefresh && newBoardUserIds.size > 0) {
+        const userIdToKeep = Array.from(newBoardUserIds)[0];
+        finalBoards = existingBoards.filter(board => {
+          // Keep the board if:
+          // 1. It's in the new boards list (already added/replaced above)
+          // 2. It's a system board (support@cboard.io or user_id = 1)
+          // 3. It's a public profile (is_public = true)
+          // 4. It doesn't belong to the user being refreshed
+          const boardIdStr = String(board.id || '');
+          if (newBoardIds.has(boardIdStr)) {
+            return true; // Keep boards in the new list
+          }
+          if (board.email === 'support@cboard.io' || board.user_id === 1) {
+            return true; // Keep system boards
+          }
+          if (board.is_public === true || board.isPublic === true) {
+            return true; // Keep public profiles
+          }
+          // Remove user boards that are no longer in the API response
+          const boardUserId = board.user_id || board.email;
+          if (boardUserId && String(boardUserId) === String(userIdToKeep)) {
+            return false; // Remove user board that's no longer in API
+          }
+          return true; // Keep other boards (backward compatibility)
+        });
+      }
+      
       console.log('ADD_BOARDS - Boards after reconciliation:', {
-        totalBoards: existingBoards.length,
-        boardsWithTiles: existingBoards.filter(b => b.tiles && b.tiles.length > 0).length,
-        boardIds: existingBoards.map(b => ({ id: b.id, tilesCount: b.tiles?.length || 0 }))
+        totalBoards: finalBoards.length,
+        boardsWithTiles: finalBoards.filter(b => b.tiles && b.tiles.length > 0).length,
+        boardIds: finalBoards.map(b => ({ id: b.id, tilesCount: b.tiles?.length || 0 })),
+        isCompleteUserRefresh,
+        removedCount: existingBoards.length - finalBoards.length
       });
       
       return {
         ...state,
-        boards: existingBoards
+        boards: finalBoards
       };
     case CHANGE_BOARD:
       const taBoards = [...state.boards];
@@ -285,10 +382,12 @@ function boardReducer(state = initialState, action) {
         boards: nextBoards
       };
     case DELETE_BOARD:
+      // boardId can be a string or number, convert to string for comparison
+      const boardIdToDelete = String(action.boardId);
       return {
         ...state,
         boards: state.boards.filter(
-          board => action.boardId.indexOf(board.id) === -1
+          board => String(board.id) !== boardIdToDelete
         )
       };
 
@@ -424,7 +523,7 @@ function boardReducer(state = initialState, action) {
       let flag = false;
       const myBoards = [...state.boards];
       // Handle different response formats: {data: [...]} or [...] or {boards: [...]}
-      const boardsArray =
+      let boardsArray =
         action.boards?.data || action.boards?.boards || action.boards || [];
       if (!Array.isArray(boardsArray)) {
         console.warn(
@@ -436,6 +535,11 @@ function boardReducer(state = initialState, action) {
           isFetching: false
         };
       }
+      
+      // Transform image URLs to use current backend address (in case not already transformed in API)
+      const { transformBoardsImageUrls } = require('../../utils/imageUrlTransformer');
+      boardsArray = transformBoardsImageUrls(boardsArray);
+      
       for (let i = 0; i < boardsArray.length; i++) {
         for (let j = 0; j < myBoards.length; j++) {
           if (myBoards[j].id === boardsArray[i].id) {

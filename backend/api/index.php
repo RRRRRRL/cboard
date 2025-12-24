@@ -30,6 +30,8 @@ $allowedOrigins = [
     'http://127.0.0.1:3001',
     'http://192.168.62.37',
     'http://192.168.62.37:3000',
+    'http://192.168.62.41',
+    'http://192.168.62.41:3000',
     'https://aac.uplifor.org',
     'https://www.aac.uplifor.org'
 ];
@@ -88,6 +90,9 @@ require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../database/init.php';
 require_once __DIR__ . '/helpers.php';
 
+// Load AI helpers (Ollama integration)
+require_once __DIR__ . '/helpers/ollama.php';
+
 // Load authentication helpers
 require_once __DIR__ . '/auth.php';
 
@@ -96,7 +101,6 @@ require_once __DIR__ . '/middleware/rateLimiter.php';
 
 // Load route handlers
 require_once __DIR__ . '/routes/user.php';
-require_once __DIR__ . '/routes/board.php';
 require_once __DIR__ . '/routes/communicator.php';
 require_once __DIR__ . '/routes/settings.php';
 require_once __DIR__ . '/routes/media.php';
@@ -109,11 +113,13 @@ require_once __DIR__ . '/routes/tts.php';
 require_once __DIR__ . '/routes/scanning.php';
 require_once __DIR__ . '/routes/devices.php';
 require_once __DIR__ . '/routes/jyutping.php';
+require_once __DIR__ . '/routes/jyutping-rules.php';
 require_once __DIR__ . '/routes/transfer.php';
 require_once __DIR__ . '/routes/ai.php';
 require_once __DIR__ . '/routes/games.php';
 require_once __DIR__ . '/routes/ocr.php';
 require_once __DIR__ . '/routes/admin.php';
+require_once __DIR__ . '/routes/data-retention.php';
 
 // Get request method and path
 $method = $_SERVER['REQUEST_METHOD'];
@@ -197,16 +203,24 @@ try {
     http_response_code($response['status'] ?? 200);
     echo json_encode($response['data'] ?? $response);
     
+} catch (PDOException $e) {
+    error_log("API PDO Error: " . $e->getMessage() . " in " . $e->getFile() . ":" . $e->getLine());
+    error_log("PDO Error Code: " . $e->getCode());
+    error_log("PDO Error Info: " . json_encode($e->errorInfo ?? []));
+    http_response_code(500);
+    echo json_encode([
+        'success' => false,
+        'message' => 'Database error',
+        'error' => getenv('APP_DEBUG') === 'true' ? $e->getMessage() : 'Internal server error'
+    ]);
 } catch (Exception $e) {
     error_log("API Error: " . $e->getMessage() . " in " . $e->getFile() . ":" . $e->getLine());
     error_log("Stack trace: " . $e->getTraceAsString());
     http_response_code(500);
     echo json_encode([
         'success' => false,
-        'error' => $e->getMessage(),
         'message' => 'Internal server error',
-        'file' => $e->getFile(),
-        'line' => $e->getLine()
+        'error' => getenv('APP_DEBUG') === 'true' ? $e->getMessage() : 'An error occurred'
     ]);
 }
 
@@ -233,9 +247,36 @@ function routeRequest($method, $pathParts, $data, $authToken) {
         return handleUserRoutes($method, $pathParts, $data, $authToken);
     }
     
-    // Board routes
+    // Board routes (legacy - all board routes now handled by profile routes)
+    // All board endpoints are now profile-centric for backward compatibility
     if ($route === 'board') {
-        return handleBoardRoutes($method, $pathParts, $data, $authToken);
+        // Convert /board/{id} to /profiles/{id}/board for single board access
+        if (count($pathParts) === 2 && is_numeric($pathParts[1])) {
+            // GET /board/{id} -> GET /profiles/{id}/board
+            if ($method === 'GET') {
+                $profilePathParts = ['profiles', $pathParts[1], 'board'];
+                return handleProfileRoutes($method, $profilePathParts, $data, $authToken);
+            }
+            // PUT /board/{id} -> PUT /profiles/{id}/board
+            if ($method === 'PUT') {
+                $profilePathParts = ['profiles', $pathParts[1], 'board'];
+                return handleProfileRoutes($method, $profilePathParts, $data, $authToken);
+            }
+            // DELETE /board/{id} -> DELETE /profiles/{id}
+            if ($method === 'DELETE') {
+                $profilePathParts = ['profiles', $pathParts[1]];
+                return handleProfileRoutes($method, $profilePathParts, $data, $authToken);
+            }
+        }
+        // List endpoints are now profile-centric, redirect to profile handler
+        if (count($pathParts) === 1 || 
+            (count($pathParts) === 2 && ($pathParts[1] === 'public' || $pathParts[1] === 'my')) ||
+            (count($pathParts) >= 3 && $pathParts[1] === 'byemail')) {
+            // These are list endpoints, now handled by profile routes
+            return handleProfileRoutes($method, $pathParts, $data, $authToken);
+        }
+        // For any other board routes, redirect to profile handler
+        return handleProfileRoutes($method, $pathParts, $data, $authToken);
     }
     
     // Communicator routes
@@ -333,6 +374,11 @@ function routeRequest($method, $pathParts, $data, $authToken) {
         return handleJyutpingRoutes($method, $pathParts, $data, $authToken);
     }
     
+    // Jyutping rules routes (Sprint 7 - Admin/Teacher features)
+    if ($route === 'jyutping-rules') {
+        return handleJyutpingRulesRoutes($method, $pathParts, $data, $authToken);
+    }
+    
     // Transfer routes (Sprint 8)
     if ($route === 'transfer') {
         return handleTransferRoutes($method, $pathParts, $data, $authToken);
@@ -356,6 +402,11 @@ function routeRequest($method, $pathParts, $data, $authToken) {
     // Admin routes
     if ($route === 'admin') {
         return handleAdminRoutes($method, $pathParts, $data, $authToken);
+    }
+    
+    // Data retention routes
+    if ($route === 'data-retention') {
+        return handleDataRetentionRoutes($method, $pathParts, $data, $authToken);
     }
     
     // 404 - Route not found

@@ -1,0 +1,31 @@
+.Intro {
+  padding: 16px;
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.Intro h1,
+.Intro h2,
+.Intro h3 {
+  margin-top: 16px;
+  margin-bottom: 8px;
+}
+
+.Intro p {
+  line-height: 1.6;
+}
+
+.Intro ul,
+.Intro ol {
+  padding-left: 20px;
+}
+
+.Intro img {
+  max-width: 100%;
+  height: auto;
+}
+
+.Intro iframe {
+  max-width: 100%;
+}
+

@@ -1,0 +1,91 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`OCRTranslator tests default renderer 1`] = `
+<OCRTranslator
+  classes={
+    Object {
+      "imagePreview": "OCRTranslator-imagePreview-3 imagePreview",
+      "resultArea": "OCRTranslator-resultArea-4 resultArea",
+      "tabPanel": "OCRTranslator-tabPanel-1 tabPanel",
+      "uploadArea": "OCRTranslator-uploadArea-2 uploadArea",
+    }
+  }
+  intl={
+    Object {
+      "formatMessage": [Function],
+    }
+  }
+  loading={false}
+  ocrResult={null}
+  onClose={[MockFunction]}
+  onConvertToJyutping={[MockFunction]}
+  onDeleteHistory={[MockFunction]}
+  onGetHistory={[MockFunction]}
+  onRecognizeImage={[MockFunction]}
+  translationHistory={Array []}
+/>
+`;
+
+exports[`OCRTranslator tests renders with OCR result 1`] = `
+<OCRTranslator
+  classes={
+    Object {
+      "imagePreview": "OCRTranslator-imagePreview-3 imagePreview",
+      "resultArea": "OCRTranslator-resultArea-4 resultArea",
+      "tabPanel": "OCRTranslator-tabPanel-1 tabPanel",
+      "uploadArea": "OCRTranslator-uploadArea-2 uploadArea",
+    }
+  }
+  intl={
+    Object {
+      "formatMessage": [Function],
+    }
+  }
+  loading={false}
+  ocrResult={
+    Object {
+      "recognized_text": "你好世界",
+    }
+  }
+  onClose={[MockFunction]}
+  onConvertToJyutping={[MockFunction]}
+  onDeleteHistory={[MockFunction]}
+  onGetHistory={[MockFunction]}
+  onRecognizeImage={[MockFunction]}
+  translationHistory={Array []}
+/>
+`;
+
+exports[`OCRTranslator tests renders with translation history 1`] = `
+<OCRTranslator
+  classes={
+    Object {
+      "imagePreview": "OCRTranslator-imagePreview-3 imagePreview",
+      "resultArea": "OCRTranslator-resultArea-4 resultArea",
+      "tabPanel": "OCRTranslator-tabPanel-1 tabPanel",
+      "uploadArea": "OCRTranslator-uploadArea-2 uploadArea",
+    }
+  }
+  intl={
+    Object {
+      "formatMessage": [Function],
+    }
+  }
+  loading={false}
+  ocrResult={null}
+  onClose={[MockFunction]}
+  onConvertToJyutping={[MockFunction]}
+  onDeleteHistory={[MockFunction]}
+  onGetHistory={[MockFunction]}
+  onRecognizeImage={[MockFunction]}
+  translationHistory={
+    Array [
+      Object {
+        "created_at": "2024-01-01T00:00:00Z",
+        "id": 1,
+        "recognized_text": "你好",
+      },
+    ]
+  }
+/>
+`;

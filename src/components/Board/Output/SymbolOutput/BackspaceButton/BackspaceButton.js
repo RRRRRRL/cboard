@@ -27,6 +27,7 @@ export class BackspaceButton extends Component {
           className={
             increaseOutputButtons ? 'Output__button__lg' : 'Output__button__sm'
           }
+          data-output-action="backspace"
           {...other}
         >
           <BackspaceIcon

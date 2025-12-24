@@ -6,3 +6,80 @@
   margin-bottom: 16px;
 }
 
+/* Responsive design for tablets and phones */
+@media (max-width: 768px) {
+  .AIFeatures {
+    padding: 8px;
+  }
+
+  .AIFeatures .MuiTab-root {
+    min-width: 80px;
+    font-size: 0.875rem;
+    padding: 8px 12px;
+  }
+
+  .AIFeatures .MuiPaper-root {
+    margin-bottom: 12px;
+    padding: 12px;
+  }
+
+  .AIFeatures .MuiTextField-root {
+    margin-bottom: 12px;
+  }
+
+  .AIFeatures .MuiCard-root {
+    margin-bottom: 8px;
+  }
+
+  .AIFeatures .MuiCardContent-root {
+    padding: 12px !important;
+  }
+
+  .AIFeatures .MuiTypography-h5 {
+    font-size: 1.1rem;
+  }
+
+  .AIFeatures .MuiTypography-h6 {
+    font-size: 1rem;
+  }
+
+  .AIFeatures .MuiButton-root {
+    padding: 8px 16px;
+    font-size: 0.875rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .AIFeatures {
+    padding: 4px;
+  }
+
+  .AIFeatures .MuiTab-root {
+    min-width: 60px;
+    font-size: 0.75rem;
+    padding: 6px 8px;
+  }
+
+  .AIFeatures .MuiPaper-root {
+    margin-bottom: 8px;
+    padding: 8px;
+  }
+
+  .AIFeatures .MuiCardContent-root {
+    padding: 8px !important;
+  }
+
+  .AIFeatures .MuiTypography-h5 {
+    font-size: 1rem;
+  }
+
+  .AIFeatures .MuiTypography-h6 {
+    font-size: 0.9rem;
+  }
+
+  .AIFeatures .MuiButton-root {
+    padding: 6px 12px;
+    font-size: 0.8rem;
+  }
+}
+

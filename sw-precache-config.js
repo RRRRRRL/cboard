@@ -39,7 +39,8 @@ module.exports = {
       handler: 'cacheFirst',
       options: {
         cache: {
-          name: 'symbols-mulberry'
+          name: 'symbols-mulberry',
+          maxEntries: 100
         }
       }
     },
@@ -48,7 +49,8 @@ module.exports = {
       handler: 'cacheFirst',
       options: {
         cache: {
-          name: 'symbols-arasaac'
+          name: 'symbols-arasaac',
+          maxEntries: 100
         }
       }
     },
@@ -57,7 +59,44 @@ module.exports = {
       handler: 'cacheFirst',
       options: {
         cache: {
-          name: 'symbols-cboard'
+          name: 'symbols-cboard',
+          maxEntries: 100
+        }
+      }
+    },
+    // Cache API GET requests for offline support
+    {
+      urlPattern: /\/api\/(board|communicator|language|cards|jyutping|games|ocr\/history)/,
+      handler: 'networkFirst',
+      options: {
+        cache: {
+          name: 'api-cache',
+          maxEntries: 50,
+          maxAgeSeconds: 60 * 60 * 24 // 24 hours
+        },
+        networkTimeoutSeconds: 3
+      }
+    },
+    // Cache images and media files
+    {
+      urlPattern: /\.(jpg|jpeg|png|gif|svg|webp|mp3|wav|ogg)$/,
+      handler: 'cacheFirst',
+      options: {
+        cache: {
+          name: 'media-cache',
+          maxEntries: 200,
+          maxAgeSeconds: 60 * 60 * 24 * 7 // 7 days
+        }
+      }
+    },
+    // Cache static assets
+    {
+      urlPattern: /\/static\//,
+      handler: 'cacheFirst',
+      options: {
+        cache: {
+          name: 'static-cache',
+          maxEntries: 100
         }
       }
     }

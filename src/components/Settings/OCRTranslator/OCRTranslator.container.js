@@ -26,7 +26,11 @@ export class OCRTranslatorContainer extends PureComponent {
       this.setState({ ocrResult: result, loading: false });
       return result;
     } catch (error) {
-      console.error('OCR recognize error:', error);
+      // Suppress error logging for expected network errors (frontend will use client-side OCR)
+      const isNetworkError = error.code === 'ERR_NETWORK' || error.message === 'Network Error';
+      if (!isNetworkError || navigator.onLine) {
+        console.error('OCR recognize error:', error);
+      }
       this.setState({ loading: false });
       throw error;
     }
@@ -51,7 +55,11 @@ export class OCRTranslatorContainer extends PureComponent {
       const result = await API.getOCRHistory(20, 0);
       this.setState({ translationHistory: result.history || [], loading: false });
     } catch (error) {
-      console.error('Get OCR history error:', error);
+      // Suppress error logging for expected network errors
+      const isNetworkError = error.code === 'ERR_NETWORK' || error.message === 'Network Error';
+      if (!isNetworkError || navigator.onLine) {
+        console.error('Get OCR history error:', error);
+      }
       this.setState({ loading: false });
     }
   };
@@ -80,7 +88,11 @@ export class OCRTranslatorContainer extends PureComponent {
       );
       this.handleGetHistory();
     } catch (error) {
-      console.error('Delete OCR history error:', error);
+      // Suppress error logging for expected network errors
+      const isNetworkError = error.code === 'ERR_NETWORK' || error.message === 'Network Error';
+      if (!isNetworkError || navigator.onLine) {
+        console.error('Delete OCR history error:', error);
+      }
     }
   };
 

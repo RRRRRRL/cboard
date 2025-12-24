@@ -382,16 +382,8 @@ export function syncCommunicators(remoteCommunicators) {
     dispatch({
       type: SYNC_COMMUNICATORS,
       communicators: updatedCommunicators,
-      activeCommunicatorId: needToChangeActiveCommunicator
-        ? lastRemoteSavedCommunicatorId
-        : activeCommunicatorId
+      // 保持當前 activeCommunicator，不再在同步時強制切換或跳轉 root board
+      activeCommunicatorId
     });
-
-    if (needToChangeActiveCommunicator) {
-      const newActiveCommunicator = getActiveCommunicator(getState);
-      const rootBoard = newActiveCommunicator.rootBoard;
-      dispatch(switchBoard(rootBoard));
-      history.replace(`/board/${rootBoard}`);
-    }
   };
 }

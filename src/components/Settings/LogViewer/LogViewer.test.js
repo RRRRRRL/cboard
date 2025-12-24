@@ -36,8 +36,10 @@ const COMPONENT_PROPS = {
     formatMessage: msg => msg.defaultMessage || msg.id
   },
   classes: {
-    filters: 'filters',
-    tableContainer: 'tableContainer'
+    tableContainer: 'tableContainer',
+    filterSection: 'filterSection',
+    formControl: 'formControl',
+    exportButton: 'exportButton'
   }
 };
 

@@ -164,6 +164,14 @@ export default defineMessages({
     defaultMessage:
       'This action will delete the board and it cannot be recovered. Do you want to proceed?'
   },
+  boardDeleteError: {
+    id: 'cboard.components.CommunicatorDialog.boardDeleteError',
+    defaultMessage: 'Failed to delete board'
+  },
+  cancel: {
+    id: 'cboard.components.CommunicatorDialog.cancel',
+    defaultMessage: 'Cancel'
+  },
   publishBoard: {
     id: 'cboard.components.CommunicatorDialog.publishBoard',
     defaultMessage: 'Board Description'

@@ -11,8 +11,13 @@ export const UPDATE_USER_DATA = 'cboard/App/UPDATE_USER_DATA';
 export const SET_UNLOGGED_USER_LOCATION =
   'cboard/App/SET_UNLOGGED_USER_LOCATION';
 // language constants
-export const DEFAULT_LANG = 'en-US';
+// Default language set to Traditional Chinese (zh-TW) for Hong Kong users
+export const DEFAULT_LANG = 'zh-TW';
 export const APP_LANGS = [
+  'zh-TW', // Traditional Chinese - Primary language for Hong Kong
+  'zh-CN', // Simplified Chinese
+  'en-US', // English
+  'en-GB',
   'ar-SA',
   'be-BY',
   'bn-BD',
@@ -21,8 +26,6 @@ export const APP_LANGS = [
   'da-DK',
   'de-DE',
   'el-GR',
-  'en-US',
-  'en-GB',
   'es-ES',
   'fa-IR',
   'fi-FI',
@@ -62,8 +65,6 @@ export const APP_LANGS = [
   'pt-TL',
   'uk-UA',
   'vi-VN',
-  'zh-CN',
-  'zh-TW',
   'zu-ZA'
   // for crowdin contextual translation
 ];

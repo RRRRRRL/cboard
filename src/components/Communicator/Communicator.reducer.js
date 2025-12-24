@@ -109,7 +109,14 @@ function communicatorReducer(state = initialState, action) {
         const index = state.communicators.indexOf(activeCommunicator);
         if (index !== -1) {
           const updatedCommunicators = [...state.communicators];
-          updatedCommunicators[index].boards.push(action.boardId);
+          // Ensure boards array exists before pushing
+          if (!updatedCommunicators[index].boards) {
+            updatedCommunicators[index].boards = [];
+          }
+          // Only add if not already in the array
+          if (!updatedCommunicators[index].boards.includes(action.boardId)) {
+            updatedCommunicators[index].boards.push(action.boardId);
+          }
           updatedCommunicators[index].lastEdited = moment().format();
           return {
             ...state,
@@ -124,14 +131,17 @@ function communicatorReducer(state = initialState, action) {
         const index = state.communicators.indexOf(activeCommunicator);
         if (index !== -1) {
           const dupdatedCommunicators = [...state.communicators];
-          const bindex = activeCommunicator.boards.indexOf(action.boardId);
-          if (bindex !== -1) {
-            dupdatedCommunicators[index].boards.splice(bindex, 1);
-            dupdatedCommunicators[index].lastEdited = moment().format();
-            return {
-              ...state,
-              communicators: dupdatedCommunicators
-            };
+          // Ensure boards array exists
+          if (dupdatedCommunicators[index].boards && Array.isArray(dupdatedCommunicators[index].boards)) {
+            const bindex = dupdatedCommunicators[index].boards.indexOf(action.boardId);
+            if (bindex !== -1) {
+              dupdatedCommunicators[index].boards.splice(bindex, 1);
+              dupdatedCommunicators[index].lastEdited = moment().format();
+              return {
+                ...state,
+                communicators: dupdatedCommunicators
+              };
+            }
           }
         }
       }
@@ -142,20 +152,26 @@ function communicatorReducer(state = initialState, action) {
         const index = state.communicators.indexOf(activeCommunicator);
         if (index !== -1) {
           const updatedCommunicators = [...state.communicators];
-          const boardIndex = updatedCommunicators[index].boards.indexOf(
-            action.prevBoardId
-          );
-          if (boardIndex !== -1) {
-            updatedCommunicators[index].boards.splice(
-              boardIndex,
-              1,
-              action.nextBoardId
+          // Ensure boards array exists
+          if (!updatedCommunicators[index].boards) {
+            updatedCommunicators[index].boards = [];
+          }
+          if (Array.isArray(updatedCommunicators[index].boards)) {
+            const boardIndex = updatedCommunicators[index].boards.indexOf(
+              action.prevBoardId
             );
-            updatedCommunicators[index].lastEdited = moment().format();
-            return {
-              ...state,
-              communicators: updatedCommunicators
-            };
+            if (boardIndex !== -1) {
+              updatedCommunicators[index].boards.splice(
+                boardIndex,
+                1,
+                action.nextBoardId
+              );
+              updatedCommunicators[index].lastEdited = moment().format();
+              return {
+                ...state,
+                communicators: updatedCommunicators
+              };
+            }
           }
         }
       }

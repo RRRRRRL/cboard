@@ -72,6 +72,58 @@ export default defineMessages({
   avgDifficulty: {
     id: 'cboard.components.Settings.AIFeatures.avgDifficulty',
     defaultMessage: 'Average Difficulty'
+  },
+  addSelectedCards: {
+    id: 'cboard.components.Settings.AIFeatures.addSelectedCards',
+    defaultMessage: 'Add Selected'
+  },
+  vocalization: {
+    id: 'cboard.components.Settings.AIFeatures.vocalization',
+    defaultMessage: 'Vocalization (optional)'
+  },
+  untitledCard: {
+    id: 'cboard.components.Settings.AIFeatures.untitledCard',
+    defaultMessage: 'Untitled Card'
+  },
+  cardCreatedFromAISuggestion: {
+    id: 'cboard.components.Settings.AIFeatures.cardCreatedFromAISuggestion',
+    defaultMessage: 'Card created from AI suggestion and added to your board.'
+  },
+  cardCreateErrorFromAISuggestion: {
+    id: 'cboard.components.Settings.AIFeatures.cardCreateErrorFromAISuggestion',
+    defaultMessage: 'Failed to create card from AI suggestion.'
+  },
+  cardCreatedButNotLinked: {
+    id: 'cboard.components.Settings.AIFeatures.cardCreatedButNotLinked',
+    defaultMessage: 'Card created but could not be added to profile. Please add it manually.'
+  },
+  recommendedDifficulty: {
+    id: 'cboard.components.Settings.AIFeatures.recommendedDifficulty',
+    defaultMessage: 'Recommended Difficulty'
+  },
+  getAISuggestions: {
+    id: 'cboard.components.Settings.AIFeatures.getAISuggestions',
+    defaultMessage: 'Get AI Suggestions'
+  },
+  aiLearningSuggestions: {
+    id: 'cboard.components.Settings.AIFeatures.aiLearningSuggestions',
+    defaultMessage: 'AI Learning Suggestions'
+  },
+  commonMistakes: {
+    id: 'cboard.components.Settings.AIFeatures.commonMistakes',
+    defaultMessage: 'Common Mistakes'
+  },
+  correctAnswerIs: {
+    id: 'cboard.components.Settings.AIFeatures.correctAnswerIs',
+    defaultMessage: 'Correct answer is'
+  },
+  butYouSelected: {
+    id: 'cboard.components.Settings.AIFeatures.butYouSelected',
+    defaultMessage: 'but you selected'
+  },
+  mistakeCount: {
+    id: 'cboard.components.Settings.AIFeatures.mistakeCount',
+    defaultMessage: '{count} mistakes'
   }
 });
 

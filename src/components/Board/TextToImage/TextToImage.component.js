@@ -71,39 +71,46 @@ class TextToImage extends Component {
         const cleanUrl = imageUrl.replace(/^\/+/, '');
         
         // For uploads, construct URL properly
+        // Images should be accessed via /api/uploads/ (with /api/ prefix)
+        // Use base URL from API_URL (which uses REACT_APP_DEV_API_URL from .env)
         if (cleanUrl.startsWith('api/uploads/') || cleanUrl.startsWith('uploads/')) {
-          // Extract base URL from API_URL
-          // API_URL is "http://192.168.62.37/api" or "http://192.168.62.37/api/"
-          // We want: "http://192.168.62.37"
+          // Extract base URL from API_URL (which uses .env config)
+          // API_URL is "http://192.168.62.41/api" or "http://192.168.62.41/api/"
+          // We want: "http://192.168.62.41"
           try {
-            const apiUrlObj = new URL(API_URL);
-            const baseUrl = `${apiUrlObj.protocol}//${apiUrlObj.host}`;
-            
-            // If cleanUrl already starts with 'api/uploads/', use it directly
-            // If it starts with 'uploads/', add 'api/' prefix
-            let urlPath = cleanUrl;
-            if (urlPath.startsWith('uploads/') && !urlPath.startsWith('api/uploads/')) {
-              urlPath = 'api/' + urlPath;
+            let baseUrl;
+            if (API_URL) {
+              // Check if API_URL is a relative path (starts with /)
+              if (API_URL.startsWith('/')) {
+                // Relative path - use current origin
+                baseUrl = window.location.origin;
+              } else {
+                // Absolute URL - extract base URL
+                const apiUrlObj = new URL(API_URL);
+                baseUrl = `${apiUrlObj.protocol}//${apiUrlObj.host}`;
+              }
+            } else {
+              // Fallback: use current origin
+              baseUrl = window.location.origin;
             }
             
-            // baseUrl is "http://192.168.62.37", urlPath is "api/uploads/..."
-            fullUrl = `${baseUrl}/${urlPath}`;
+            // Ensure 'api/' prefix is present
+            let imagePath = cleanUrl;
+            if (imagePath.startsWith('uploads/') && !imagePath.startsWith('api/uploads/')) {
+              imagePath = 'api/' + imagePath;
+            }
+            
+            // Construct URL: baseUrl + /api/uploads/...
+            // Result: "http://192.168.62.41/api/uploads/user_1/image.png"
+            fullUrl = `${baseUrl}/${imagePath}`;
           } catch (e) {
-            // Fallback: use API_URL and append cleanUrl
-            // API_URL is "http://192.168.62.37/api/" (with trailing slash)
-            // If cleanUrl already starts with 'api/uploads/', remove 'api/' from it first
-            // because API_URL already contains '/api'
-            let urlPath = cleanUrl;
-            if (urlPath.startsWith('api/uploads/')) {
-              // Remove 'api/' prefix since API_URL already has '/api'
-              urlPath = urlPath.replace(/^api\//, '');
-            } else if (urlPath.startsWith('uploads/')) {
-              // Keep as is, API_URL will provide the '/api' prefix
-              // urlPath stays as 'uploads/...'
+            // Fallback: use current origin
+            const baseUrl = window.location.origin;
+            let imagePath = cleanUrl;
+            if (imagePath.startsWith('uploads/') && !imagePath.startsWith('api/uploads/')) {
+              imagePath = 'api/' + imagePath;
             }
-            
-            // API_URL already ends with '/', so just append urlPath
-            fullUrl = `${API_URL.replace(/\/+$/, '')}/${urlPath}`;
+            fullUrl = `${baseUrl}/${imagePath}`;
           }
         } else {
           // For other URLs, use API_URL
@@ -142,7 +149,7 @@ class TextToImage extends Component {
       
       // Provide more helpful messages based on status code
       if (error.response?.status === 503) {
-        errorMessage = errorMessage || 'The image search service is currently unavailable. Please try again later or use a different search term.';
+        errorMessage = errorMessage || 'Server busy, maybe try again or try other word';
       } else if (error.response?.status === 500) {
         errorMessage = errorMessage || 'An error occurred on the server. Please try again later.';
       }

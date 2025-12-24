@@ -69,10 +69,11 @@ export function importBoards(boards) {
   };
 }
 
-export function addBoards(boards) {
+export function addBoards(boards, isCompleteRefresh = false) {
   return {
     type: ADD_BOARDS,
-    boards
+    boards,
+    isCompleteRefresh
   };
 }
 
@@ -92,7 +93,7 @@ function getActiveCommunicator(getState) {
 function replaceHistoryWithActiveBoardId(getState) {
   const { board } = getState();
   const id = board.activeBoardId;
-  history.replace(`/board/${id}`);
+  history.replace(`/profile/${id}`);
 }
 
 export function changeDefaultBoard(selectedBoardNameOnJson) {
@@ -162,7 +163,7 @@ export function changeDefaultBoard(selectedBoardNameOnJson) {
 
     const switchActiveBoard = homeBoardId => {
       if (homeBoardId) {
-        const goTo = `/board/${homeBoardId}`;
+        const goTo = `/profile/${homeBoardId}`;
 
         dispatch(switchBoard(homeBoardId));
         history.replace(goTo);
@@ -544,11 +545,17 @@ export function getApiMyBoards() {
 export function createApiBoard(boardData, boardId) {
   return async dispatch => {
     dispatch(createApiBoardStarted());
-    boardData = {
-      ...boardData,
+    
+    // Convert image URLs to relative paths before saving (don't store IP-based URLs)
+    const { convertBoardUrlsToRelative } = require('../../utils/imageUrlTransformer');
+    let processedBoardData = convertBoardUrlsToRelative(boardData);
+    
+    processedBoardData = {
+      ...processedBoardData,
       isPublic: false
     };
-    return API.createBoard(boardData)
+    
+    return API.createBoard(processedBoardData)
       .then(res => {
         dispatch(createApiBoardSuccess(res, boardId));
         return res;
@@ -563,12 +570,55 @@ export function createApiBoard(boardData, boardId) {
 export function updateApiBoard(boardData) {
   return async dispatch => {
     dispatch(updateApiBoardStarted());
-    return API.updateBoard(boardData)
+    
+    // Check if this is a metadata-only update (no tiles in request)
+    const isMetadataOnlyUpdate = !('tiles' in boardData);
+    
+    // Convert image URLs to relative paths before saving (don't store IP-based URLs)
+    // BUT: For metadata-only updates, don't process tiles (they shouldn't be in the request)
+    const { convertBoardUrlsToRelative } = require('../../utils/imageUrlTransformer');
+    let processedBoardData;
+    
+    if (isMetadataOnlyUpdate) {
+      // For metadata-only updates, create a clean object without tiles
+      // Only convert URLs for fields that might have URLs (caption, etc.)
+      processedBoardData = { ...boardData };
+      if (processedBoardData.caption) {
+        const { convertUrlToRelativePath } = require('../../utils/imageUrlTransformer');
+        processedBoardData.caption = convertUrlToRelativePath(processedBoardData.caption);
+      }
+      // Explicitly ensure tiles is NOT in the object
+      delete processedBoardData.tiles;
+    } else {
+      // For full board updates, convert all URLs including tiles
+      processedBoardData = convertBoardUrlsToRelative(boardData);
+    }
+    
+    // Ensure isPublic field is preserved
+    if ('isPublic' in boardData) {
+      processedBoardData.isPublic = boardData.isPublic;
+    }
+    
+    console.log('[updateApiBoard] Updating board:', {
+      boardId: processedBoardData.id,
+      isPublic: processedBoardData.isPublic,
+      hasIsPublic: 'isPublic' in processedBoardData,
+      hasTiles: 'tiles' in processedBoardData,
+      isMetadataOnly: isMetadataOnlyUpdate,
+      keys: Object.keys(processedBoardData)
+    });
+    
+    return API.updateBoard(processedBoardData)
       .then(res => {
+        console.log('[updateApiBoard] Board updated successfully:', {
+          boardId: res.id,
+          isPublic: res.isPublic
+        });
         dispatch(updateApiBoardSuccess(res));
         return res;
       })
       .catch(err => {
+        console.error('[updateApiBoard] Error updating board:', err);
         dispatch(updateApiBoardFailure(err.message));
         throw new Error(err.message);
       });
@@ -622,8 +672,12 @@ export function getApiObjects() {
           });
       })
       .catch(err => {
-        const errorMessage = err?.message || err?.toString() || 'Unknown error';
-        console.error('getApiObjects error:', errorMessage);
+        // Suppress error logging for expected network errors
+        const isNetworkError = err?.code === 'ERR_NETWORK' || err?.message === 'Network Error';
+        if (!isNetworkError || navigator.onLine) {
+          const errorMessage = err?.message || err?.toString() || 'Unknown error';
+          console.error('getApiObjects error:', errorMessage);
+        }
       });
   };
 }

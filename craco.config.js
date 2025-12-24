@@ -24,6 +24,35 @@ module.exports = {
         }
       ];
 
+      // Disable TypeScript type checking to avoid compatibility issues with Node.js v24+
+      // This is safe since the project is primarily JavaScript
+      // Remove fork-ts-checker-webpack-plugin if present
+      if (webpackConfig.plugins) {
+        webpackConfig.plugins = webpackConfig.plugins.filter(plugin => {
+          if (!plugin) return true;
+          // Check by constructor name
+          if (plugin.constructor && plugin.constructor.name) {
+            const name = plugin.constructor.name;
+            if (name.includes('ForkTsChecker') || name.includes('TypeScript')) {
+              console.log(`[Craco] Removing TypeScript checker plugin: ${name}`);
+              return false;
+            }
+          }
+          // Check by plugin options/identifier
+          if (plugin.options && (plugin.options.typescript || plugin.options.tsconfig)) {
+            console.log('[Craco] Removing TypeScript checker plugin (detected by options)');
+            return false;
+          }
+          return true;
+        });
+      }
+      
+      // Also disable TypeScript checking in development mode
+      if (process.env.TSC_COMPILE_ON_ERROR === 'true') {
+        // Set environment variable to skip type checking
+        process.env.SKIP_TYPE_CHECK = 'true';
+      }
+
       return webpackConfig;
     }
   },

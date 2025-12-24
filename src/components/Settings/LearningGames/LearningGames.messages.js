@@ -84,6 +84,94 @@ export default defineMessages({
   gameSubmitted: {
     id: 'cboard.components.Settings.LearningGames.gameSubmitted',
     defaultMessage: 'Game results submitted successfully'
+  },
+  offlineMode: {
+    id: 'cboard.components.Settings.LearningGames.offlineMode',
+    defaultMessage: 'You are currently offline. Please check your connection.'
+  },
+  historyTab: {
+    id: 'cboard.components.Settings.LearningGames.historyTab',
+    defaultMessage: 'History'
+  },
+  historyTitle: {
+    id: 'cboard.components.Settings.LearningGames.historyTitle',
+    defaultMessage: 'Previous Game Results'
+  },
+  historyEmpty: {
+    id: 'cboard.components.Settings.LearningGames.historyEmpty',
+    defaultMessage: 'No game history yet. Play a game to see your results here.'
+  },
+  historyGameType: {
+    id: 'cboard.components.Settings.LearningGames.historyGameType',
+    defaultMessage: 'Game Type'
+  },
+  historyDifficulty: {
+    id: 'cboard.components.Settings.LearningGames.historyDifficulty',
+    defaultMessage: 'Difficulty'
+  },
+  historyScore: {
+    id: 'cboard.components.Settings.LearningGames.historyScore',
+    defaultMessage: 'Score'
+  },
+  historyAccuracy: {
+    id: 'cboard.components.Settings.LearningGames.historyAccuracy',
+    defaultMessage: 'Accuracy'
+  },
+  historyTimeSpent: {
+    id: 'cboard.components.Settings.LearningGames.historyTimeSpent',
+    defaultMessage: 'Time Spent'
+  },
+  historyPlayedAt: {
+    id: 'cboard.components.Settings.LearningGames.historyPlayedAt',
+    defaultMessage: 'Played At'
+  },
+  historyFilterAll: {
+    id: 'cboard.components.Settings.LearningGames.historyFilterAll',
+    defaultMessage: 'All'
+  },
+  historyFilterLabelGameType: {
+    id: 'cboard.components.Settings.LearningGames.historyFilterLabelGameType',
+    defaultMessage: 'Filter by game type'
+  },
+  historyFilterLabelDifficulty: {
+    id: 'cboard.components.Settings.LearningGames.historyFilterLabelDifficulty',
+    defaultMessage: 'Filter by difficulty'
+  },
+  selectProfile: {
+    id: 'cboard.components.Settings.LearningGames.selectProfile',
+    defaultMessage: 'Select Profile'
+  },
+  statsTotalGames: {
+    id: 'cboard.components.Settings.LearningGames.statsTotalGames',
+    defaultMessage: 'Total Games'
+  },
+  statsAverageAccuracy: {
+    id: 'cboard.components.Settings.LearningGames.statsAverageAccuracy',
+    defaultMessage: 'Average Accuracy'
+  },
+  statsBestScore: {
+    id: 'cboard.components.Settings.LearningGames.statsBestScore',
+    defaultMessage: 'Best Score'
+  },
+  statsBestAccuracy: {
+    id: 'cboard.components.Settings.LearningGames.statsBestAccuracy',
+    defaultMessage: 'Best Accuracy'
+  },
+  statsTotalTime: {
+    id: 'cboard.components.Settings.LearningGames.statsTotalTime',
+    defaultMessage: 'Total Time Spent'
+  },
+  statsByGameType: {
+    id: 'cboard.components.Settings.LearningGames.statsByGameType',
+    defaultMessage: 'Statistics by Game Type'
+  },
+  statsGamesPlayed: {
+    id: 'cboard.components.Settings.LearningGames.statsGamesPlayed',
+    defaultMessage: 'Games Played'
+  },
+  selectCorrectHanzi: {
+    id: 'cboard.components.Settings.LearningGames.selectCorrectHanzi',
+    defaultMessage: 'Select the correct Chinese character'
   }
 });
 

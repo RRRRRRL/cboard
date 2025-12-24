@@ -5,13 +5,6 @@ import { FormattedMessage, injectIntl } from 'react-intl';
 import { withStyles } from '@material-ui/core/styles';
 import Button from '@material-ui/core/Button';
 import Link from '@material-ui/core/Link';
-import CloseIcon from '@material-ui/icons/Close';
-import IconButton from '../UI/IconButton';
-import {
-  AppleLoginButton,
-  FacebookLoginButton,
-  GoogleLoginButton
-} from 'react-social-login-buttons';
 
 import messages from './WelcomeScreen.messages';
 import { finishFirstVisit } from '../App/App.actions';
@@ -20,19 +13,15 @@ import Login from '../Account/Login';
 import SignUp from '../Account/SignUp';
 import ResetPassword from '../Account/ResetPassword';
 import CboardLogo from './CboardLogo/CboardLogo.component';
+import history from '../../history';
+import { getEyeTrackingInstance } from '../../utils/eyeTrackingIntegration';
 import './WelcomeScreen.css';
-import { API_URL, GOOGLE_FIREBASE_WEB_CLIENT_ID } from '../../constants';
 import {
   isCordova,
   isAndroid,
-  isElectron,
   isIOS,
   manageKeyboardEvents
 } from '../../cordova-util';
-
-const SocialBtnStyle = {
-  borderRadius: '15px'
-};
 
 // Cordova path cannot be absolute
 const backgroundImage = isCordova()
@@ -102,66 +91,24 @@ export class WelcomeScreen extends Component {
     });
   };
 
-  handleGoogleLoginClick = () => {
-    const { intl } = this.props;
-    if (isAndroid() || isIOS()) {
-      const FirebasePlugin = window.FirebasePlugin;
-      FirebasePlugin.authenticateUserWithGoogle(
-        GOOGLE_FIREBASE_WEB_CLIENT_ID,
-        function(credential) {
-          window.location.hash = `#/login/googleidtoken/callback?id_token=${
-            credential.idToken
-          }`;
-        },
-        function(error) {
-          alert(intl.formatMessage(messages.loginErrorAndroid));
-          console.error('Failed to authenticate with Google: ' + error);
-        }
-      );
-    } else {
-      window.location = `${API_URL}login/google`;
-    }
+  handleContinueAsGuest = () => {
+    const { finishFirstVisit } = this.props;
+    console.log('[WelcomeScreen] Continue as Guest clicked');
+    
+    // Dispatch action to finish first visit
+    finishFirstVisit();
+    
+    // Force navigation to home page
+    // Use setTimeout to ensure Redux state updates before navigation
+    setTimeout(() => {
+      history.push('/');
+      // Force a page reload if navigation doesn't work
+      if (window.location.pathname === '/login-signup' || window.location.pathname === '/') {
+        window.location.href = '/';
+      }
+    }, 100);
   };
 
-  handleFacebookLoginClick = () => {
-    const { intl } = this.props;
-    if (isAndroid() || isIOS()) {
-      window.facebookConnectPlugin.login(
-        ['email'],
-        function(userData) {
-          window.facebookConnectPlugin.getAccessToken(function(accesToken) {
-            window.location.hash = `#/login/facebooktoken/callback?access_token=${accesToken}`;
-          });
-        },
-        function(msg) {
-          alert(intl.formatMessage(messages.loginErrorAndroid));
-          console.log(msg);
-        }
-      );
-    } else {
-      window.location = `${API_URL}login/facebook`;
-    }
-  };
-
-  handleAppleLoginClick = () => {
-    const intl = this.props.intl;
-    if (isIOS()) {
-      window.cordova.plugins.SignInWithApple.signin(
-        { requestedScopes: [0, 1] },
-        function(succ) {
-          window.location.hash = `#/login/apple/callback?${
-            succ.authorizationCode
-          }`;
-        },
-        function(err) {
-          alert(intl.formatMessage(messages.loginErrorAndroid));
-          console.error(err);
-        }
-      );
-      return;
-    }
-    window.location = `${API_URL}login/apple-web`;
-  };
 
   updateDialogStyle() {
     if (!(isAndroid() || isIOS())) return;
@@ -209,6 +156,45 @@ export class WelcomeScreen extends Component {
   }
 
   componentDidMount() {
+    // Cleanup eye tracking when login/welcome screen is shown
+    try {
+      const eyeTrackingInstance = getEyeTrackingInstance();
+      if (eyeTrackingInstance) {
+        console.log('[WelcomeScreen] Cleaning up eye tracking on mount...');
+        eyeTrackingInstance.cleanup();
+      }
+      
+      // Also ensure WebGazer video element is removed if it exists
+      const videoElement = document.getElementById('webgazerVideoFeed');
+      if (videoElement) {
+        videoElement.style.display = 'none';
+        videoElement.style.visibility = 'hidden';
+        videoElement.style.opacity = '0';
+        videoElement.style.width = '0';
+        videoElement.style.height = '0';
+        videoElement.style.position = 'fixed';
+        videoElement.style.top = '-9999px';
+        videoElement.style.left = '-9999px';
+        try {
+          videoElement.remove();
+        } catch (e) {
+          console.warn('[WelcomeScreen] Error removing video element:', e);
+        }
+      }
+      
+      // Remove video container
+      const videoContainer = document.getElementById('webgazer-video-container');
+      if (videoContainer) {
+        try {
+          videoContainer.remove();
+        } catch (e) {
+          console.warn('[WelcomeScreen] Error removing video container:', e);
+        }
+      }
+    } catch (err) {
+      console.warn('[WelcomeScreen] Error cleaning up eye tracking:', err);
+    }
+
     if (!(isAndroid() || isIOS())) return;
     manageKeyboardEvents({
       onShow: this.handleKeyboardDidShow,
@@ -216,6 +202,16 @@ export class WelcomeScreen extends Component {
     });
   }
   componentWillUnmount() {
+    // Ensure eye tracking is cleaned up when component unmounts
+    try {
+      const eyeTrackingInstance = getEyeTrackingInstance();
+      if (eyeTrackingInstance) {
+        eyeTrackingInstance.cleanup();
+      }
+    } catch (err) {
+      console.warn('[WelcomeScreen] Error cleaning up eye tracking on unmount:', err);
+    }
+
     if (!(isAndroid() || isIOS())) return;
     manageKeyboardEvents({
       onShow: this.handleKeyboardDidShow,
@@ -231,11 +227,6 @@ export class WelcomeScreen extends Component {
     return (
       <div className={classes.WelcomeScreen}>
         <div className="WelcomeScreen__container">
-          {onClose && (
-            <IconButton label="close" onClick={onClose}>
-              <CloseIcon />
-            </IconButton>
-          )}
           <div className="WelcomeScreen__logo">
             <CboardLogo />
           </div>
@@ -256,51 +247,17 @@ export class WelcomeScreen extends Component {
               <FormattedMessage {...messages.signUp} />
             </Button>
 
-            <div className="WelcomeScreen__button WelcomeScreen__button">
-              {!isElectron() && (
-                <GoogleLoginButton
-                  style={SocialBtnStyle}
-                  className="WelcomeScreen__button WelcomeScreen__button--google"
-                  onClick={this.handleGoogleLoginClick}
-                >
-                  <FormattedMessage {...messages.google} />
-                </GoogleLoginButton>
-              )}
-
-              {!isElectron() && (
-                <FacebookLoginButton
-                  style={SocialBtnStyle}
-                  className="WelcomeScreen__button WelcomeScreen__button--facebook"
-                  onClick={this.handleFacebookLoginClick}
-                >
-                  <FormattedMessage {...messages.facebook} />
-                </FacebookLoginButton>
-              )}
-
-              {!isAndroid() && !isElectron() && (
-                <AppleLoginButton
-                  style={SocialBtnStyle}
-                  className="WelcomeScreen__button WelcomeScreen__button--google"
-                  onClick={this.handleAppleLoginClick}
-                >
-                  <FormattedMessage {...messages.apple} />
-                </AppleLoginButton>
-              )}
-            </div>
-
-            {!onClose && (
-              <Button
-                className="WelcomeScreen__button WelcomeScreen__button--skip"
-                onClick={finishFirstVisit}
-                style={{
-                  color: '#fff',
-                  margin: '1em auto 0 auto',
-                  textShadow: '0px 0px 6px black'
-                }}
-              >
-                <FormattedMessage {...messages.skipForNow} />
-              </Button>
-            )}
+            <Button
+              className="WelcomeScreen__button WelcomeScreen__button--guest"
+              onClick={this.handleContinueAsGuest}
+              style={{
+                color: '#fff',
+                margin: '1em auto 0 auto',
+                textShadow: '0px 0px 6px black'
+              }}
+            >
+              <FormattedMessage {...messages.continueAsGuest} />
+            </Button>
           </footer>
           <div className="WelcomeScreen__links">
             <Link

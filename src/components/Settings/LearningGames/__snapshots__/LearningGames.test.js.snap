@@ -1,0 +1,92 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`LearningGames tests default renderer 1`] = `
+<LearningGames
+  classes={
+    Object {
+      "gameCard": "LearningGames-gameCard-2 gameCard",
+      "optionButton": "LearningGames-optionButton-4 optionButton",
+      "questionCard": "LearningGames-questionCard-3 questionCard",
+      "scoreDisplay": "LearningGames-scoreDisplay-5 scoreDisplay",
+      "tabPanel": "LearningGames-tabPanel-1 tabPanel",
+    }
+  }
+  gameData={null}
+  intl={
+    Object {
+      "formatMessage": [Function],
+    }
+  }
+  loading={false}
+  onAnswerQuestion={[MockFunction]}
+  onClose={[MockFunction]}
+  onStartGame={[MockFunction]}
+  onSubmitGame={[MockFunction]}
+/>
+`;
+
+exports[`LearningGames tests renders loading state 1`] = `
+<LearningGames
+  classes={
+    Object {
+      "gameCard": "LearningGames-gameCard-2 gameCard",
+      "optionButton": "LearningGames-optionButton-4 optionButton",
+      "questionCard": "LearningGames-questionCard-3 questionCard",
+      "scoreDisplay": "LearningGames-scoreDisplay-5 scoreDisplay",
+      "tabPanel": "LearningGames-tabPanel-1 tabPanel",
+    }
+  }
+  gameData={null}
+  intl={
+    Object {
+      "formatMessage": [Function],
+    }
+  }
+  loading={true}
+  onAnswerQuestion={[MockFunction]}
+  onClose={[MockFunction]}
+  onStartGame={[MockFunction]}
+  onSubmitGame={[MockFunction]}
+/>
+`;
+
+exports[`LearningGames tests renders with game data 1`] = `
+<LearningGames
+  classes={
+    Object {
+      "gameCard": "LearningGames-gameCard-2 gameCard",
+      "optionButton": "LearningGames-optionButton-4 optionButton",
+      "questionCard": "LearningGames-questionCard-3 questionCard",
+      "scoreDisplay": "LearningGames-scoreDisplay-5 scoreDisplay",
+      "tabPanel": "LearningGames-tabPanel-1 tabPanel",
+    }
+  }
+  gameData={
+    Object {
+      "questions": Array [
+        Object {
+          "character": "你",
+          "correct_answer": "nei5",
+          "meaning": "you",
+          "options": Array [
+            "nei5",
+            "lei5",
+            "nei4",
+            "lei4",
+          ],
+        },
+      ],
+    }
+  }
+  intl={
+    Object {
+      "formatMessage": [Function],
+    }
+  }
+  loading={false}
+  onAnswerQuestion={[MockFunction]}
+  onClose={[MockFunction]}
+  onStartGame={[MockFunction]}
+  onSubmitGame={[MockFunction]}
+/>
+`;

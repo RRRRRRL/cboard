@@ -34,17 +34,81 @@ function formatSrc(src) {
     return `.${src}`;
   }
   
-  // Convert relative upload paths to absolute URLs
-  // e.g., "uploads/user_1/image.png" -> "http://localhost:8000/uploads/user_1/image.png"
-  if (typeof src === 'string' && src.startsWith('uploads/')) {
-    try {
-      if (API_URL) {
-        // Extract base URL (protocol + host) from API_URL
-        // API_URL is like "http://localhost:8000/api" or "http://localhost:8000/api/"
+  if (typeof src !== 'string') {
+    return src;
+  }
+  
+  // Skip data URIs and blob URLs
+  if (src.startsWith('data:') || src.startsWith('blob:')) {
+    return src;
+  }
+  
+  // Get base URL from API_URL (which uses REACT_APP_DEV_API_URL from .env)
+  let baseUrl;
+  try {
+    if (API_URL) {
+      // Check if API_URL is a relative path (starts with /)
+      if (API_URL.startsWith('/')) {
+        // Relative path - use current origin
+        baseUrl = window.location.origin;
+      } else {
+        // Absolute URL - extract base URL
         const apiUrlObj = new URL(API_URL);
-        const baseUrl = `${apiUrlObj.protocol}//${apiUrlObj.host}`;
-        return `${baseUrl}/${src}`;
+        baseUrl = `${apiUrlObj.protocol}//${apiUrlObj.host}`;
       }
+    } else {
+      baseUrl = window.location.origin;
+    }
+  } catch (e) {
+    console.warn('Failed to extract base URL from API_URL:', e);
+    baseUrl = window.location.origin;
+  }
+  
+  // Handle full URLs (http:// or https://) - check if it's an upload path from our backend
+  if (src.startsWith('http://') || src.startsWith('https://')) {
+    // Check if it's an upload path from our backend (contains /uploads/ or /api/uploads/)
+    if (src.includes('/uploads/') || src.includes('/api/uploads/')) {
+      try {
+        const urlObj = new URL(src);
+        let path = urlObj.pathname;
+        
+        // Ensure /api/uploads/ prefix is present (add if missing)
+        if (path.startsWith('/uploads/') && !path.startsWith('/api/uploads/')) {
+          path = '/api' + path;
+        }
+        
+        // Reconstruct with current base URL
+        return `${baseUrl}${path}`;
+      } catch (e) {
+        // If URL parsing fails, try to extract path manually
+        const match = src.match(/(\/uploads\/.*)$/);
+        if (match) {
+          let path = match[1];
+          // Ensure /api/uploads/ prefix
+          if (!path.startsWith('/api/uploads/')) {
+            path = '/api' + path;
+          }
+          return `${baseUrl}${path}`;
+        }
+        // If no match, return as-is (might be external URL)
+        return src;
+      }
+    }
+    // For other external URLs, return as-is
+    return src;
+  }
+  
+  // Handle relative paths (uploads/... or api/uploads/...)
+  if (src.startsWith('uploads/') || src.startsWith('api/uploads/')) {
+    try {
+      // Ensure 'api/' prefix is present
+      let imagePath = src;
+      if (imagePath.startsWith('uploads/') && !imagePath.startsWith('api/uploads/')) {
+        imagePath = 'api/' + imagePath;
+      }
+      
+      // Construct URL: baseUrl + /api/uploads/...
+      return `${baseUrl}/${imagePath}`;
     } catch (e) {
       console.warn('Failed to convert relative upload path to absolute URL:', e);
     }
