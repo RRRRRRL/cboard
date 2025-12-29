@@ -25,6 +25,7 @@ import { DISPLAY_SIZE_GRID_COLS } from '../Settings/Display/Display.constants';
 import NavigationButtons from '../NavigationButtons';
 import EditGridButtons from '../EditGridButtons';
 import { DEFAULT_ROWS_NUMBER, DEFAULT_COLUMNS_NUMBER } from './Board.constants';
+import { SCANNING_METHOD_EYE_TRACKING } from '../Settings/Scanning/Scanning.constants';
 
 import { Link } from 'react-router-dom';
 
@@ -102,7 +103,9 @@ export class Board extends Component {
     copiedTiles: PropTypes.arrayOf(PropTypes.object),
     setIsScroll: PropTypes.func,
     isScroll: PropTypes.bool,
-    totalRows: PropTypes.number
+    totalRows: PropTypes.number,
+    isJyutpingEnabled: PropTypes.bool,
+    audioGuideMode: PropTypes.string
   };
 
   static defaultProps = {
@@ -145,6 +148,13 @@ export class Board extends Component {
 
     // Initial check for scanner highlight audio feedback
     this.handleScannerHighlightAudio();
+
+    // NEW: poll for scanner highlight changes while scanner is active
+    this._scannerHighlightInterval = setInterval(() => {
+      if (this.props.scannerSettings.active) {
+        this.handleScannerHighlightAudio();
+      }
+    }, 80); // 50–100 ms is fine
   }
 
   componentDidUpdate(prevProps) {
@@ -160,7 +170,22 @@ export class Board extends Component {
       audioGuideChanged ||
       this.props.scannerSettings.active
     ) {
-      this.handleScannerHighlightAudio();
+      // Schedule audio check for next tick to avoid render conflicts
+      if (this._audioCheckTimeout) {
+        clearTimeout(this._audioCheckTimeout);
+      }
+      this._audioCheckTimeout = setTimeout(() => {
+        this.handleScannerHighlightAudio();
+        this._audioCheckTimeout = null;
+      }, 100); // Small delay to ensure DOM is stable
+    }
+  }
+
+  componentWillUnmount() {
+    // Clean up any pending timeouts
+    if (this._audioCheckTimeout) {
+      clearTimeout(this._audioCheckTimeout);
+      this._audioCheckTimeout = null;
     }
   }
 
@@ -198,6 +223,7 @@ export class Board extends Component {
     this.lastScannerFocusedElement = focusedElement;
 
     if (audioGuideMode === 'beep') {
+      console.log('[ScannerHighlight] mode=beep, playing beep sound');
       this.playScannerBeep();
       return;
     }
@@ -205,14 +231,23 @@ export class Board extends Component {
     if (audioGuideMode === 'card_audio' && board && Array.isArray(board.tiles)) {
       const tileId =
         focusedElement.dataset?.tileId || focusedElement.id || null;
+      console.log('[ScannerHighlight] mode=card_audio, elementId=', focusedElement.id, 'tileId=', tileId);
+
       if (!tileId) {
+        console.log('[ScannerHighlight] no tileId found, skipping');
         return;
       }
+
       const tile = board.tiles.find(
         t => t && String(t.id) === String(tileId)
       );
+
       if (tile) {
+        console.log('[ScannerHighlight] tile found:', { id: tile.id, label: tile.label, labelKey: tile.labelKey, sound: !!tile.sound });
         this.playScannerTileAudio(tile);
+      } else {
+        console.log('[ScannerHighlight] tile not found in board.tiles, falling back to beep');
+        this.playScannerBeep();
       }
     }
   };
@@ -274,12 +309,14 @@ export class Board extends Component {
     }
 
     // Fallback: speak tile label using browser TTS
-    if (!tile.label || !('speechSynthesis' in window)) {
+    // Resolve the label using the same logic as renderTiles
+    const resolvedLabel = resolveTileLabel(tile, this.props.intl);
+    if (!resolvedLabel || !('speechSynthesis' in window)) {
       return;
     }
     try {
       window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(tile.label);
+      const utterance = new SpeechSynthesisUtterance(resolvedLabel);
       utterance.lang = 'zh-HK';
       utterance.rate = 0.9;
       utterance.pitch = 1.0;
@@ -336,7 +373,7 @@ export class Board extends Component {
     if (this.state.titleDialogValue.length) {
       try {
         await this.props.editBoardTitle(this.state.titleDialogValue);
-      } catch (e) {}
+      } catch (e) { }
     }
     this.handleBoardTitleClose();
   };
@@ -364,7 +401,7 @@ export class Board extends Component {
     }
 
     // Filter out null/undefined tiles (virtual tiles from list view)
-    const validTiles = tiles.filter(tile => 
+    const validTiles = tiles.filter(tile =>
       tile !== null && tile !== undefined && typeof tile === 'object' && tile.id
     );
 
@@ -380,43 +417,43 @@ export class Board extends Component {
 
         return (
           <div key={tile.id}>
-          <Tile
-            backgroundColor={tile.backgroundColor}
-            borderColor={tile.borderColor}
-            variant={variant}
-            onClick={e => {
-              e.stopPropagation();
-              // Add visual feedback animation
-              const tileElement = e.currentTarget;
-              tileElement.classList.add('clicked');
-              setTimeout(() => {
-                tileElement.classList.remove('clicked');
-              }, 300);
-              this.handleTileClick(tile);
-            }}
-            onFocus={() => {
-              this.handleTileFocus(tile.id);
-            }}
-            data-tile-id={tile.id}
-          >
-            <Symbol
-              image={tile.image}
-              label={tile.label}
-              keyPath={tile.keyPath}
-              labelpos={displaySettings.labelPosition}
-            />
+            <Tile
+              backgroundColor={tile.backgroundColor}
+              borderColor={tile.borderColor}
+              variant={variant}
+              onClick={e => {
+                e.stopPropagation();
+                // Add visual feedback animation
+                const tileElement = e.currentTarget;
+                tileElement.classList.add('clicked');
+                setTimeout(() => {
+                  tileElement.classList.remove('clicked');
+                }, 300);
+                this.handleTileClick(tile);
+              }}
+              onFocus={() => {
+                this.handleTileFocus(tile.id);
+              }}
+              data-tile-id={tile.id}
+            >
+              <Symbol
+                image={tile.image}
+                label={tile.label}
+                keyPath={tile.keyPath}
+                labelpos={displaySettings.labelPosition}
+              />
 
-            {isSelecting && !isSaving && (
-              <div className="CheckCircle">
-                {isSelected && (
-                  <CheckCircleIcon className="CheckCircle__icon" />
-                )}
-              </div>
-            )}
-          </Tile>
-        </div>
-      );
-    });
+              {isSelecting && !isSaving && (
+                <div className="CheckCircle">
+                  {isSelected && (
+                    <CheckCircleIcon className="CheckCircle__icon" />
+                  )}
+                </div>
+              )}
+            </Tile>
+          </div>
+        );
+      });
   }
 
   renderTileFixedBoard = tileToRender => {
@@ -515,11 +552,15 @@ export class Board extends Component {
     const isNavigationButtonsOnTheSide =
       navigationSettings.navigationButtonsStyle === undefined ||
       navigationSettings.navigationButtonsStyle ===
-        NAVIGATION_BUTTONS_STYLE_SIDES;
+      NAVIGATION_BUTTONS_STYLE_SIDES;
+
+    // Only render Scanner component when not using eye-tracking
+    const isEyeTracking = this.props.scannerSettings.strategy === SCANNING_METHOD_EYE_TRACKING;
+    const scannerActive = !isEyeTracking && this.props.scannerSettings.active;
 
     return (
       <Scanner
-        active={this.props.scannerSettings.active}
+        active={scannerActive}
         iterationInterval={this.props.scannerSettings.delay}
         strategy={this.props.scannerSettings.strategy}
         onDeactivation={deactivateScanner}
@@ -566,6 +607,7 @@ export class Board extends Component {
             onGenerateEmail={this.props.onGenerateEmail}
             onRedeemCode={this.props.onRedeemCode}
             onJyutpingKeyboardClick={this.props.onJyutpingKeyboardClick}
+            isJyutpingEnabled={this.props.isJyutpingEnabled}
           />
           {emptyVoiceAlert && (
             <Alert variant="filled" severity="error">

@@ -16,6 +16,8 @@ import {
   updateUnloggedUserLocation,
   updateConnectivity
 } from '../App/App.actions';
+import { updateScannerSettings } from '../../providers/ScannerProvider/ScannerProvider.actions';
+import { getEyeTrackingInstance } from '../../utils/eyeTrackingIntegration';
 import { isCordova, isElectron } from '../../cordova-util';
 export class AppContainer extends Component {
   static propTypes = {
@@ -100,11 +102,15 @@ export class AppContainer extends Component {
 
       const setAsOffline = () => {
         updateConnectivity({ isConnected: false });
+        // Disable scanning and cleanup eye-tracking when user goes offline
+        this.disableScanningAndEyeTracking();
       };
 
       const addConnectionEventListeners = () => {
         window.addEventListener('offline', setAsOffline);
         window.addEventListener('online', setAsOnline);
+        // Also disable scanning/eye-tracking when user closes the browser
+        window.addEventListener('beforeunload', this.disableScanningAndEyeTracking);
       };
 
       const setCurrentConnectionStatus = () => {
@@ -134,6 +140,28 @@ export class AppContainer extends Component {
   handleContentCached = () => {
     const { intl, showNotification } = this.props;
     showNotification(intl.formatMessage(messages.contentIsCached));
+  };
+
+  /**
+   * Disable scanning and cleanup eye-tracking when user disconnects (goes offline)
+   */
+  disableScanningAndEyeTracking = () => {
+    try {
+      console.log('[AppContainer] User disconnected - disabling scanning and cleaning up eye-tracking...');
+
+      // Disable scanning
+      this.props.updateScannerSettings({ active: false });
+      console.log('[AppContainer] ✓ Scanning disabled on disconnect');
+
+      // Cleanup eye-tracking
+      const eyeTrackingInstance = getEyeTrackingInstance();
+      if (eyeTrackingInstance) {
+        eyeTrackingInstance.cleanup();
+        console.log('[AppContainer] ✓ Eye-tracking cleaned up on disconnect');
+      }
+    } catch (error) {
+      console.warn('[AppContainer] Error disabling scanning/eye-tracking on disconnect:', error);
+    }
   };
 
   render() {
@@ -168,6 +196,13 @@ export class AppContainer extends Component {
       />
     );
   }
+
+  componentWillUnmount() {
+    // Clean up event listeners
+    window.removeEventListener('offline', this.disableScanningAndEyeTracking);
+    window.removeEventListener('online', () => {}); // online handler was anonymous
+    window.removeEventListener('beforeunload', this.disableScanningAndEyeTracking);
+  }
 }
 
 const mapStateToProps = state => ({
@@ -185,7 +220,8 @@ const mapDispatchToProps = {
   updateUserDataFromAPI,
   updateLoggedUserLocation,
   updateUnloggedUserLocation,
-  updateConnectivity
+  updateConnectivity,
+  updateScannerSettings
 };
 
 export default connect(

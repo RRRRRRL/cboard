@@ -203,6 +203,7 @@ export class BoardContainer extends Component {
     isSelecting: false,
     isLocked: true,
     isJyutpingKeyboardOpen: false,
+    isJyutpingEnabled: false,
     isJyutpingRulesConfigOpen: false,
     tileEditorOpen: false,
     isGettingApiObjects: false,
@@ -217,7 +218,7 @@ export class BoardContainer extends Component {
     // Audio guide mode for scanning highlight feedback: 'off' | 'beep' | 'card_audio'
     audioGuideMode: 'off'
   };
-  
+
   constructor(props) {
     super(props);
     this.boardRef = React.createRef();
@@ -241,7 +242,7 @@ export class BoardContainer extends Component {
   async componentDidMount() {
     console.log('[BoardContainer] ===== componentDidMount called =====');
     this._isMounted = true;
-    
+
     // Load user profiles for transfer functionality
     if (this.props.userData && this.props.userData.id) {
       this.loadProfiles();
@@ -251,19 +252,19 @@ export class BoardContainer extends Component {
     this.loadAccessibilityAudioGuide().catch(error => {
       console.debug('[BoardContainer] Failed to load accessibility audio guide settings:', error.message || error);
     });
-    
+
     // Add window focus listener to re-check eye tracking and refresh board when user returns from settings
     this._windowFocusHandler = async () => {
       if (!this._isMounted) return;
-      
+
       console.log('[BoardContainer] Window focused - re-checking eye tracking settings and refreshing board...');
-      
+
       // Refresh current board if it's a profile (numeric ID)
       const { board } = this.props;
       if (board && board.id) {
         const boardIdStr = String(board.id);
         const isNumericId = /^\d+$/.test(boardIdStr);
-        
+
         if (isNumericId) {
           // This is a profile, refresh it to get latest data (e.g., newly added cards)
           console.log('[BoardContainer] Refreshing profile board:', boardIdStr);
@@ -281,25 +282,39 @@ export class BoardContainer extends Component {
           }
         }
       }
-      
-      // Only check eye tracking if it's enabled
-      API.getSettings().then(settings => {
+
+      // Always check eye tracking settings on focus - cleanup if disabled
+      API.getSettings().then(async (settings) => {
         if (!this._isMounted) return;
-        
+
         const eyeTrackingSettings = settings.eyeTracking || { enabled: false };
         if (eyeTrackingSettings.enabled) {
+          console.log('[BoardContainer] Eye tracking enabled on focus, setting up...');
           this.setupEyeTracking().catch(error => {
             if (error && !error.message?.includes('disabled')) {
               console.debug('[BoardContainer] Eye tracking check on focus:', error.message);
             }
           });
+        } else {
+          console.log('[BoardContainer] Eye tracking disabled on focus, ensuring cleanup...');
+          // Eye tracking is disabled - cleanup any running instance to stop camera
+          if (this.eyeTrackingInstance) {
+            console.log('[BoardContainer] Cleaning up eye tracking instance on focus (disabled)...');
+            try {
+              await this.eyeTrackingInstance.cleanup();
+              this.eyeTrackingInstance = null;
+              console.log('[BoardContainer] ✓ Eye tracking cleaned up on focus');
+            } catch (cleanupError) {
+              console.warn('[BoardContainer] Error cleaning up eye tracking on focus:', cleanupError);
+            }
+          }
         }
       }).catch(() => {
         // Guest user or settings unavailable, skip
       });
     };
     window.addEventListener('focus', this._windowFocusHandler);
-    
+
     const {
       match
     } = this.props;
@@ -336,14 +351,14 @@ export class BoardContainer extends Component {
     // Setup swipe navigation and long-press detection
     this.setupSwipeDetection();
     this.setupLongPressDetection();
-    
+
     // Setup eye tracking if enabled
     // Only setup eye tracking if it's enabled in settings
     // Check settings first to avoid unnecessary API calls
     console.log('[BoardContainer] Checking eye tracking settings before setup...');
     API.getSettings().then(settings => {
       if (!this._isMounted) return;
-      
+
       const eyeTrackingSettings = settings.eyeTracking || { enabled: false };
       if (eyeTrackingSettings.enabled) {
         console.log('[BoardContainer] Eye tracking is enabled, setting up...');
@@ -464,7 +479,7 @@ export class BoardContainer extends Component {
         boardExists = boards.find(b => b.id && String(b.id) !== '');
       }
     }
-    
+
     // Prevent creating new boards - if board doesn't exist, redirect to root board
     if (!boardExists) {
       console.warn('[BoardContainer] No board found, redirecting to root board');
@@ -486,7 +501,7 @@ export class BoardContainer extends Component {
         return;
       }
     }
-    
+
     const boardId = String(boardExists.id);
     changeBoard(boardId);
     // Ensure URL matches the board ID exactly
@@ -521,11 +536,11 @@ export class BoardContainer extends Component {
   UNSAFE_componentWillReceiveProps(nextProps) {
     const currentId = this.props.match?.params?.id;
     const nextId = nextProps.match?.params?.id;
-    
+
     // Ensure IDs are strings for comparison
     const normalizedCurrentId = currentId ? String(currentId) : null;
     const normalizedNextId = nextId ? String(nextId) : null;
-    
+
     if (normalizedCurrentId !== normalizedNextId) {
       const {
         navHistory,
@@ -543,12 +558,12 @@ export class BoardContainer extends Component {
 
       // Find board with normalized ID comparison
       const boardExists = boards.find(b => String(b.id) === normalizedNextId);
-      
+
       if (boardExists) {
         // Check if this is a browser back action
-        const isBackAction = navHistory.length >= 2 && 
+        const isBackAction = navHistory.length >= 2 &&
           String(navHistory[navHistory.length - 2]) === normalizedNextId;
-        
+
         if (isBackAction) {
           // Browser back action - use previous board logic
           changeBoard(normalizedNextId);
@@ -570,14 +585,14 @@ export class BoardContainer extends Component {
         console.log('[BoardContainer] Board not found locally, attempting to fetch:', normalizedNextId);
         this.tryRemoteBoard(normalizedNextId).then(remoteBoard => {
           if (!this._isMounted) return;
-          
+
           if (remoteBoard) {
             this.props.addBoards([remoteBoard]);
             changeBoard(normalizedNextId);
             history.replace(`/profile/${normalizedNextId}`);
           } else {
             // Board not found, check if it's a back action
-            const isBackAction = navHistory.length >= 2 && 
+            const isBackAction = navHistory.length >= 2 &&
               String(navHistory[navHistory.length - 2]) === normalizedNextId;
             if (isBackAction) {
               //board is invalid so we remove from navigation history
@@ -616,11 +631,11 @@ export class BoardContainer extends Component {
     // Check for scanning settings changes from multiple sources
     // 1. Legacy scannerSettings.active
     // 2. Accessibility settings (new format)
-    const prevScanningEnabled = prevProps.scannerSettings?.active || 
-                                this.state?.accessibilitySettings?.scanning?.enabled || false;
-    const currentScanningEnabled = this.props.scannerSettings?.active || 
-                                   this.state?.accessibilitySettings?.scanning?.enabled || false;
-    
+    const prevScanningEnabled = prevProps.scannerSettings?.active ||
+      this.state?.accessibilitySettings?.scanning?.enabled || false;
+    const currentScanningEnabled = this.props.scannerSettings?.active ||
+      this.state?.accessibilitySettings?.scanning?.enabled || false;
+
     if (prevScanningEnabled !== currentScanningEnabled) {
       if (this.eyeTrackingInstance) {
         if (currentScanningEnabled) {
@@ -637,7 +652,7 @@ export class BoardContainer extends Component {
       }
     }
     const { board, boards, userData, changeBoard } = this.props;
-    
+
     // Re-setup eye tracking if board changed (user might have enabled it in settings)
     const boardChanged = prevProps.board?.id !== board?.id;
     if (boardChanged) {
@@ -653,12 +668,12 @@ export class BoardContainer extends Component {
       }).catch(() => {
         // Guest user or settings unavailable, skip
       });
-      
+
       // Refresh board when it changes (e.g., navigating to a profile)
       if (board && board.id) {
         const boardIdStr = String(board.id);
         const isNumericId = /^\d+$/.test(boardIdStr);
-        
+
         if (isNumericId) {
           // This is a profile, refresh it to get latest data
           console.log('[BoardContainer] Board changed to profile, refreshing:', boardIdStr);
@@ -676,7 +691,7 @@ export class BoardContainer extends Component {
         }
       }
     }
-    
+
     // Re-check eye tracking settings periodically ONLY if eye tracking is enabled
     // NOTE: This interval is intentionally slow and self-stopping to avoid spamming logs
     // and repeated WebGazer initializations that can cause texture size errors.
@@ -708,35 +723,35 @@ export class BoardContainer extends Component {
         }
       }, 30000); // Check every 30 seconds, and only a few times
     }
-    
+
     // Handle board type change
     if (board && prevProps.board && board.isFixed !== prevProps.board.isFixed) {
       this.setState({ isFixedBoard: board.isFixed });
     }
-    
+
     // If user boards were just loaded and we're on root board, switch to user's most recent board
     if (userData && userData.email && boards && prevProps.boards) {
       const prevBoardsCount = prevProps.boards.length;
       const currentBoardsCount = boards.length;
-      
+
       // Check if new boards were added
       if (currentBoardsCount > prevBoardsCount) {
         const newBoards = boards.filter(b => {
           // Check if this is a new user board
           const wasInPrev = prevProps.boards.some(pb => pb.id === b.id);
           if (wasInPrev) return false;
-          
+
           // Check if it's a user board (has email or long ID)
           return b.email === userData.email || (b.id && b.id.length > 14);
         });
-        
+
         if (newBoards.length > 0) {
           // Check if current board is root or default board
           const currentBoard = board;
-          const isRootBoard = !currentBoard || 
-                             currentBoard.id === 'root' || 
-                             (currentBoard.id && currentBoard.id.length < 14);
-          
+          const isRootBoard = !currentBoard ||
+            currentBoard.id === 'root' ||
+            (currentBoard.id && currentBoard.id.length < 14);
+
           if (isRootBoard) {
             // Find oldest user board (not most recent) to avoid switching to newly added temporary boards
             // Only consider permanent IDs (numeric), not temporary shortids
@@ -746,7 +761,7 @@ export class BoardContainer extends Component {
               // Only consider permanent IDs (numeric), not temporary shortids
               return /^\d+$/.test(bIdStr);
             });
-            
+
             if (permanentBoards.length > 0) {
               // Sort by created_at (oldest first) to get the oldest board
               const sortedBoards = [...permanentBoards].sort((a, b) => {
@@ -755,7 +770,7 @@ export class BoardContainer extends Component {
                 return aDate - bDate;
               });
               const oldestBoard = sortedBoards[0];
-              
+
               if (oldestBoard && oldestBoard.id) {
                 console.log('Board component - Switching to oldest user board:', oldestBoard.id);
                 changeBoard(oldestBoard.id);
@@ -830,7 +845,7 @@ export class BoardContainer extends Component {
       // 這裡只做簡單的 null 過濾，不再把「全為 null」當成損壞板強制拋錯，
       // 避免正常的 profile / board 因為暫時性的虛擬 tiles 也被重定向回 root。
       if (remoteBoard && remoteBoard.tiles && Array.isArray(remoteBoard.tiles)) {
-        const validTiles = remoteBoard.tiles.filter(tile => 
+        const validTiles = remoteBoard.tiles.filter(tile =>
           tile !== null && tile !== undefined && typeof tile === 'object'
         );
         remoteBoard.tiles = validTiles;
@@ -863,7 +878,7 @@ export class BoardContainer extends Component {
           this.setState({ blockedPrivateBoard: true });
         }
       }
-      
+
       // If board not found (404) or corrupted, show message and redirect to root board
       if (err?.response?.status === 404 || (err.message && err.message.includes('corrupted'))) {
         if (this.props.showNotification && this.props.intl) {
@@ -889,7 +904,7 @@ export class BoardContainer extends Component {
           return null; // Return null to indicate board not found
         }
       }
-      
+
       throw new Error('Cannot get the remote board');
     }
   }
@@ -899,7 +914,7 @@ export class BoardContainer extends Component {
     let dataURL = null;
     try {
       dataURL = await domtoimage.toPng(node);
-    } catch (e) {}
+    } catch (e) { }
 
     return dataURL;
   }
@@ -1007,7 +1022,7 @@ export class BoardContainer extends Component {
         // Explicitly exclude tiles to prevent deletion
         // Create a completely new object to avoid any reference issues
         const metadataOnly = {};
-        
+
         // Only copy metadata fields, explicitly exclude tiles and grid
         if (boardData.id) metadataOnly.id = boardData.id;
         if (boardData.profileId || boardData.id) metadataOnly.profileId = boardData.profileId || boardData.id;
@@ -1022,14 +1037,14 @@ export class BoardContainer extends Component {
         if (userData.locale) metadataOnly.locale = userData.locale;
         else if (boardData.locale) metadataOnly.locale = boardData.locale;
         else metadataOnly.locale = 'en';
-        
+
         // Explicitly ensure tiles and grid are NOT included
         // Double-check by deleting them if they somehow got in
         delete metadataOnly.tiles;
         delete metadataOnly.grid;
         delete metadataOnly.tiles_count;
         delete metadataOnly.tilesCount;
-        
+
         console.log('[updateProfileMetadataOnly] Updating metadata only:', {
           profileId: metadataOnly.profileId,
           isPublic: metadataOnly.isPublic,
@@ -1039,7 +1054,7 @@ export class BoardContainer extends Component {
           inputBoardDataKeys: Object.keys(boardData),
           inputHasTiles: 'tiles' in boardData
         });
-        
+
         await updateApiBoard(metadataOnly);
       } catch (err) {
         console.error('[updateProfileMetadataOnly] Error:', err);
@@ -1122,12 +1137,12 @@ export class BoardContainer extends Component {
       addBoardCommunicator,
       history
     } = this.props;
-    
+
     // IMPORTANT: In profile-centric architecture (board = profile),
     // folders are part of the same profile, not separate boards
     const currentBoardIdStr = String(board.id || '');
     const isNumericCurrentId = /^\d+$/.test(currentBoardIdStr);
-    
+
     // IMPORTANT: User requirements - new folders should create new profiles
     // When a folder is created, it should get its own profile ID
     // The folder will be saved with this profile ID, and clicking it will open that profile
@@ -1135,7 +1150,7 @@ export class BoardContainer extends Component {
       // Current board is a user profile - new folder should create a new profile
       const loadBoardIdStr = String(tile.loadBoard || '');
       const isNumericLoadBoard = /^\d+$/.test(loadBoardIdStr);
-      
+
       if (!isNumericLoadBoard) {
         // loadBoard is a random ID (shortid) - this is a NEW folder
         // Create a new profile for this folder
@@ -1323,7 +1338,7 @@ export class BoardContainer extends Component {
 
     if (navigationSettings.bigScrollButtonsActive) {
       const cols =
-        currentLayout.reduce(function(valorAnterior, item) {
+        currentLayout.reduce(function (valorAnterior, item) {
           if (item.x > valorAnterior) return item.x;
           return valorAnterior;
         }, 0) + 1;
@@ -1428,7 +1443,7 @@ export class BoardContainer extends Component {
       const currentBoardIdStr = String(board.id || '');
       const loadBoardIdStr = String(tile.loadBoard || '');
       const isNumericCurrentId = /^\d+$/.test(currentBoardIdStr);
-      
+
       // If both are numeric and same, it's a folder in the same profile
       if (isNumericCurrentId && currentBoardIdStr === loadBoardIdStr) {
         // This is a folder tile pointing to the same profile - should not happen
@@ -1440,12 +1455,12 @@ export class BoardContainer extends Component {
         }
         return;
       }
-      
+
       // Try to find board in local boards list
       let nextBoard = boards.find(b => String(b.id) === loadBoardIdStr) ||
         // If the board id is invalid, try falling back to a board with the right name
         boards.find(b => b.name === tile.label);
-      
+
       // If not found locally, try to fetch from API (for newly created folders)
       if (!nextBoard && loadBoardIdStr) {
         try {
@@ -1472,7 +1487,7 @@ export class BoardContainer extends Component {
           }
         }
       }
-      
+
       if (nextBoard) {
         changeBoard(nextBoard.id);
         this.props.history.push(`/profile/${nextBoard.id}`);
@@ -1571,10 +1586,10 @@ export class BoardContainer extends Component {
       showNotification,
       intl
     } = this.props;
-    
+
     // Safely get strategy with fallback to automatic
     const strategy = scannerSettings?.strategy || SCANNING_METHOD_AUTOMATIC;
-    
+
     const messagesKeyMap = {
       [SCANNING_METHOD_MANUAL]: messages.scannerManualStrategy,
       [SCANNING_METHOD_AUTOMATIC]: messages.scannerAutomaticStrategy,
@@ -1675,7 +1690,7 @@ export class BoardContainer extends Component {
 
       // Ensure board.tiles is an array
       const boardTiles = Array.isArray(board.tiles) ? board.tiles : [];
-      
+
       let uTiles = [];
       if (deletedTilesiIds) {
         uTiles = boardTiles.filter(
@@ -1690,16 +1705,16 @@ export class BoardContainer extends Component {
             processedEditedTiles.push(editedTile);
             continue;
           }
-          
+
           const originalTile = boardTiles.find(t => t && t.id === editedTile.id);
           if (!originalTile) {
             processedEditedTiles.push(editedTile);
             continue;
           }
-          
+
           const tileIdStr = String(editedTile.id || '');
           const isDefaultTile = !/^\d+$/.test(tileIdStr) && tileIdStr.length < SHORT_ID_MAX_LENGTH && tileIdStr !== 'root';
-          
+
           // If this is a default Cboard tile (non-numeric ID) and it's a folder that was modified
           if (isDefaultTile && editedTile.loadBoard && !editedTile.linkedBoard) {
             // Modified default folder - will create new profile for it
@@ -1710,10 +1725,10 @@ export class BoardContainer extends Component {
               loadBoard: editedTile.loadBoard
             });
           }
-          
+
           processedEditedTiles.push(editedTile);
         }
-        
+
         uTiles = boardTiles.map(
           cTile => {
             if (!cTile || !cTile.id) return cTile;
@@ -1739,48 +1754,48 @@ export class BoardContainer extends Component {
         }
         return true;
       });
-      
+
       // If processedBoard exists, ensure its tiles are also filtered
       let finalProcessedBoard = processedBoard;
       if (processedBoard && processedBoard.tiles) {
         finalProcessedBoard = {
           ...processedBoard,
-          tiles: Array.isArray(processedBoard.tiles) 
+          tiles: Array.isArray(processedBoard.tiles)
             ? processedBoard.tiles.filter(t => t !== null && t !== undefined && typeof t === 'object' && t.id)
             : []
         };
       }
-      
+
       // Ensure grid.order is included for proper position tracking
       // Use existing grid.order if available, otherwise build from tiles
       const gridOrder = board.grid?.order || this.getDefaultOrdering(validTiles, board.grid);
-      
+
       let parentBoardData = finalProcessedBoard
         ? {
-            ...finalProcessedBoard,
-            grid: finalProcessedBoard.grid || {
-              ...board.grid,
-              order: gridOrder
-            }
+          ...finalProcessedBoard,
+          grid: finalProcessedBoard.grid || {
+            ...board.grid,
+            order: gridOrder
           }
+        }
         : {
-            ...board,
-            name:
-              board.name ||
-              this.nameFromKey(board) ||
-              intl.formatMessage(messages.myBoardTitle),
-            tiles: validTiles,
-            grid: {
-              ...board.grid,
-              rows: board.grid?.rows || 4,
-              columns: board.grid?.columns || 6,
-              order: gridOrder
-            },
-            author: userData.name,
-            email: userData.email,
-            hidden: false,
-            locale: lang
-          };
+          ...board,
+          name:
+            board.name ||
+            this.nameFromKey(board) ||
+            intl.formatMessage(messages.myBoardTitle),
+          tiles: validTiles,
+          grid: {
+            ...board.grid,
+            rows: board.grid?.rows || 4,
+            columns: board.grid?.columns || 6,
+            order: gridOrder
+          },
+          author: userData.name,
+          email: userData.email,
+          hidden: false,
+          locale: lang
+        };
       //check if user has an own communicator
       if (communicator.email !== userData.email) {
         verifyAndUpsertCommunicator(communicator);
@@ -1788,17 +1803,17 @@ export class BoardContainer extends Component {
       //check if we have to create a copy of the parent
       const parentIdStr = String(parentBoardData.id || '');
       const isNumericParentId = /^\d+$/.test(parentIdStr);
-      
+
       // IMPORTANT: User requirements:
       // 1. Default Cboard (non-numeric ID) is read-only, for initialization
       // 2. First change creates new user profile (numeric ID)
       // 3. Modifications to default folders/cards create new profiles and replace them
       // 4. Modifications within user profile update the same profile
-      
+
       const currentBoardIdStr = String(board.id || '');
       const isNumericCurrentBoardId = /^\d+$/.test(currentBoardIdStr);
       const isDefaultCboard = !isNumericCurrentBoardId && currentBoardIdStr.length < SHORT_ID_MAX_LENGTH && currentBoardIdStr !== 'root';
-      
+
       // Check if this is the first change (default Cboard being modified)
       if (isDefaultCboard) {
         // First change - will create new user profile
@@ -1814,12 +1829,12 @@ export class BoardContainer extends Component {
         };
         console.log('[handleApiUpdates] Board = Profile: Using profile ID for all updates:', currentBoardIdStr);
       }
-      
+
       // Re-check parent ID after potential update
       const updatedParentIdStr = String(parentBoardData.id || '');
       const updatedIsNumericParentId = /^\d+$/.test(updatedParentIdStr);
       const updatedIsDefaultCboard = !updatedIsNumericParentId && updatedParentIdStr.length < SHORT_ID_MAX_LENGTH && updatedParentIdStr !== 'root';
-      
+
       //check for a new own board
       // IMPORTANT: User requirements - new folders should create new profiles
       // When a folder is created, it should get its own profile ID
@@ -1827,7 +1842,7 @@ export class BoardContainer extends Component {
       if (tile && tile.loadBoard && !tile.linkedBoard) {
         const loadBoardIdStr = String(tile.loadBoard || '');
         const isNumericLoadBoard = /^\d+$/.test(loadBoardIdStr);
-        
+
         if (!updatedIsNumericParentId) {
           // Parent is a template/root board, create new child board (legacy behavior)
           const boardData = {
@@ -1876,7 +1891,7 @@ export class BoardContainer extends Component {
       // 1. Default Cboard (non-numeric ID) → First change creates new user profile
       // 2. User profile (numeric ID) → Updates same profile
       // 3. Modified default folders/cards → Create new profiles, replace in same position
-      
+
       if (updatedIsDefaultCboard) {
         // Parent is default Cboard (non-numeric ID) - FIRST CHANGE: create new user profile
         createParentBoard = true;
@@ -1895,7 +1910,7 @@ export class BoardContainer extends Component {
         // Fallback: update the parent
         updateBoard(parentBoardData);
       }
-      
+
       // Handle modified default folders/cards - create new profiles for them
       // This happens AFTER the main board is saved, so we can update tile references
       if (editedTiles && updatedIsNumericParentId) {
@@ -1903,10 +1918,10 @@ export class BoardContainer extends Component {
         // Check if any edited tiles are default Cboard tiles that need new profiles
         for (const editedTile of editedTiles) {
           if (!editedTile || !editedTile.id) continue;
-          
+
           const tileIdStr = String(editedTile.id || '');
           const isDefaultTile = !/^\d+$/.test(tileIdStr) && tileIdStr.length < SHORT_ID_MAX_LENGTH && tileIdStr !== 'root';
-          
+
           // If this is a modified default folder, create new profile for it
           if (isDefaultTile && editedTile.loadBoard && !editedTile.linkedBoard) {
             console.log('[handleApiUpdates] Modified default folder detected, will create new profile after main board save:', {
@@ -1942,7 +1957,7 @@ export class BoardContainer extends Component {
             createParentBoard,
             userEmail: userData.email
           });
-          
+
           // Store modified default folders before saving (for post-save processing)
           const modifiedDefaultFolders = [];
           if (editedTiles && updatedIsNumericParentId) {
@@ -1955,7 +1970,7 @@ export class BoardContainer extends Component {
               }
             }
           }
-          
+
           updateApiObjectsNoChild(parentBoardData, createParentBoard)
             .then(async parentBoardId => {
               // Check if component is still mounted before updating state
@@ -1963,7 +1978,7 @@ export class BoardContainer extends Component {
                 console.log('[handleApiUpdates] Component unmounted, skipping state update');
                 return;
               }
-              
+
               console.log('handleApiUpdates - Board saved successfully:', {
                 originalId: parentBoardData.id,
                 newId: parentBoardId,
@@ -1972,7 +1987,7 @@ export class BoardContainer extends Component {
                 isProfile: updatedIsNumericParentId,
                 modifiedDefaultFoldersCount: modifiedDefaultFolders.length
               });
-              
+
               // IMPORTANT: In profile-centric architecture (board = profile),
               // if we're updating an existing profile (numeric ID), do NOT replace the board
               // because it's the same profile, just updated. Only replace if we created a NEW profile.
@@ -1989,11 +2004,11 @@ export class BoardContainer extends Component {
                   );
                 }
               }
-              
+
               // Handle modified default folders - create new profiles for them
               if (modifiedDefaultFolders.length > 0 && updatedIsNumericParentId && this._isMounted) {
                 console.log('[handleApiUpdates] Processing modified default folders:', modifiedDefaultFolders.length);
-                
+
                 // Get the updated board to modify tile references
                 let updatedBoard = { ...parentBoardData, id: parentBoardId };
                 try {
@@ -2005,23 +2020,23 @@ export class BoardContainer extends Component {
                 } catch (err) {
                   console.error('[handleApiUpdates] Error fetching updated board:', err);
                 }
-                
+
                 // Check again if component is still mounted before processing folders
                 if (!this._isMounted) {
                   console.log('[handleApiUpdates] Component unmounted during folder processing, aborting');
                   return;
                 }
-                
+
                 // Create new profiles for each modified default folder
                 const { API } = require('../../api/api');
-                
+
                 for (const modifiedFolder of modifiedDefaultFolders) {
                   // Check if component is still mounted before each iteration
                   if (!this._isMounted) {
                     console.log('[handleApiUpdates] Component unmounted, stopping folder processing');
                     break;
                   }
-                  
+
                   try {
                     // Create a new profile for the modified folder
                     // The folder content should be loaded from the default Cboard's loadBoard
@@ -2034,7 +2049,7 @@ export class BoardContainer extends Component {
                       email: userData.email,
                       locale: lang
                     };
-                    
+
                     // Try to load the original folder content from default Cboard
                     try {
                       const originalFolderBoard = await API.getBoard(modifiedFolder.loadBoard);
@@ -2045,13 +2060,13 @@ export class BoardContainer extends Component {
                       console.warn('[handleApiUpdates] Could not load original folder content:', modifiedFolder.loadBoard);
                       // Continue with empty tiles - user can add content later
                     }
-                    
+
                     // Check again before creating profile
                     if (!this._isMounted) {
                       console.log('[handleApiUpdates] Component unmounted before creating folder profile');
                       break;
                     }
-                    
+
                     // Create new profile for the folder using API.createBoard
                     const createdFolderBoard = await API.createBoard(folderBoardData);
                     const newFolderProfileId = createdFolderBoard.id;
@@ -2060,13 +2075,13 @@ export class BoardContainer extends Component {
                       newProfileId: newFolderProfileId,
                       label: modifiedFolder.label
                     });
-                    
+
                     // Check again before updating board
                     if (!this._isMounted) {
                       console.log('[handleApiUpdates] Component unmounted before updating board');
                       break;
                     }
-                    
+
                     // Update the main board's tile to reference the new profile ID
                     const updatedTiles = (updatedBoard.tiles || []).map(tile => {
                       if (tile && tile.id === modifiedFolder.id) {
@@ -2078,17 +2093,17 @@ export class BoardContainer extends Component {
                       }
                       return tile;
                     });
-                    
+
                     // Save the updated board with new folder reference
                     const updatedBoardData = {
                       ...updatedBoard,
                       tiles: updatedTiles,
                       profileId: parentBoardId
                     };
-                    
+
                     await API.updateBoard(updatedBoardData);
                     console.log('[handleApiUpdates] Updated main board with new folder profile reference');
-                    
+
                     // Check again before updating Redux state
                     if (this._isMounted) {
                       // Refresh the board in Redux state
@@ -2099,13 +2114,13 @@ export class BoardContainer extends Component {
                   }
                 }
               }
-              
+
               // Check if component is still mounted before final state update
               if (!this._isMounted) {
                 console.log('[handleApiUpdates] Component unmounted, skipping final state update');
                 return;
               }
-              
+
               // For existing profiles (numeric ID), parentBoardId should be the same as parentBoardData.id
               // No need to replace board - it's the same profile, just updated
               this.historyReplaceBoardId(parentBoardId);
@@ -2136,10 +2151,10 @@ export class BoardContainer extends Component {
                 console.log('[handleApiUpdates] Component unmounted, skipping state update');
                 return;
               }
-              
+
               // updateApiObjects already updated the parent board's tile.loadBoard
               // to reference the new child profile ID, so we don't need to do it here
-              
+
               if (createParentBoard) {
                 /* Here the parentBoardData is not updated with the values
                 that updatedApiObjects store on the API. Inside the boards are already updated
@@ -2374,11 +2389,11 @@ export class BoardContainer extends Component {
 
   publishBoard = async () => {
     const { board, updateBoard, showNotification, intl } = this.props;
-    
+
     // Check if board has tiles
     const tilesCount = board.tiles?.length || 0;
     const hasTiles = tilesCount > 0;
-    
+
     // Create a minimal board object with ONLY metadata fields for publishing
     // DO NOT include tiles array to prevent accidental deletion of cards
     const newBoard = {
@@ -2392,7 +2407,7 @@ export class BoardContainer extends Component {
       // Explicitly DO NOT include tiles array - backend will preserve existing tiles
       // Only include metadata fields that need to be updated
     };
-    
+
     console.log('[publishBoard] Toggling isPublic (metadata only):', {
       boardId: board.id,
       boardName: board.name,
@@ -2403,7 +2418,7 @@ export class BoardContainer extends Component {
       hasTilesInRequest: 'tiles' in newBoard,
       warning: !hasTiles && newBoard.isPublic ? 'Board has no tiles, will not appear in public list' : null
     });
-    
+
     // Warn user if trying to publish empty board
     if (!hasTiles && newBoard.isPublic && showNotification && intl) {
       showNotification(
@@ -2414,7 +2429,7 @@ export class BoardContainer extends Component {
         'warning'
       );
     }
-    
+
     // Don't use updateIfFeaturedBoard for metadata-only updates - it might add unwanted fields
     // Just pass the minimal newBoard directly
     // Update Redux state with new isPublic value
@@ -2422,33 +2437,33 @@ export class BoardContainer extends Component {
       ...board,
       isPublic: newBoard.isPublic
     });
-    
+
     try {
       // Use a special method that only updates metadata, not tiles
       // Pass newBoard directly (not processedBoard) to ensure no tiles are included
       await this.updateProfileMetadataOnly(newBoard);
-      
+
       // Show success notification
       if (showNotification && intl) {
         const message = newBoard.isPublic
           ? intl.formatMessage({
-              id: 'cboard.components.BoardShare.boardPublished',
-              defaultMessage: 'Board published successfully! It will now appear in the Public Boards tab.'
-            })
+            id: 'cboard.components.BoardShare.boardPublished',
+            defaultMessage: 'Board published successfully! It will now appear in the Public Boards tab.'
+          })
           : intl.formatMessage({
-              id: 'cboard.components.BoardShare.boardUnpublished',
-              defaultMessage: 'Board unpublished successfully. It will no longer appear in the Public Boards tab.'
-            });
+            id: 'cboard.components.BoardShare.boardUnpublished',
+            defaultMessage: 'Board unpublished successfully. It will no longer appear in the Public Boards tab.'
+          });
         showNotification(message, 'success');
       }
-      
+
       // Trigger event to refresh public boards list if CommunicatorDialog is open
-      const eventDetail = { 
-        boardId: board.id, 
+      const eventDetail = {
+        boardId: board.id,
         boardName: board.name,
         profileId: board.profileId || board.id
       };
-      
+
       if (newBoard.isPublic) {
         console.log('[publishBoard] Dispatching boardPublished event:', eventDetail);
         window.dispatchEvent(new CustomEvent('boardPublished', {
@@ -2502,13 +2517,13 @@ export class BoardContainer extends Component {
       }
     } catch (error) {
       console.error('Generate QR code error:', error);
-      const errorMessage = error.response?.data?.data?.message || 
-                          error.response?.data?.message || 
-                          error.message ||
-                          this.props.intl.formatMessage({
-                            id: 'cboard.components.Settings.Transfer.error',
-                            defaultMessage: 'An error occurred'
-                          });
+      const errorMessage = error.response?.data?.data?.message ||
+        error.response?.data?.message ||
+        error.message ||
+        this.props.intl.formatMessage({
+          id: 'cboard.components.Settings.Transfer.error',
+          defaultMessage: 'An error occurred'
+        });
       this.props.showNotification(errorMessage, 'error');
       throw new Error(errorMessage);
     }
@@ -2529,10 +2544,10 @@ export class BoardContainer extends Component {
       console.error('Generate cloud code error:', error);
       throw new Error(
         error.response?.data?.error ||
-          this.props.intl.formatMessage({
-            id: 'cboard.components.Settings.Transfer.error',
-            defaultMessage: 'An error occurred'
-          })
+        this.props.intl.formatMessage({
+          id: 'cboard.components.Settings.Transfer.error',
+          defaultMessage: 'An error occurred'
+        })
       );
     }
   };
@@ -2552,10 +2567,10 @@ export class BoardContainer extends Component {
       console.error('Generate email transfer error:', error);
       throw new Error(
         error.response?.data?.error ||
-          this.props.intl.formatMessage({
-            id: 'cboard.components.Settings.Transfer.error',
-            defaultMessage: 'An error occurred'
-          })
+        this.props.intl.formatMessage({
+          id: 'cboard.components.Settings.Transfer.error',
+          defaultMessage: 'An error occurred'
+        })
       );
     }
   };
@@ -2607,13 +2622,13 @@ export class BoardContainer extends Component {
       }
     } catch (error) {
       console.error('Redeem code error:', error);
-      const errorMessage = error.response?.data?.data?.message || 
-                          error.response?.data?.message || 
-                          error.message ||
-                          this.props.intl.formatMessage({
-                            id: 'cboard.components.Settings.Transfer.invalidCode',
-                            defaultMessage: 'Invalid or expired code'
-                          });
+      const errorMessage = error.response?.data?.data?.message ||
+        error.response?.data?.message ||
+        error.message ||
+        this.props.intl.formatMessage({
+          id: 'cboard.components.Settings.Transfer.invalidCode',
+          defaultMessage: 'Invalid or expired code'
+        });
       this.props.showNotification(errorMessage, 'error');
       throw new Error(errorMessage);
     }
@@ -2754,12 +2769,12 @@ export class BoardContainer extends Component {
   selectedTiles = () => {
     return this.state.selectedTileIds
       ? this.state.selectedTileIds.map(selectedTileId => {
-          const tiles = this.props.board.tiles.filter(tile => {
-            return tile.id === selectedTileId;
-          })[0];
+        const tiles = this.props.board.tiles.filter(tile => {
+          return tile.id === selectedTileId;
+        })[0];
 
-          return tiles;
-        })
+        return tiles;
+      })
       : [];
   };
 
@@ -2796,12 +2811,12 @@ export class BoardContainer extends Component {
     const disableBackButton = navHistory.length === 1;
     const editingTiles = this.state.tileEditorOpen
       ? this.state.selectedTileIds.map(selectedTileId => {
-          const tiles = board.tiles.filter(tile => {
-            return tile.id === selectedTileId;
-          })[0];
+        const tiles = board.tiles.filter(tile => {
+          return tile.id === selectedTileId;
+        })[0];
 
-          return tiles;
-        })
+        return tiles;
+      })
       : [];
 
     return (
@@ -2821,6 +2836,7 @@ export class BoardContainer extends Component {
           isRootBoardTourEnabled={this.props.isRootBoardTourEnabled}
           isSymbolSearchTourEnabled={this.props.isSymbolSearchTourEnabled}
           isUnlockedTourEnabled={this.props.isUnlockedTourEnabled}
+          audioGuideMode={this.state.audioGuideMode}
           //updateBoard={this.handleUpdateBoard}
           onAddClick={this.handleAddClick}
           onDeleteClick={this.handleDeleteClick}
@@ -2839,9 +2855,13 @@ export class BoardContainer extends Component {
           onBoardTypeChange={this.handleBoardTypeChange}
           editBoardTitle={this.handleEditBoardTitle}
           selectedTileIds={this.state.selectedTileIds}
-          onJyutpingKeyboardClick={() =>
-            this.setState({ isJyutpingKeyboardOpen: true })
-          }
+          onJyutpingKeyboardClick={() => {
+            const newEnabledState = !this.state.isJyutpingEnabled;
+            this.setState({
+              isJyutpingEnabled: newEnabledState,
+              isJyutpingKeyboardOpen: newEnabledState
+            });
+          }}
           onJyutpingRulesClick={() =>
             this.setState({ isJyutpingRulesConfigOpen: true })
           }
@@ -2873,6 +2893,7 @@ export class BoardContainer extends Component {
           improvedPhrase={improvedPhrase}
           speak={speak}
           onSwitchBoard={this.handleSwitchBoard}
+          isJyutpingEnabled={this.state.isJyutpingEnabled}
         />
         <Dialog
           open={!!this.state.copyPublicBoard && !isPremiumRequiredModalOpen}
@@ -2979,7 +3000,7 @@ export class BoardContainer extends Component {
         />
         <JyutpingKeyboard
           open={this.state.isJyutpingKeyboardOpen}
-          onClose={() => this.setState({ isJyutpingKeyboardOpen: false })}
+          onClose={() => this.setState({ isJyutpingKeyboardOpen: false, isJyutpingEnabled: false })}
         />
         <JyutpingRulesConfig
           open={this.state.isJyutpingRulesConfigOpen || false}
@@ -2992,17 +3013,31 @@ export class BoardContainer extends Component {
   }
 
   getCurrentProfileUserId = () => {
-    // Get user_id from current profile
-    // If board has profileId, get profile's user_id
+    console.log('[DEBUG] getCurrentProfileUserId called');
+    console.log('[DEBUG] userData:', this.props.userData);
+    console.log('[DEBUG] board:', this.props.board);
+    console.log('[DEBUG] profiles:', this.state.profiles);
+
+    // Always return current user's id from Redux state first
+    const currentUserId = this.props.userData?.id;
+    if (currentUserId) {
+      console.log('[DEBUG] Returning current user ID from Redux:', currentUserId);
+      return parseInt(currentUserId, 10);
+    }
+
+    // Fallback: Get user_id from current profile if available
     const { board } = this.props;
     if (board && board.profileId) {
       const profile = this.state.profiles?.find(p => String(p.id) === String(board.profileId));
       const userId = profile?.user_id;
-      return userId ? parseInt(userId, 10) : null;
+      if (userId) {
+        console.log('[DEBUG] Returning user ID from profile:', userId);
+        return parseInt(userId, 10);
+      }
     }
-    // If no profile, return current user's id (for teacher/therapist managing their own rules)
-    const userId = this.props.userData?.id;
-    return userId ? parseInt(userId, 10) : null;
+
+    console.log('[DEBUG] No user ID found, returning null');
+    return null;
   };
 
   getCurrentProfileId = () => {
@@ -3012,13 +3047,13 @@ export class BoardContainer extends Component {
 
   componentWillUnmount() {
     this._isMounted = false;
-    
+
     // Cleanup window focus listener
     if (this._windowFocusHandler) {
       window.removeEventListener('focus', this._windowFocusHandler);
       this._windowFocusHandler = null;
     }
-    
+
     // Cleanup swipe and long-press listeners
     if (this.swipeCleanup) {
       this.swipeCleanup();
@@ -3026,7 +3061,7 @@ export class BoardContainer extends Component {
     if (this.longPressCleanup) {
       this.longPressCleanup();
     }
-    
+
     // Cleanup eye tracking
     if (this.eyeTrackingInstance) {
       this.eyeTrackingInstance.cleanup();
@@ -3035,7 +3070,7 @@ export class BoardContainer extends Component {
 
   setupSwipeDetection = () => {
     const { navigationSettings } = this.props;
-    
+
     // Check if swipe navigation is enabled
     if (!navigationSettings?.swipeEnabled) {
       return;
@@ -3095,7 +3130,7 @@ export class BoardContainer extends Component {
 
   handleSwipe = (startX, startY, endX, endY) => {
     const { navigationSettings } = this.props;
-    
+
     if (!navigationSettings?.swipeEnabled) {
       return;
     }
@@ -3110,7 +3145,7 @@ export class BoardContainer extends Component {
         // Swipe right - go to previous board
         this.onRequestPreviousBoard();
       }
-      
+
       // Log swipe action
       this.logSwipeAction(deltaX > 0 ? 'right' : 'left');
     }
@@ -3134,19 +3169,19 @@ export class BoardContainer extends Component {
   setupEyeTracking = async () => {
     console.log('[BoardContainer] ===== setupEyeTracking called =====');
     try {
-      // Cleanup existing instance first
+      // Always cleanup existing instance first to ensure camera is stopped
       if (this.eyeTrackingInstance) {
         console.log('[BoardContainer] Cleaning up existing eye tracking instance...');
-        this.eyeTrackingInstance.cleanup();
+        await this.eyeTrackingInstance.cleanup();
         this.eyeTrackingInstance = null;
       }
-      
+
       // Load eye tracking settings
       console.log('[BoardContainer] Loading eye tracking settings from API...');
       let eyeTrackingSettings = { enabled: false, deviceType: 'tobii', dwellTime: 1000 };
-      
+
       try {
-      const settings = await API.getSettings();
+        const settings = await API.getSettings();
         eyeTrackingSettings = settings.eyeTracking || { enabled: false, deviceType: 'tobii', dwellTime: 1000 };
         console.log('[BoardContainer] Eye tracking settings loaded:', eyeTrackingSettings);
       } catch (error) {
@@ -3160,18 +3195,19 @@ export class BoardContainer extends Component {
           eyeTrackingSettings = { enabled: false, deviceType: 'tobii', dwellTime: 1000 };
         }
       }
-      
+
       if (!eyeTrackingSettings.enabled) {
-        console.log('[BoardContainer] Eye tracking is disabled in settings');
+        console.log('[BoardContainer] Eye tracking is disabled in settings - ensuring camera is stopped');
+        // Cleanup was already done above, just return
         return;
       }
-      
+
       console.log('[BoardContainer] Setting up eye tracking with device type:', eyeTrackingSettings.deviceType);
-      
+
       // Get eye tracking instance
       this.eyeTrackingInstance = getEyeTrackingInstance();
       console.log('[BoardContainer] Eye tracking instance obtained');
-      
+
       // Initialize with settings and callback
       console.log('[BoardContainer] Calling initialize() on eye tracking instance...');
       console.log('[BoardContainer] Eye tracking settings being passed:', JSON.stringify(eyeTrackingSettings));
@@ -3185,10 +3221,10 @@ export class BoardContainer extends Component {
         settingsToPass,
         this.handleEyeTrackingDwell.bind(this)
       );
-      
+
       // Setup eye-tracking driven scanning if scanning is enabled
       await this.setupEyeTrackingScanning();
-      
+
       console.log('[BoardContainer] ✓ Eye tracking initialized successfully');
     } catch (error) {
       console.error('[BoardContainer] ❌ Error in setupEyeTracking:', error);
@@ -3197,7 +3233,7 @@ export class BoardContainer extends Component {
         message: error?.message,
         stack: error?.stack?.substring(0, 500)
       });
-      
+
       // Suppress error logging for expected network errors
       const isNetworkError = error?.code === 'ERR_NETWORK' || error?.message === 'Network Error';
       if (!isNetworkError || navigator.onLine) {
@@ -3222,11 +3258,19 @@ export class BoardContainer extends Component {
       // Get scanning/accessibility settings
       const accessibilityData = await API.getAccessibilitySettings();
       const scanningSettings = accessibilityData?.accessibility?.scanning || {};
-      
-      if (scanningSettings.enabled) {
+
+      console.log('[BoardContainer] Scanning settings check:', {
+        enabled: scanningSettings.enabled,
+        strategy: scanningSettings.strategy,
+        mode: scanningSettings.mode
+      });
+
+      if (scanningSettings.enabled && scanningSettings.enabled !== false && scanningSettings.enabled !== 'false') {
+        console.log('[BoardContainer] Setting up eye-tracking scanning (enabled)');
+
         const { board, communicator } = this.props;
         const tiles = board?.tiles || [];
-        
+
         // Get scanning navigation data if needed (for row/column modes)
         let navigationData = null;
         const profileId = communicator?.activeCommunicatorId || null;
@@ -3245,14 +3289,14 @@ export class BoardContainer extends Component {
 
         // Setup scanning with callbacks
         // Include strategy from scannerSettings (Redux) for backward compatibility
-        const scanningStrategy = scanningSettings.strategy || 
-                                 this.props.scannerSettings?.strategy || 
-                                 'automatic';
+        const scanningStrategy = scanningSettings.strategy ||
+          this.props.scannerSettings?.strategy ||
+          'automatic';
         const scanningSettingsWithStrategy = {
           ...scanningSettings,
           strategy: scanningStrategy
         };
-        
+
         this.eyeTrackingInstance.setupScanning(
           scanningSettingsWithStrategy,
           tiles,
@@ -3260,10 +3304,11 @@ export class BoardContainer extends Component {
           this.handleScanningHighlight.bind(this),
           this.handleScanningSelect.bind(this)
         );
-        
+
         console.log('[BoardContainer] ✓ Eye-tracking scanning setup complete');
       } else {
-        // Disable scanning
+        console.log('[BoardContainer] Scanning disabled - not setting up eye-tracking scanning');
+        // Explicitly disable scanning
         this.eyeTrackingInstance.updateScanningSettings({ enabled: false });
       }
     } catch (error) {
@@ -3277,92 +3322,158 @@ export class BoardContainer extends Component {
   handleScanningHighlight = (elementId, element) => {
     // Trigger audio feedback when highlight changes
     const { audioGuideMode, board } = this.state;
-    
+
     if (!audioGuideMode || audioGuideMode === 'off') {
       return;
     }
 
-    // Use a small delay to avoid too frequent audio triggers
+    // Clear any existing timeout to ensure immediate response
     if (this._highlightAudioTimeout) {
       clearTimeout(this._highlightAudioTimeout);
     }
 
+    // For smoother audio feedback, use a very short delay (50ms instead of 100ms)
+    // This provides better responsiveness during scanning transitions
     this._highlightAudioTimeout = setTimeout(() => {
+      // Always play audio feedback during scanning transitions
+      // Row/column changes and card changes should both trigger feedback
+
       if (audioGuideMode === 'beep') {
+        // Play smooth beep for all scanning transitions
         this.playScanningBeep();
       } else if (audioGuideMode === 'card_audio') {
-        // Check if it's a tile (not output bar element)
+        // Try to play card sound for tile elements, beep for others
         if (!elementId.startsWith('output-') && board && Array.isArray(board.tiles)) {
           const tile = board.tiles.find(t => t && String(t.id) === String(elementId));
           if (tile) {
-            this.playScanningTileAudio(tile);
+            // Try to play tile sound, fallback to beep if it fails
+            this.playScanningTileAudio(tile).catch(() => {
+              // Fallback to smooth beep if tile audio fails
+              this.playScanningBeep();
+            });
+          } else {
+            // Row/column scanning or unknown element - use beep
+            this.playScanningBeep();
           }
         } else {
-          // For output bar elements, just play beep
+          // Output bar elements or other non-tile elements - use beep
           this.playScanningBeep();
         }
       }
-    }, 100); // Small delay to debounce rapid highlight changes
+    }, 50); // Reduced delay for more responsive feedback
   };
 
   /**
-   * Play beep sound for scanning highlight
+   * Play beep sound for scanning highlight - smooth and responsive
    */
   playScanningBeep = () => {
     try {
       const AudioContextImpl = window.AudioContext || window.webkitAudioContext || null;
       if (!AudioContextImpl) {
+        console.warn('[BoardContainer] Web Audio API not available, skipping beep');
         return;
       }
+
       const ctx = new AudioContextImpl();
       const oscillator = ctx.createOscillator();
       const gainNode = ctx.createGain();
 
-      oscillator.type = 'sine';
-      oscillator.frequency.setValueAtTime(880, ctx.currentTime); // A5 tone
+      // Use triangle wave for smoother sound
+      oscillator.type = 'triangle';
+      oscillator.frequency.setValueAtTime(1000, ctx.currentTime); // Higher frequency for clearer sound
 
-      gainNode.gain.setValueAtTime(0.001, ctx.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + 0.01);
-      gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+      // Smooth envelope for better audio quality
+      const now = ctx.currentTime;
+      gainNode.gain.setValueAtTime(0, now);
+      gainNode.gain.linearRampToValueAtTime(0.3, now + 0.005); // Quick attack
+      gainNode.gain.setValueAtTime(0.3, now + 0.08); // Sustain
+      gainNode.gain.linearRampToValueAtTime(0, now + 0.12); // Quick release
 
       oscillator.connect(gainNode);
       gainNode.connect(ctx.destination);
 
-      oscillator.start();
-      oscillator.stop(ctx.currentTime + 0.18);
+      const duration = 0.12;
+      oscillator.start(now);
+      oscillator.stop(now + duration);
 
+      // Clean up context after sound ends
       oscillator.onended = () => {
         try {
-          ctx.close();
+          if (ctx.state !== 'closed') {
+            ctx.close();
+          }
         } catch (e) {
-          // ignore
+          // ignore cleanup errors
         }
       };
+
+      // Fallback cleanup in case onended doesn't fire
+      setTimeout(() => {
+        try {
+          if (ctx.state !== 'closed') {
+            ctx.close();
+          }
+        } catch (e) {
+          // ignore cleanup errors
+        }
+      }, duration * 1000 + 100);
+
     } catch (e) {
-      // Fallback: do nothing if Web Audio is unavailable
+      console.warn('[BoardContainer] Error playing beep sound:', e.message);
+      // Fallback: do nothing if Web Audio fails
     }
   };
 
   /**
-   * Play tile audio for scanning highlight
+   * Play tile audio for scanning highlight - always use speech to read card/folder tag/keyword
    */
   playScanningTileAudio = (tile) => {
-    // Prefer recorded sound if available
-    if (tile.sound) {
-      try {
-        const audio = new Audio(tile.sound);
-        audio.play().catch(() => {
-          // Ignore playback errors (e.g., user gesture required)
-        });
-        return;
-      } catch (e) {
-        // Fallback to speech if audio fails
-      }
+    console.log('[BoardContainer] Reading card/folder for scanning:', tile.label, 'type:', tile.type);
+
+    // Always use speech synthesis to read the card/folder tag/keyword
+    // This provides consistent audio feedback for scanning
+    this.speakTileLabel(tile);
+  };
+
+  /**
+   * Speak the tile's label/tag/keyword using speech synthesis
+   */
+  speakTileLabel = (tile) => {
+    if (!tile || (!tile.label && !tile.labelKey)) {
+      console.warn('[BoardContainer] No label available for tile speech');
+      return;
     }
 
-    // Fallback to speech if no sound available
+    // Get the display label (resolve internationalization if needed)
+    const displayLabel = tile.label || tile.labelKey || 'Unknown';
+
+    console.log('[BoardContainer] Speaking tile label:', displayLabel);
+
+    try {
+      if (this.props.speak) {
+        // Use the speech synthesis with the resolved label
+        this.props.speak(displayLabel);
+      } else {
+        console.warn('[BoardContainer] Speech synthesis not available');
+      }
+    } catch (e) {
+      console.warn('[BoardContainer] Error speaking tile label:', e);
+    }
+  };
+
+  /**
+   * Fallback to speech synthesis for tile audio
+   */
+  fallbackToSpeech = (tile) => {
     if (tile.label && this.props.speak) {
-      this.props.speak(tile.label);
+      console.log('[BoardContainer] Using speech synthesis for:', tile.label);
+      try {
+        this.props.speak(tile.label);
+      } catch (e) {
+        console.warn('[BoardContainer] Speech synthesis failed:', e);
+      }
+    } else {
+      console.warn('[BoardContainer] No speech available for tile');
     }
   };
 
@@ -3417,7 +3528,7 @@ export class BoardContainer extends Component {
       }
       return;
     }
-    
+
     // Handle regular tile selection
     const { board } = this.props;
     if (!board || !board.tiles) {
@@ -3454,7 +3565,7 @@ export class BoardContainer extends Component {
     if (!tile) {
       return;
     }
-    
+
     // Trigger tile click
     this.handleTileClick(tile);
   };
@@ -3467,7 +3578,7 @@ export class BoardContainer extends Component {
       const tile = e.target.closest('.Tile');
       if (!tile) return;
       const tileId = tile.dataset.tileId || tile.id;
-      
+
       pressTimer = setTimeout(() => {
         this.handleLongPress(e, tile, tileId);
       }, longPressThreshold);
@@ -3550,17 +3661,17 @@ const mapStateToProps = ({
     // Convert both to string for comparison (profile id might be number)
     return String(board.id) === String(activeBoardId);
   });
-  
+
   // Ensure board.id is string and board.tiles exists
   const normalizedBoard = activeBoard ? {
     ...activeBoard,
     id: String(activeBoard.id),
     tiles: activeBoard.tiles || []
   } : null;
-  
+
   // Convert navHistory ids to strings (profile ids might be numbers)
   const normalizedNavHistory = (board.navHistory || []).map(id => String(id));
-  
+
   return {
     communicator: currentCommunicator,
     board: normalizedBoard,
@@ -3625,4 +3736,3 @@ export default connect(
   mapStateToProps,
   mapDispatchToProps
 )(injectIntl(BoardContainer));
-

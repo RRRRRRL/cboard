@@ -84,7 +84,7 @@ class Scanning extends React.Component {
       active: oldSettings.active || scanning.enabled || false,
       delay: oldSettings.delay || scanning.speed * 1000 || 2000, // Convert seconds to ms
       strategy: oldSettings.strategy || SCANNING_METHOD_AUTOMATIC,
-      
+
       // Sprint 5 new settings
       enabled: scanning.enabled !== undefined ? scanning.enabled : (oldSettings.active || false),
       mode: scanning.mode || SCANNING_MODE_SINGLE,
@@ -147,6 +147,7 @@ class Scanning extends React.Component {
       scanning: scanningSettings,
       audio_guide: this.state.audio_guide
     };
+    console.log('[Scanning] saving audio_guide:', this.state.audio_guide);
 
     this.props.updateScannerSettings(accessibilitySettings, {
       // Legacy format for backward compatibility

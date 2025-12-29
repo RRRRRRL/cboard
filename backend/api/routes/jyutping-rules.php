@@ -94,7 +94,7 @@ function handleJyutpingRulesRoutes($method, $pathParts, $data, $authToken) {
     // PUT /jyutping-rules/matching/{userId} - Update matching rules for a student
     if ($method === 'PUT' && count($pathParts) === 3 && $pathParts[1] === 'matching') {
         $userId = (int)$pathParts[2];
-        
+        error_log('Matching rules PUT payload: ' . json_encode($data));
         try {
             // Verify student exists
             $stmt = $db->prepare("SELECT id, role FROM users WHERE id = ?");
@@ -195,24 +195,32 @@ function handleJyutpingRulesRoutes($method, $pathParts, $data, $authToken) {
                 // Create new rule
                 $sql = "INSERT INTO jyutping_matching_rules 
                         (user_id, profile_id, frequency_threshold, allow_exact_match, allow_substring_match, 
-                         allow_single_char_match, require_ai_correction, ai_confidence_threshold, enabled, created_by,
-                         merge_n_ng_finals, allow_coda_simplification, ignore_tones, allow_fuzzy_tones,
-                         fuzzy_tone_pairs, allow_ng_zero_confusion, allow_n_l_confusion)
+                        allow_single_char_match, require_ai_correction, ai_confidence_threshold, enabled, created_by,
+                        merge_n_ng_finals, allow_coda_simplification, ignore_tones, allow_fuzzy_tones,
+                        fuzzy_tone_pairs, allow_ng_zero_confusion, allow_n_l_confusion)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
                 $stmt = $db->prepare($sql);
                 $stmt->execute([
                     $userId,
                     $profileId,
                     isset($data['frequency_threshold']) ? (int)$data['frequency_threshold'] : 50,
-                    isset($data['allow_exact_match']) ? (int)$data['allow_exact_match'] : 1,
-                    isset($data['allow_substring_match']) ? (int)$data['allow_substring_match'] : 1,
-                    isset($data['allow_single_char_match']) ? (int)$data['allow_single_char_match'] : 1,
-                    isset($data['require_ai_correction']) ? (int)$data['require_ai_correction'] : 0,
+                    isset($data['allow_exact_match']) ? (int)!empty($data['allow_exact_match']) : 1,
+                    isset($data['allow_substring_match']) ? (int)!empty($data['allow_substring_match']) : 1,
+                    isset($data['allow_single_char_match']) ? (int)!empty($data['allow_single_char_match']) : 1,
+                    isset($data['require_ai_correction']) ? (int)!empty($data['require_ai_correction']) : 0,
                     isset($data['ai_confidence_threshold']) ? (float)$data['ai_confidence_threshold'] : 0.50,
-                    isset($data['enabled']) ? (int)$data['enabled'] : 1,
-                    $user['id']
+                    isset($data['enabled']) ? (int)!empty($data['enabled']) : 1,
+                    $user['id'],
+                    isset($data['merge_n_ng_finals']) ? (int)!empty($data['merge_n_ng_finals']) : 0,
+                    isset($data['allow_coda_simplification']) ? (int)!empty($data['allow_coda_simplification']) : 0,
+                    isset($data['ignore_tones']) ? (int)!empty($data['ignore_tones']) : 0,
+                    isset($data['allow_fuzzy_tones']) ? (int)!empty($data['allow_fuzzy_tones']) : 0,
+                    array_key_exists('fuzzy_tone_pairs', $data) ? $data['fuzzy_tone_pairs'] : null,
+                    isset($data['allow_ng_zero_confusion']) ? (int)!empty($data['allow_ng_zero_confusion']) : 0,
+                    isset($data['allow_n_l_confusion']) ? (int)!empty($data['allow_n_l_confusion']) : 0,
                 ]);
             }
+
             
             return successResponse(['message' => 'Matching rules updated successfully']);
             

@@ -108,7 +108,8 @@ export class Navbar extends React.Component {
       onDeactivateScannerClick,
       onLockClick,
       onLockNotify,
-      onJyutpingKeyboardClick
+    onJyutpingKeyboardClick,
+    isJyutpingEnabled
     } = this.props;
 
     const isPublic = board && board.isPublic;
@@ -184,7 +185,7 @@ export class Navbar extends React.Component {
                 }}
                 disabled={false}
                 title={intl.formatMessage(messages.jyutpingKeyboard)}
-                style={{ color: '#fff' }}
+                style={{ color: isJyutpingEnabled ? '#4caf50' : '#fff' }}
               >
                 <KeyboardIcon />
               </IconButton>
@@ -237,7 +238,8 @@ Navbar.propTypes = {
   onGenerateEmail: PropTypes.func,
   onRedeemCode: PropTypes.func,
   onJyutpingKeyboardClick: PropTypes.func,
-  showNotification: PropTypes.func
+  showNotification: PropTypes.func,
+  isJyutpingEnabled: PropTypes.bool
 };
 
 export default withRouter(injectIntl(Navbar));

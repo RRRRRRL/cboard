@@ -1,5 +1,6 @@
 export const SCANNING_METHOD_AUTOMATIC = 'automatic';
 export const SCANNING_METHOD_MANUAL = 'manual';
+export const SCANNING_METHOD_EYE_TRACKING = 'eye_tracking';
 
 // Sprint 5: Scanning modes
 export const SCANNING_MODE_SINGLE = 'single';

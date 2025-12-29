@@ -73,7 +73,7 @@ class JyutpingKeyboard extends Component {
     this.handleResize(); // Initial check
     // Load common words when interface opens
     this.loadCommonWords();
-    
+
     // Load voices when component mounts (voices may not be available immediately)
     if ('speechSynthesis' in window) {
       // Some browsers need voices to be loaded
@@ -96,7 +96,7 @@ class JyutpingKeyboard extends Component {
           .filter(s => s.frequency && s.frequency > 0)
           .sort((a, b) => (b.frequency || 0) - (a.frequency || 0))
           .slice(0, 15);
-        
+
         // Remove duplicates
         const uniqueWords = [];
         const seen = new Set();
@@ -107,7 +107,7 @@ class JyutpingKeyboard extends Component {
             uniqueWords.push(word);
           }
         }
-        
+
         this.setState({ suggestions: uniqueWords });
       }
     } catch (error) {
@@ -136,19 +136,19 @@ class JyutpingKeyboard extends Component {
   resolveSpeechProfile = profileKey => {
     // Get available voices from browser
     const voices = window.speechSynthesis?.getVoices() || [];
-    
+
     // Find Cantonese/Hong Kong voices - prioritize different voices
-    const cantoneseVoices = voices.filter(v => 
-      v.lang.toLowerCase().includes('hk') || 
+    const cantoneseVoices = voices.filter(v =>
+      v.lang.toLowerCase().includes('hk') ||
       v.lang.toLowerCase().includes('zh') ||
       v.name.toLowerCase().includes('cantonese') ||
       v.name.toLowerCase().includes('hong kong')
     );
-    
+
     // Try to find distinct voices by name (some browsers have multiple HK voices)
     // Sort by name to get consistent ordering
     const sortedVoices = [...cantoneseVoices].sort((a, b) => a.name.localeCompare(b.name));
-    
+
     // Get unique voices (by name) to ensure different voices for each profile
     const uniqueVoices = [];
     const seenNames = new Set();
@@ -158,29 +158,29 @@ class JyutpingKeyboard extends Component {
         uniqueVoices.push(voice);
       }
     }
-    
+
     // If we have multiple unique voices, use them; otherwise use pitch to differentiate
     const voice1 = uniqueVoices[0] || cantoneseVoices[0];
     const voice2 = uniqueVoices[1] || uniqueVoices[0] || cantoneseVoices[0];
     const voice3 = uniqueVoices[2] || uniqueVoices[1] || uniqueVoices[0] || cantoneseVoices[0];
-    
+
     const PROFILES = {
-      cantonese_1: { 
-        lang: 'zh-HK', 
+      cantonese_1: {
+        lang: 'zh-HK',
         pitch: 1.0,
         voiceURI: voice1?.voiceURI || null,
         voiceName: voice1?.name || null,
         voice: voice1 || null
       },
-      cantonese_2: { 
-        lang: 'zh-HK', 
+      cantonese_2: {
+        lang: 'zh-HK',
         pitch: 0.8, // Lower pitch for different voice
         voiceURI: voice2?.voiceURI || null,
         voiceName: voice2?.name || null,
         voice: voice2 || null
       },
-      cantonese_3: { 
-        lang: 'zh-HK', 
+      cantonese_3: {
+        lang: 'zh-HK',
         pitch: 1.2, // Higher pitch for different voice
         voiceURI: voice3?.voiceURI || null,
         voiceName: voice3?.name || null,
@@ -203,16 +203,16 @@ class JyutpingKeyboard extends Component {
 
     // Validate input with strict matching rules
     const validation = validateJyutpingInput(newInput);
-    
+
     if (!validation.isValid) {
-      this.setState({ 
+      this.setState({
         validationError: validation.error,
         jyutpingInput: newInput // Still allow typing, but show error
       });
       return;
     }
 
-    this.setState({ 
+    this.setState({
       jyutpingInput: newInput,
       validationError: null
     });
@@ -241,10 +241,16 @@ class JyutpingKeyboard extends Component {
       // First, try exact / strict match search
       const response = await API.searchJyutping(code);
       console.log('Jyutping search response:', response);
-      
+      const rules = response.rules || {}; // new
+
       // API returns {code, matches, match_type} format
       const matches = response.matches || [];
       const matchType = response.match_type || '';
+
+      const variantsUsed = Array.isArray(response.variants_used)
+        ? response.variants_used
+        : [code];
+
 
       if (matches && matches.length > 0) {
         // Filter out matches without valid hanzi/word
@@ -256,37 +262,134 @@ class JyutpingKeyboard extends Component {
         // Determine if we should apply strict matching
         // Strict matching: only show exact syllable matches (e.g., "baa" only shows "baa", not "baai")
         // Apply strict matching only if we have exact matches (match_type === 'exact' or 'tone_variant')
-        
-        const baseInput = removeTone((code || '').toLowerCase().trim());
-        const EQUIVALENT_SYLLABLES = {
+        // Normalize phonological variants for strict matching to mirror backend rules
+
+        // Normalization functions to mirror backend phonological rules
+        const normalizeNngFinal = base => {
+          // Match something like [letters] + (an|ang) at the end
+          const m = base.match(/^([a-z]+)(an|ang)$/);
+          if (!m) return base;
+          const stem = m[1];
+          // We normalize to 'an' as canonical (backend does the same)
+          return stem + 'an';
+        };
+
+        const normalizeTkFinal = base => {
+          // Match something like [letters] + (at|ak) at the end
+          const m = base.match(/^([a-z]+)(at|ak)$/);
+          if (!m) return base;
+          const stem = m[1];
+          // We normalize to 'at' as canonical (backend does the same)
+          return stem + 'at';
+        };
+
+        const normalizeNlInitial = base => {
+          // Match something like (n|l) + [letters] at the start
+          const m = base.match(/^(n|l)(.+)$/);
+          if (!m) return base;
+          const rest = m[2];
+          // We normalize to 'n' as canonical (backend does the same)
+          return 'n' + rest;
+        };
+
+        const normalizeNgZeroInitial = base => {
+          // Match something like ng[letters] or just [letters] (zero initial)
+          if (base.startsWith('ng')) {
+            // Remove 'ng' prefix to normalize to zero initial
+            return base.substring(2);
+          }
+          // For zero initial words, add 'ng' prefix for comparison
+          // But since we're normalizing for strict matching, we need to check both forms
+          return base; // Keep as-is for now, handle in comparison logic
+        };
+
+        // Get phonological rules from backend response
+        const rules = response.rules || {};
+
+        // Create normalization function that applies all enabled rules
+        const normalizeBase = base => {
+          let b = base;
+
+          if (rules.merge_n_ng_finals) {
+            b = normalizeNngFinal(b);
+          }
+          if (rules.allow_coda_simplification) {
+            b = normalizeTkFinal(b);
+          }
+          if (rules.allow_n_l_confusion) {
+            b = normalizeNlInitial(b);
+          }
+          if (rules.allow_ng_zero_confusion) {
+            b = normalizeNgZeroInitial(b);
+          }
+
+          return b;
+        };
+
+        const baseInputRaw = removeTone((code || '').toLowerCase().trim());
+
+        // Existing hard-coded equivalence (lei/nei) if you still want it
+        const STATIC_EQUIV = {
           lei: ['nei'],
           nei: ['lei']
         };
+
+        // Start with baseInputRaw and static equivalents
         const allowedBases = new Set([
-          baseInput,
-          ...(EQUIVALENT_SYLLABLES[baseInput] || [])
+          baseInputRaw,
+          ...(STATIC_EQUIV[baseInputRaw] || [])
         ]);
 
-        // Check if we have exact matches for the base syllable
+        // Apply phonological normalization to input and allowed bases
+        const normalizedInputBase = normalizeBase(baseInputRaw);
+        const normalizedAllowedBases = new Set([
+          normalizedInputBase,
+          ...Array.from(allowedBases).map(b => normalizeBase(b))
+        ]);
+
+        // For ng/zero confusion, we need to check both forms
+        if (rules.allow_ng_zero_confusion) {
+          if (baseInputRaw.startsWith('ng')) {
+            normalizedAllowedBases.add(baseInputRaw.substring(2)); // ngaa -> aa
+          } else {
+            normalizedAllowedBases.add('ng' + baseInputRaw); // aa -> ngaa
+          }
+        }
+
+        const variantsSet = new Set(
+          variantsUsed.map(v => removeTone((v || '').toLowerCase().trim()))
+        );
+
         const hasExactMatches = validMatches.some(m => {
           const jy = (m.jyutping_code || m.jyutping || '').toLowerCase().trim();
           if (!jy) return false;
           const base = removeTone(jy);
-          return allowedBases.has(base);
+          const normBase = normalizeBase(base);
+
+          // Treat all variants as equivalent bases
+          if (variantsSet.has(base) || variantsSet.has(normBase)) return true;
+
+          return normalizedAllowedBases.has(normBase) || normalizedAllowedBases.has(base);
         });
 
+
         let filteredMatches;
-        
+
         if (hasExactMatches && (matchType === 'exact' || matchType === 'tone_variant')) {
-          // Strict matching: only show exact syllable matches (different tones allowed)
-          // e.g., "baa" shows "baa1", "baa2", "baa3" but NOT "baai"
           filteredMatches = validMatches.filter(m => {
             const jy = (m.jyutping_code || m.jyutping || '').toLowerCase().trim();
             if (!jy) return false;
             const base = removeTone(jy);
+            const normBase = normalizeBase(base);
+
+            if (variantsSet.has(base) || variantsSet.has(normBase)) return true;
+
+            if (normalizedAllowedBases.has(normBase)) return true;
+            if (rules.allow_ng_zero_confusion && normalizedAllowedBases.has(base)) return true;
+
             return allowedBases.has(base);
           });
-          console.log('Strict matching applied, filtered to:', filteredMatches.length);
+          console.log('Strict matching applied with phonological normalization:', filteredMatches.length);
         } else {
           // No exact matches or partial input: show all matches (including partial matches)
           // e.g., "ba" can show "baa", "baai", "baat", etc.
@@ -304,7 +407,7 @@ class JyutpingKeyboard extends Component {
             uniqueMatches.push(match);
           }
         }
-        
+
         // Filter out bad words
         const filteredUniqueMatches = filterBadWords(uniqueMatches);
 
@@ -330,7 +433,7 @@ class JyutpingKeyboard extends Component {
         console.log('No matches from search, trying suggestions API...');
         const suggestionsResponse = await API.getJyutpingSuggestions(code, 15);
         console.log('Suggestions response:', suggestionsResponse);
-        
+
         // API returns {input, suggestions, count} format
         const suggestions = suggestionsResponse.suggestions || [];
 
@@ -356,7 +459,7 @@ class JyutpingKeyboard extends Component {
               uniqueSuggestions.push(suggestion);
             }
           }
-          
+
           // Filter out bad words
           const filteredUniqueSuggestions = filterBadWords(uniqueSuggestions);
 
@@ -383,9 +486,9 @@ class JyutpingKeyboard extends Component {
       console.error('Jyutping search error:', error);
       console.error('Error details:', error.response?.data || error.message);
       // Ensure we clear loading state and show empty suggestions on error
-      this.setState({ 
-        suggestions: [], 
-        isSearching: false 
+      this.setState({
+        suggestions: [],
+        isSearching: false
       });
     }
   };
@@ -404,7 +507,7 @@ class JyutpingKeyboard extends Component {
 
     // Add to text output
     const { textOutput, lastSelectedWord } = this.state;
-    
+
     // Check if the suggestion contains the last selected word
     // If so, only add the part that comes after it
     let textToAdd = hanzi;
@@ -425,7 +528,7 @@ class JyutpingKeyboard extends Component {
         textToAdd = hanzi.substring(lastWord.length);
       }
     }
-    
+
     // Also check if textOutput already ends with part of the suggestion
     // to avoid duplication
     if (textOutput && textOutput.trim()) {
@@ -442,12 +545,12 @@ class JyutpingKeyboard extends Component {
         }
       }
     }
-    
+
     // If nothing left to add, don't add anything
     if (!textToAdd || textToAdd.trim().length === 0) {
       return;
     }
-    
+
     const newText = textOutput + textToAdd;
 
     this.setState({
@@ -529,9 +632,9 @@ class JyutpingKeyboard extends Component {
           newInput = jyutpingInput.slice(0, -1);
         }
       }
-      
+
       this.setState({ jyutpingInput: newInput });
-      
+
       // Immediately search for updated suggestions
       await this.searchJyutping(newInput);
     } else if (textOutput.length > 0) {
@@ -555,20 +658,20 @@ class JyutpingKeyboard extends Component {
 
   handleEnter = async () => {
     const { jyutpingInput, textOutput } = this.state;
-    
+
     // If there's jyutping input, perform strict match and add to output
     if (jyutpingInput && jyutpingInput.trim()) {
       try {
         // Perform strict exact match search
         const response = await API.searchJyutping(jyutpingInput.trim());
         const matches = response.matches || [];
-        
+
         // Filter for exact match only (strict matching)
         const exactMatches = matches.filter(m => {
           const jy = (m.jyutping_code || m.jyutping || '').toLowerCase().trim();
           return jy === jyutpingInput.toLowerCase().trim();
         });
-        
+
         // If exact match found, add the first one to output
         if (exactMatches.length > 0) {
           const match = exactMatches[0];
@@ -580,17 +683,17 @@ class JyutpingKeyboard extends Component {
               jyutpingInput: '', // Clear input
               suggestions: [] // Clear suggestions
             });
-            
+
             // Play audio for the selected character
             await this.playCharacterAudio(hanzi, match.jyutping_code || '');
-            
+
             // Fetch related words based on the UPDATED output box content
             await this.fetchRelatedWords(hanzi, match.jyutping_code || '', newText);
-            
+
             return; // Don't add newline
           }
         }
-        
+
         // If no exact match, clear input but don't add anything
         this.setState({
           jyutpingInput: '',
@@ -627,14 +730,14 @@ class JyutpingKeyboard extends Component {
     }
 
     const disabledKeys = new Set();
-    
+
     // Valid initials (19 only): b, p, m, f, d, t, n, l, g, k, ng, h, gw, kw, w, z, c, s, j
     const VALID_INITIALS = new Set([
       'b', 'p', 'm', 'f', 'd', 't', 'n', 'l',
       'g', 'k', 'ng', 'h', 'gw', 'kw', 'w',
       'z', 'c', 's', 'j'
     ]);
-    
+
     // All possible finals in the keyboard layouts
     // Note: 'm' and 'ng' are also initials, so they should be handled separately
     const ALL_FINALS = [
@@ -682,16 +785,16 @@ class JyutpingKeyboard extends Component {
     const currentInitial = extractInitial(jyutpingInput);
     const inputWithoutTone = removeTone(jyutpingInput);
     const hasInitial = !!currentInitial;
-    
+
     // Check if input already contains a final
     // We need to check if the input (after initial) matches any final
     // Sort finals by length (longest first) to match longer finals first (e.g., "aang" before "aa")
     const sortedFinals = [...ALL_FINALS].sort((a, b) => b.length - a.length);
-    
+
     let hasFinal = false;
     let matchedFinal = null;
     let remainingAfterFinal = '';
-    
+
     if (hasInitial && currentInitial) {
       const afterInitial = inputWithoutTone.substring(currentInitial.length).toLowerCase();
       // Check if what's after initial is a valid final (try longest matches first)
@@ -788,12 +891,12 @@ class JyutpingKeyboard extends Component {
         'g', 'k', 'ng', 'h', 'gw', 'kw', 'w',
         'z', 'c', 's', 'j'
       ];
-      
+
       for (const initial of allPossibleInitials) {
         // Don't disable the current initial or its continuation (for multi-char initials like gw, kw, ng)
-        if (initial !== currentInitial && 
-            !currentInitial.startsWith(initial) && 
-            !initial.startsWith(currentInitial)) {
+        if (initial !== currentInitial &&
+          !currentInitial.startsWith(initial) &&
+          !initial.startsWith(currentInitial)) {
           disabledKeys.add(initial);
         }
       }
@@ -831,7 +934,7 @@ class JyutpingKeyboard extends Component {
         utterance.rate = speechRate;
         utterance.pitch = profile.pitch;
         utterance.volume = 0.7; // Slightly quieter for key feedback
-        
+
         // Set specific voice if available (for different Cantonese voices)
         // Priority: voice object > voiceURI > voiceName
         if (profile.voice) {
@@ -846,7 +949,7 @@ class JyutpingKeyboard extends Component {
             utterance.voice = voice;
           }
         }
-        
+
         // Play audio (non-blocking for key presses)
         window.speechSynthesis.speak(utterance);
       } catch (error) {
@@ -882,7 +985,7 @@ class JyutpingKeyboard extends Component {
         utterance.rate = Math.max(0.5, Math.min(2.0, speechRate));
         utterance.pitch = profile.pitch;
         utterance.volume = 1.0;
-        
+
         // Set specific voice if available (for different Cantonese voices)
         // Priority: voice object > voiceURI > voiceName
         if (profile.voice) {
@@ -897,7 +1000,7 @@ class JyutpingKeyboard extends Component {
             utterance.voice = voice;
           }
         }
-        
+
         // Wait for audio to finish before resolving
         await new Promise((resolve, reject) => {
           utterance.onend = resolve;
@@ -928,17 +1031,17 @@ class JyutpingKeyboard extends Component {
       // The output box is the source of truth for related word suggestions
       const textOutput = currentTextOutput !== null ? currentTextOutput : this.state.textOutput;
       const fullContext = textOutput.trim();
-      
+
       // Debug logging
       console.log('Fetching related words:', { hanzi, jyutping, fullContext });
-      
+
       // Call API with full context for ollama prediction
       // The backend will use the full context to predict logical next words
       // For example: "你想去" -> "邊", "去" -> "學校", "醫院", "屋企"
       const response = await API.getRelatedWords(hanzi, jyutping, fullContext);
-      
+
       console.log('Related words API response:', response);
-      
+
       if (response && response.related_words && response.related_words.length > 0) {
         // Remove duplicates
         const uniqueWords = [];
@@ -972,7 +1075,7 @@ class JyutpingKeyboard extends Component {
       // Play the complete sentence as a whole, not word by word
       if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
-        
+
         const utterance = new SpeechSynthesisUtterance(textOutput);
         const { speechProfile, speechRate } = this.state;
         const profile = this.resolveSpeechProfile(speechProfile);
@@ -980,7 +1083,7 @@ class JyutpingKeyboard extends Component {
         utterance.rate = Math.max(0.5, Math.min(2.0, speechRate));
         utterance.pitch = profile.pitch;
         utterance.volume = 1.0;
-        
+
         // Set specific voice if available (for different Cantonese voices)
         // Priority: voice object > voiceURI > voiceName
         if (profile.voice) {
@@ -995,7 +1098,7 @@ class JyutpingKeyboard extends Component {
             utterance.voice = voice;
           }
         }
-        
+
         // Wait for audio to finish
         await new Promise((resolve, reject) => {
           utterance.onend = resolve;
@@ -1107,7 +1210,7 @@ class JyutpingKeyboard extends Component {
                   // This helps backend understand what was just typed
                   const lastWordMatch = trimmed.match(/[\u4e00-\u9fff]+$/);
                   const lastWord = lastWordMatch ? lastWordMatch[0] : '';
-                  
+
                   // Fetch related words based on the COMPLETE output box content
                   // Pass the full text as context, and last word as hanzi
                   // Backend will use context as primary input for AI prediction
@@ -1199,21 +1302,21 @@ class JyutpingKeyboard extends Component {
             scrollButtons="auto"
             className="JyutpingKeyboard__tabs"
           >
-            <Tab 
-              label={intl.formatMessage(messages.jyutping1)} 
-              value={LAYOUT_TYPES.JYUTPING_1} 
+            <Tab
+              label={intl.formatMessage(messages.jyutping1)}
+              value={LAYOUT_TYPES.JYUTPING_1}
             />
-            <Tab 
-              label={intl.formatMessage(messages.jyutping2)} 
-              value={LAYOUT_TYPES.JYUTPING_2} 
+            <Tab
+              label={intl.formatMessage(messages.jyutping2)}
+              value={LAYOUT_TYPES.JYUTPING_2}
             />
-            <Tab 
-              label={intl.formatMessage(messages.qwerty)} 
-              value={LAYOUT_TYPES.QWERTY} 
+            <Tab
+              label={intl.formatMessage(messages.qwerty)}
+              value={LAYOUT_TYPES.QWERTY}
             />
-            <Tab 
-              label={intl.formatMessage(messages.numeric)} 
-              value={LAYOUT_TYPES.NUMERIC} 
+            <Tab
+              label={intl.formatMessage(messages.numeric)}
+              value={LAYOUT_TYPES.NUMERIC}
             />
           </Tabs>
 

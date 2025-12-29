@@ -46,26 +46,32 @@ function JyutpingRulesConfig({
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
+    let isMounted = true;
+
     if (open && userId) {
-      loadRules();
+      loadRules(isMounted);
     }
+
+    return () => {
+      isMounted = false;
+    };
   }, [open, userId, profileId]);
 
-  const loadRules = async () => {
+  const loadRules = async (isMounted) => {
     setLoading(true);
     try {
       // Ensure userId and profileId are numbers
       const userIdNum = userId ? parseInt(userId, 10) : null;
       const profileIdNum = profileId ? parseInt(profileId, 10) : null;
-      
+
       if (!userIdNum) {
-        setLoading(false);
+        if (isMounted) setLoading(false);
         return;
       }
-      
+
       // Load matching rules
       const matchingResponse = await API.getJyutpingMatchingRules(userIdNum, profileIdNum);
-      if (matchingResponse && matchingResponse.success) {
+      if (isMounted && matchingResponse && matchingResponse.success) {
         // Merge with defaults to ensure all fields are present
         setMatchingRules(prev => ({
           ...prev,
@@ -83,42 +89,63 @@ function JyutpingRulesConfig({
 
       // Load exception rules
       const exceptionResponse = await API.getJyutpingExceptionRules(userIdNum, profileIdNum);
-      if (exceptionResponse && exceptionResponse.success) {
+      if (isMounted && exceptionResponse && exceptionResponse.success) {
         setExceptionRules(exceptionResponse.data.rules || []);
       }
     } catch (error) {
       console.error('Error loading rules:', error);
     } finally {
-      setLoading(false);
+      if (isMounted) setLoading(false);
     }
   };
 
   const handleSave = async () => {
     setSaving(true);
     try {
+      console.log('[DEBUG] JyutpingRulesConfig - Starting save operation');
+      console.log('[DEBUG] userId:', userId, 'profileId:', profileId);
+
       // Ensure userId and profileId are numbers
       const userIdNum = userId ? parseInt(userId, 10) : null;
       const profileIdNum = profileId ? parseInt(profileId, 10) : null;
-      
+
+      console.log('[DEBUG] Parsed userIdNum:', userIdNum, 'profileIdNum:', profileIdNum);
+
       if (!userIdNum) {
+        console.error('[DEBUG] Invalid userId, cannot save');
         alert(intl.formatMessage(messages.saveError));
         setSaving(false);
         return;
       }
-      
+
+      console.log('[DEBUG] Matching rules to save:', matchingRules);
+
       // Save matching rules
-      await API.updateJyutpingMatchingRules(userIdNum, matchingRules, profileIdNum);
+      console.log('[DEBUG] Calling API.updateJyutpingMatchingRules...');
+      const matchingResult = await API.updateJyutpingMatchingRules(userIdNum, matchingRules, profileIdNum);
+      console.log('[DEBUG] Matching rules save result:', matchingResult);
 
       // Save exception rules
       const rulesToSave = exceptionRules.map(rule => ({
         rule_id: rule.id,
         enabled: rule.enabled
       }));
-      await API.updateJyutpingExceptionRules(userIdNum, rulesToSave, profileIdNum);
+      console.log('[DEBUG] Exception rules to save:', rulesToSave);
 
+      console.log('[DEBUG] Calling API.updateJyutpingExceptionRules...');
+      const exceptionResult = await API.updateJyutpingExceptionRules(userIdNum, rulesToSave, profileIdNum);
+      console.log('[DEBUG] Exception rules save result:', exceptionResult);
+
+      console.log('[DEBUG] Save operation completed successfully');
       onClose();
     } catch (error) {
-      console.error('Error saving rules:', error);
+      console.error('[DEBUG] Error saving rules:', error);
+      console.error('[DEBUG] Error details:', {
+        message: error.message,
+        response: error.response,
+        status: error.response?.status,
+        data: error.response?.data
+      });
       alert(intl.formatMessage(messages.saveError));
     } finally {
       setSaving(false);
@@ -133,7 +160,7 @@ function JyutpingRulesConfig({
   };
 
   const handleExceptionRuleToggle = (ruleId) => {
-    setExceptionRules(prev => prev.map(rule => 
+    setExceptionRules(prev => prev.map(rule =>
       rule.id === ruleId ? { ...rule, enabled: !rule.enabled } : rule
     ));
   };
@@ -154,7 +181,7 @@ function JyutpingRulesConfig({
             <Typography variant="h6" gutterBottom>
               <FormattedMessage {...messages.matchingRules} />
             </Typography>
-            
+
             <FormGroup>
               <FormControlLabel
                 control={
@@ -382,4 +409,3 @@ JyutpingRulesConfig.defaultProps = {
 };
 
 export default injectIntl(JyutpingRulesConfig);
-

@@ -479,7 +479,9 @@ function predictJyutpingForChinese(string $chineseText): ?string {
               "2. 多個音節之間用單一空格分隔，例如：hok6 haau6。\n" .
               "3. 每個音節必須由小寫英文字母開頭，結尾是 1–6 的數字聲調，例如: ngo5, hok6, haau6。\n" .
               "4. 不要加標點符號，不要加引號，不要加前綴或後綴文字。\n" .
-              "5. 如果無法確定正確粵拼，就直接回答一個字：\"NA\"。\n\n" .
+              "5. 如果無法確定正確粵拼，就直接回答一個字：\"NA\"。\n" .
+              "6. 請確保音節數量與中文字數相同。\n" .
+              "7. 請確保是粵拼而非普通話。\n" .
               "只輸出粵拼本身，例如：ngo5, hok6 haau6。";
 
     $model = normalizeModel(_env('OLLAMA_MODEL', 'llama3:latest'));

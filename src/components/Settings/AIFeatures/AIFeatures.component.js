@@ -48,11 +48,9 @@ function AIFeatures({
   loading,
   suggestions,
   savingSuggestionId,
-  predictions,
   learningStats,
   onGetSuggestions,
   onAddSuggestionAsCard,
-  onGetPredictions,
   onGetLearningStats,
   onGetLearningSuggestions,
   classes,
@@ -61,7 +59,6 @@ function AIFeatures({
   const [activeTab, setActiveTab] = useState(0);
   const [selectedProfile, setSelectedProfile] = useState('');
   const [context, setContext] = useState('');
-  const [typingInput, setTypingInput] = useState('');
   const [selectedCards, setSelectedCards] = useState(new Set());
   const [cardVocalizations, setCardVocalizations] = useState({});
 
@@ -73,13 +70,6 @@ function AIFeatures({
     if (!selectedProfile || !context) return;
     await onGetSuggestions(context, selectedProfile, 10);
   };
-
-  const handleGetTypingPredictions = async (value) => {
-    const text = typeof value === 'string' ? value : typingInput;
-    if (!text) return;
-    await onGetPredictions(text, 'en', 5);
-  };
-
 
   const renderCardSuggestions = () => {
     const buildImageUrl = (card) => {
@@ -174,7 +164,7 @@ function AIFeatures({
               const vocalization = cardVocalizations[key] || '';
 
               return (
-                <Card key={key} className={classes.suggestionCard} style={{ 
+                <Card key={key} className={classes.suggestionCard} style={{
                   border: isSelected ? '2px solid #1976d2' : '1px solid #e0e0e0',
                   marginBottom: '16px'
                 }}>
@@ -266,46 +256,6 @@ function AIFeatures({
     );
   };
 
-  const renderTypingPredictions = () => {
-    return (
-      <div className={classes.tabPanel}>
-        <TextField
-          fullWidth
-          label={<FormattedMessage {...messages.typeText} />}
-          value={typingInput}
-          onChange={e => {
-            const value = e.target.value;
-            setTypingInput(value);
-            if (value) {
-              handleGetTypingPredictions(value);
-            }
-          }}
-          style={{ marginBottom: '16px' }}
-        />
-        {predictions && predictions.length > 0 && (
-          <div>
-            <Typography variant="h6" gutterBottom>
-              <FormattedMessage {...messages.predictions} />
-            </Typography>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-              {predictions.map((pred, index) => (
-                <Button
-                  key={index}
-                  variant="outlined"
-                  className={classes.predictionChip}
-                  onClick={() => setTypingInput(pred.text)}
-                >
-                  {pred.text}
-                </Button>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  };
-
-
   const renderLearningStats = () => {
     return (
       <div className={classes.tabPanel}>
@@ -322,7 +272,7 @@ function AIFeatures({
             ))}
           </Select>
         </FormControl>
-        
+
         <Button
           variant="contained"
           color="primary"
@@ -332,7 +282,7 @@ function AIFeatures({
         >
           {loading ? <CircularProgress size={24} /> : <FormattedMessage {...messages.loadStats} />}
         </Button>
-        
+
         <Button
           variant="contained"
           color="secondary"
@@ -342,7 +292,7 @@ function AIFeatures({
         >
           {loading ? <CircularProgress size={24} /> : <FormattedMessage {...messages.getAISuggestions} />}
         </Button>
-        
+
         {learningStats && (
           <Paper style={{ padding: '16px', marginBottom: '16px' }}>
             <Typography variant="h6" gutterBottom>
@@ -361,7 +311,7 @@ function AIFeatures({
             )}
           </Paper>
         )}
-        
+
         {learningStats && learningStats.ai_suggestions && (
           <Paper style={{ padding: '16px', marginTop: '16px', backgroundColor: '#f5f5f5' }}>
             <Typography variant="h6" gutterBottom>
@@ -372,7 +322,7 @@ function AIFeatures({
             </Typography>
           </Paper>
         )}
-        
+
         {learningStats && learningStats.common_mistakes && learningStats.common_mistakes.length > 0 && (
           <Paper style={{ padding: '16px', marginTop: '16px' }}>
             <Typography variant="h6" gutterBottom>
@@ -399,13 +349,11 @@ function AIFeatures({
         <Paper>
           <Tabs value={activeTab} onChange={handleTabChange}>
             <Tab label={<FormattedMessage {...messages.cardSuggestions} />} />
-            <Tab label={<FormattedMessage {...messages.typingPrediction} />} />
             <Tab label={<FormattedMessage {...messages.learningStats} />} />
           </Tabs>
 
           {activeTab === 0 && renderCardSuggestions()}
-          {activeTab === 1 && renderTypingPredictions()}
-          {activeTab === 2 && renderLearningStats()}
+          {activeTab === 1 && renderLearningStats()}
         </Paper>
       </div>
     </FullScreenDialog>
@@ -417,10 +365,8 @@ AIFeatures.propTypes = {
   profiles: PropTypes.array.isRequired,
   loading: PropTypes.bool.isRequired,
   suggestions: PropTypes.array,
-  predictions: PropTypes.array,
   learningStats: PropTypes.object,
   onGetSuggestions: PropTypes.func.isRequired,
-  onGetPredictions: PropTypes.func.isRequired,
   onGetLearningStats: PropTypes.func.isRequired,
   onGetLearningSuggestions: PropTypes.func,
   classes: PropTypes.object.isRequired,
@@ -428,5 +374,3 @@ AIFeatures.propTypes = {
 };
 
 export default withStyles(styles)(AIFeatures);
-
-

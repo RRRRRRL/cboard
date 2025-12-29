@@ -185,6 +185,45 @@ function getEnabledExceptionRules($db, $userId = null, $profileId = null) {
     }
 }
 
+
+/**
+ * Count Jyutping syllables in a code string.
+ */
+function count_jyutping_syllables(string $jp): int {
+    $jp = trim(preg_replace('/\s+/', ' ', $jp));
+    if ($jp === '') return 0;
+    return count(explode(' ', $jp));
+}
+
+/**
+ * Require Jyutping syllable count to match Hanzi length.
+ */
+function is_valid_full_jyutping(string $hanzi, string $jp): bool {
+    $hanziLen = mb_strlen($hanzi, 'UTF-8');
+    $sylCount = count_jyutping_syllables($jp);
+    return $hanziLen > 0 && $hanziLen === $sylCount;
+}
+
+/**
+ * Validate AI‑generated Jyutping: length + basic pattern.
+ */
+function validate_ai_jyutping(string $hanzi, string $aiJp): ?string {
+    $jp = trim($aiJp);
+    if ($jp === '') return null;
+
+    // 1) syllable count must equal Hanzi length
+    if (!is_valid_full_jyutping($hanzi, $jp)) {
+        return null;
+    }
+
+    // 2) basic Jyutping form: letters+tone per syllable
+    if (!preg_match('/^[a-z]+[1-6](\s+[a-z]+[1-6])*$/', $jp)) {
+        return null;
+    }
+
+    return $jp;
+}
+
 /**
  * Find Jyutping for a given Chinese text (hanzi/word).
  * Returns array with jyutping_code, hanzi, word, or null if not found.
@@ -293,6 +332,37 @@ function findJyutpingForText($db, $chineseText, $debug = false, $userId = null, 
     if ($debug) error_log("  [findJyutping] ✗ No match found - giving up");
     return null;
 }
+
+/**
+ * Safe Jyutping lookup for games: only full‑word mappings allowed.
+ */
+function findFullWordJyutpingForGame(PDO $db, string $chineseText, ?bool $debug, ?int $userId, ?int $profileId): ?array {
+    $debug = (bool)$debug;
+    $result = findJyutpingForText($db, $chineseText, $debug, $userId, $profileId);
+    if (!$result) return null;
+
+    $jp = $result['jyutping_code'] ?? '';
+    $hanzi = $result['hanzi'] ?? $result['word'] ?? $chineseText;
+
+    // Reject if Jyutping structure or length do not match
+    if (!is_valid_full_jyutping($chineseText, $jp)) {
+        if ($debug) {
+            error_log("  [findFullWordJyutpingForGame] Rejecting non‑full match for '$chineseText': jp='$jp'");
+        }
+        return null;
+    }
+
+    // Also require the matched hanzi to be the full text (no partial like '椒鹽')
+    if (mb_strlen($hanzi, 'UTF-8') !== mb_strlen($chineseText, 'UTF-8')) {
+        if ($debug) {
+            error_log("  [findFullWordJyutpingForGame] Rejecting substring hanzi='$hanzi' for '$chineseText'");
+        }
+        return null;
+    }
+
+    return $result;
+}
+
 
 function handleGamesRoutes($method, $pathParts, $data, $authToken) {
     $db = getDB();
@@ -1030,7 +1100,9 @@ function handleGamesRoutes($method, $pathParts, $data, $authToken) {
                     // Step 2: Find Jyutping using improved search function
                     // Apply student-specific matching rules if profileId is provided
                     if ($chineseText) {
-                        $jyutping = findJyutpingForText($db, $chineseText, true, $studentUserId, $profileId); // Enable debug
+                        $jyutping = findFullWordJyutpingForGame($db, $chineseText, false, $userId, $profileId);
+                        $jyutpingCode = $jyutping ? $jyutping['jyutping_code'] : null;
+                        // Enable debug
                     } else {
                         if ($gameType === 'jyutping-picture') {
                             error_log("  [jyutping] No chineseText determined for title='$title'");
@@ -1067,17 +1139,17 @@ function handleGamesRoutes($method, $pathParts, $data, $authToken) {
                         // 延遲載入 AI helper，避免無用開銷
                         require_once __DIR__ . '/../helpers/ollama.php';
                         $aiJyutping = predictJyutpingForChinese($chineseText);
-                        if ($aiJyutping) {
-                            $jyutpingCode = $aiJyutping;
-                            $confidence = 0.9; // AI 通過格式與驗證，視為高置信度
+                        $validatedAi = $aiJyutping ? validate_ai_jyutping($chineseText, $aiJyutping) : null;
+                        if ($validatedAi) {
+                            $jyutpingCode = $validatedAi;
+                            $confidence = 0.9;
                             if ($gameType === 'jyutping-picture') {
                                 error_log("  [jyutping] ✓ AI corrected jyutping for '$chineseText' -> '$jyutpingCode'");
                             }
                         } else {
                             if ($gameType === 'jyutping-picture') {
-                                error_log("  [jyutping] ✗ AI could not provide reliable jyutping for '$chineseText'");
+                                error_log("  [jyutping] ✗ AI jyutping rejected for '$chineseText' -> '" . ($aiJyutping ?? '') . "'");
                             }
-                            // 低置信度且 AI 也失敗，當作沒有可用粵拼，避免只用單字造成題目含糊
                             if (($jyutping['_match_type'] ?? null) === 'single_char' || $confidence < 0.5) {
                                 $jyutpingCode = null;
                             }
@@ -1209,7 +1281,7 @@ function handleGamesRoutes($method, $pathParts, $data, $authToken) {
                         $jyutping = null;
                         if ($chineseText) {
                             // Apply student-specific matching rules if profileId is provided
-                            $jyutping = findJyutpingForText($db, $chineseText, false, $studentUserId, $profileId);
+                            $jyutping = findFullWordJyutpingForGame($db, $chineseText, false, $studentUserId, $profileId);
                         }
                         
                         $jyutpingCode = null;
@@ -1235,10 +1307,10 @@ function handleGamesRoutes($method, $pathParts, $data, $authToken) {
                         if ($chineseText && $confidence < 0.5) {
                             require_once __DIR__ . '/../helpers/ollama.php';
                             $aiJyutping = predictJyutpingForChinese($chineseText);
-                            if ($aiJyutping) {
-                                $jyutpingCode = $aiJyutping;
+                            $validatedAi = $aiJyutping ? validate_ai_jyutping($chineseText, $aiJyutping) : null;
+                            if ($validatedAi) {
+                                $jyutpingCode = $validatedAi;
                             } else {
-                                // 單字或低置信度且 AI 失敗，視為無效
                                 if (($jyutping['_match_type'] ?? null) === 'single_char' || $confidence < 0.5) {
                                     $jyutpingCode = null;
                                 }

@@ -6,8 +6,8 @@
 -- Stores per-student matching rule configurations
 CREATE TABLE IF NOT EXISTS `jyutping_matching_rules` (
   `id` INT(11) NOT NULL AUTO_INCREMENT,
-  `user_id` INT(11) NOT NULL COMMENT 'Student user ID',
-  `profile_id` INT(11) DEFAULT NULL COMMENT 'Optional: specific profile for this student',
+  `user_id` INT UNSIGNED COMMENT 'Student user ID',
+  `profile_id` INT UNSIGNED COMMENT 'Optional: specific profile for this student',
   `frequency_threshold` INT(11) DEFAULT 50 COMMENT 'Minimum frequency threshold (default: 50)',
   `allow_exact_match` TINYINT(1) DEFAULT 1 COMMENT 'Allow exact matching strategy',
   `allow_substring_match` TINYINT(1) DEFAULT 1 COMMENT 'Allow substring matching strategy',
@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS `jyutping_matching_rules` (
   `require_ai_correction` TINYINT(1) DEFAULT 0 COMMENT 'Require AI correction for low confidence matches',
   `ai_confidence_threshold` DECIMAL(3,2) DEFAULT 0.50 COMMENT 'AI correction threshold (0.0-1.0)',
   `enabled` TINYINT(1) DEFAULT 1 COMMENT 'Whether this rule set is active',
-  `created_by` INT(11) DEFAULT NULL COMMENT 'User ID who created this rule',
+  `created_by` INT UNSIGNED COMMENT 'User ID who created this rule',
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
@@ -50,11 +50,11 @@ CREATE TABLE IF NOT EXISTS `jyutping_exception_rules` (
 -- Junction table: which exception rules are enabled/disabled for which students
 CREATE TABLE IF NOT EXISTS `jyutping_student_exception_rules` (
   `id` INT(11) NOT NULL AUTO_INCREMENT,
-  `user_id` INT(11) NOT NULL COMMENT 'Student user ID',
-  `profile_id` INT(11) DEFAULT NULL COMMENT 'Optional: specific profile for this student',
+  `user_id` INT(11) UNSIGNED COMMENT 'Student user ID',
+  `profile_id` INT(11) UNSIGNED COMMENT 'Optional: specific profile for this student',
   `rule_id` INT(11) NOT NULL COMMENT 'Exception rule ID',
   `enabled` TINYINT(1) DEFAULT 1 COMMENT 'Whether this rule is enabled for this student',
-  `created_by` INT(11) DEFAULT NULL COMMENT 'User ID who configured this rule',
+  `created_by` INT(11) UNSIGNED COMMENT 'User ID who configured this rule',
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),

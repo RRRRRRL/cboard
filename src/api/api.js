@@ -68,10 +68,10 @@ class API {
           if (isAndroid()) {
             window.FirebasePlugin.unregister();
             window.facebookConnectPlugin.logout(
-              function(msg) {
+              function (msg) {
                 console.log('disconnect facebook msg' + msg);
               },
-              function(msg) {
+              function (msg) {
                 console.log('error facebook disconnect msg' + msg);
               }
             );
@@ -82,7 +82,7 @@ class API {
         return Promise.reject(error);
       }
     );
-    
+
     // Initialize offline storage
     if (typeof window !== 'undefined' && 'indexedDB' in window) {
       initOfflineStorage().catch(err => {
@@ -101,7 +101,7 @@ class API {
   async requestWithOfflineSupport(method, url, config = {}, cacheConfig = { enabled: true, maxAge: 60 * 60 * 1000 }) {
     const fullUrl = url.startsWith('http') ? url : `${BASE_URL}${url}`;
     const params = config.params || {};
-    
+
     // Try to get from cache first if offline or cache is enabled
     if (cacheConfig.enabled && !isOnline()) {
       const cachedData = await getCachedApiResponse(fullUrl, params);
@@ -444,7 +444,7 @@ class API {
       // These are normal responses from /board/my endpoint
       const filterCorruptedProfiles = (profiles) => {
         if (!Array.isArray(profiles)) return profiles;
-        
+
         // Don't filter - all profiles from /board/my are valid
         // Virtual tiles arrays (filled with null) are intentional for metadata display
         return profiles;
@@ -577,13 +577,13 @@ class API {
     const headers = authToken ? {
       Authorization: `Bearer ${authToken}`
     } : {};
-    
+
     console.log('[API GET BOARD] Requesting board data:', {
       profileId: id,
       hasAuthToken: !!authToken,
       endpoint: `/profiles/${id}/board`
     });
-    
+
     try {
       const response = await this.requestWithOfflineSupport(
         'GET',
@@ -601,18 +601,18 @@ class API {
           gridRows: response.data.grid?.rows,
           gridColumns: response.data.grid?.columns
         });
-        
+
         const { transformBoardImageUrls } = require('../utils/imageUrlTransformer');
         const boardData = transformBoardImageUrls(response.data);
-        
+
         // Filter out null/undefined tiles, but不要再把「全為 null」視為損壞板，
         // 否則在 profile->board 過程中任何暫時為 null 的情況都會把板攔住。
         if (boardData.tiles && Array.isArray(boardData.tiles)) {
-          const validTiles = boardData.tiles.filter(tile => 
+          const validTiles = boardData.tiles.filter(tile =>
             tile !== null && tile !== undefined && typeof tile === 'object'
           );
           boardData.tiles = validTiles;
-          
+
           console.log('[API GET BOARD] Tiles filtered:', {
             profileId: id,
             originalTilesCount: response.data.tiles?.length || 0,
@@ -625,14 +625,14 @@ class API {
             }))
           });
         }
-        
+
         console.log('[API GET BOARD] Returning board data:', {
           profileId: id,
           boardId: boardData.id,
           boardName: boardData.name,
           finalTilesCount: boardData.tiles?.length || 0
         });
-        
+
         return boardData;
       }
 
@@ -673,7 +673,7 @@ class API {
 
   async getSettings() {
     const authToken = getAuthToken();
-    
+
     // Default settings for guest users or when not authenticated
     const defaultSettings = {
       settings: {
@@ -713,7 +713,7 @@ class API {
         dwellTime: 1000
       }
     };
-    
+
     // If no auth token, return default settings (guest mode)
     if (!(authToken && authToken.length)) {
       console.log('[API] getSettings - No auth token, returning default settings (guest mode)');
@@ -727,10 +727,10 @@ class API {
     try {
       const response = await this.requestWithOfflineSupport('GET', `/settings`, { headers }, { enabled: true, maxAge: 5 * 60 * 1000 });
       const data = response.data || response;
-      
+
       // Normalize settings structure - backend uses accessibility.eye_tracking, frontend uses eyeTracking
       const settings = data.settings || data;
-      
+
       // Convert backend format (accessibility.eye_tracking) to frontend format (eyeTracking)
       let eyeTrackingSettings = settings.eyeTracking;
       if (!eyeTrackingSettings && settings.accessibility && settings.accessibility.eye_tracking) {
@@ -742,16 +742,16 @@ class API {
           device: backendSettings.device || null
         };
       }
-      
+
       // Return normalized settings - ensure eyeTracking is always available
       const normalized = {
         ...settings,
         eyeTracking: eyeTrackingSettings || { enabled: false, deviceType: 'tobii', dwellTime: 1000 }
       };
-      
+
       // Log for debugging
       console.log('[API] getSettings - Normalized eye tracking settings:', normalized.eyeTracking);
-      
+
       return normalized;
     } catch (error) {
       // Return default settings if offline
@@ -759,7 +759,7 @@ class API {
         console.log('[API] getSettings - Offline, returning default settings');
         return defaultSettings.settings;
       }
-      
+
       // For other errors, rethrow so callers can handle (e.g., force re-login on 401)
       throw error;
     }
@@ -777,14 +777,14 @@ class API {
 
     // Convert frontend format (eyeTracking) to backend format (accessibility.eye_tracking) if needed
     let settingsToSave = { ...newSettings };
-    
+
     // If eyeTracking is being updated, also update accessibility.eye_tracking for backend compatibility
     if (newSettings.eyeTracking) {
       // Get existing settings to merge properly
       try {
         const existing = await this.getSettings();
         const existingSettings = existing.settings || existing;
-        
+
         settingsToSave = {
           ...existingSettings,
           ...newSettings,
@@ -801,7 +801,7 @@ class API {
             }
           }
         };
-        
+
         console.log('[API] updateSettings - Saving eye tracking settings:', {
           eyeTracking: settingsToSave.eyeTracking,
           accessibility_eye_tracking: settingsToSave.accessibility?.eye_tracking
@@ -996,7 +996,7 @@ class API {
       if (authToken && authToken.length) {
         headers.Authorization = `Bearer ${authToken}`;
       }
-      
+
       const { data } = await this.axiosInstance.post(
         `/action-logs`,
         actionData,
@@ -1100,19 +1100,19 @@ class API {
           if (videoDevices.length === 0) {
             throw new Error('No camera devices found');
           }
-          
+
           // Try to access camera to verify it's actually working
           const stream = await navigator.mediaDevices.getUserMedia({ video: true });
           const tracks = stream.getVideoTracks();
           if (tracks.length === 0) {
             throw new Error('Camera stream has no video tracks');
           }
-          
+
           // Check if track is actually active
           if (!tracks[0].readyState || tracks[0].readyState !== 'live') {
             throw new Error('Camera track is not live');
           }
-          
+
           // Stop the test stream
           tracks.forEach(track => track.stop());
           deviceConnected = true;
@@ -1161,17 +1161,17 @@ class API {
 
     try {
       // Add timeout to prevent hanging on network errors
-      const timeoutPromise = new Promise((_, reject) => 
+      const timeoutPromise = new Promise((_, reject) =>
         setTimeout(() => reject(new Error('Request timeout')), 5000)
       );
-      
+
       // Include connection verification status in registration data
       const registrationData = {
         ...deviceData,
         connection_verified: true,
         verified_at: new Date().toISOString()
       };
-      
+
       const requestPromise = this.axiosInstance.post(
         `/devices/eyetracking/register`,
         registrationData,
@@ -1180,14 +1180,14 @@ class API {
           timeout: 5000 // 5 second timeout
         }
       );
-      
+
       const response = await Promise.race([requestPromise, timeoutPromise]);
       return response.data;
     } catch (error) {
       // Handle network errors gracefully
-      const isNetworkError = error.code === 'ERR_NETWORK' || 
-                            error.message === 'Network Error' || 
-                            error.message === 'Request timeout';
+      const isNetworkError = error.code === 'ERR_NETWORK' ||
+        error.message === 'Network Error' ||
+        error.message === 'Request timeout';
       if (isNetworkError) {
         // Return a soft error that won't break initialization
         const networkError = new Error('Network error during device registration');
@@ -1223,10 +1223,10 @@ class API {
   async selectCardViaEyeTracking(selectionData = {}) {
     try {
       // Add timeout to prevent hanging
-      const timeoutPromise = new Promise((_, reject) => 
+      const timeoutPromise = new Promise((_, reject) =>
         setTimeout(() => reject(new Error('Request timeout')), 3000)
       );
-      
+
       const requestPromise = this.axiosInstance.post(
         `/devices/eyetracking/select`,
         selectionData,
@@ -1234,14 +1234,14 @@ class API {
           timeout: 3000 // 3 second timeout for logging
         }
       );
-      
+
       const response = await Promise.race([requestPromise, timeoutPromise]);
       return response.data;
     } catch (error) {
       // Don't throw errors for logging - it's non-critical
-      const isNetworkError = error.code === 'ERR_NETWORK' || 
-                            error.message === 'Network Error' || 
-                            error.message === 'Request timeout';
+      const isNetworkError = error.code === 'ERR_NETWORK' ||
+        error.message === 'Network Error' ||
+        error.message === 'Request timeout';
       if (isNetworkError) {
         // Silently fail for network errors - logging is not critical
         return null;
@@ -1258,8 +1258,18 @@ class API {
 
   async searchJyutping(code) {
     try {
+      const authToken = getAuthToken();
+      const headers = {};
+
+      // Attach token if logged in, so backend can load per-user rules
+      if (authToken && authToken.length) {
+        headers.Authorization = `Bearer ${authToken}`;
+      }
+
       const { data } = await this.axiosInstance.get(`/jyutping/search`, {
-        params: { code }
+        params: { code },
+        // Only send headers if we actually have any
+        headers: Object.keys(headers).length ? headers : undefined
       });
       return data;
     } catch (err) {
@@ -1270,8 +1280,16 @@ class API {
 
   async getJyutpingSuggestions(input, limit = 10) {
     try {
+      const authToken = getAuthToken();
+      const headers = {};
+
+      if (authToken && authToken.length) {
+        headers.Authorization = `Bearer ${authToken}`;
+      }
+
       const { data } = await this.axiosInstance.get(`/jyutping/suggestions`, {
-        params: { input, limit }
+        params: { input, limit },
+        headers: Object.keys(headers).length ? headers : undefined
       });
       return data;
     } catch (err) {
@@ -1279,6 +1297,7 @@ class API {
       throw err;
     }
   }
+
 
   async generateJyutpingAudio(audioData) {
     // Audio endpoint doesn't require authentication for basic playback
@@ -1361,7 +1380,7 @@ class API {
 
     try {
       const params = profileId ? { profile_id: profileId } : {};
-      const response = await this.axiosInstance.get(`/jyutping-rules/matching/${userId}`, {
+      const response = await this.axiosInstance.get(`/jyutping/rules/matching/${userId}`, {
         headers,
         params
       });
@@ -1390,7 +1409,7 @@ class API {
     };
 
     try {
-      const response = await this.axiosInstance.put(`/jyutping-rules/matching/${userId}`, {
+      const response = await this.axiosInstance.put(`/jyutping/rules/matching/${userId}`, {
         ...rules,
         profile_id: profileId
       }, { headers });
@@ -1419,7 +1438,7 @@ class API {
 
     try {
       const params = profileId ? { profile_id: profileId } : {};
-      const response = await this.axiosInstance.get(`/jyutping-rules/exceptions/${userId}`, {
+      const response = await this.axiosInstance.get(`/jyutping/rules/exceptions/${userId}`, {
         headers,
         params
       });
@@ -1448,7 +1467,7 @@ class API {
     };
 
     try {
-      const response = await this.axiosInstance.put(`/jyutping-rules/exceptions/${userId}`, {
+      const response = await this.axiosInstance.put(`/jyutping/rules/exceptions/${userId}`, {
         rules,
         profile_id: profileId
       }, { headers });
@@ -1512,15 +1531,15 @@ class API {
 
     const createdProfile = profileRes.data || profileRes;
     const profileId = createdProfile.id;
-    
+
     // Validate profileId
     if (!profileId || (typeof profileId !== 'number' && typeof profileId !== 'string')) {
       throw new Error(`Invalid profile ID returned from creation: ${profileId}`);
     }
-    
+
     // Ensure profileId is a string for URL construction
     const profileIdStr = String(profileId);
-    
+
     console.log('[API CREATE BOARD] Step 2: Profile created:', {
       profileId,
       profileIdStr,
@@ -1534,7 +1553,7 @@ class API {
       ...board,
       profileId: profileIdStr
     };
-    
+
     console.log('[API CREATE BOARD] Step 3: Saving board data to profile:', {
       profileId: profileIdStr,
       boardPayload: {
@@ -1548,7 +1567,7 @@ class API {
       boardPayload,
       { headers }
     );
-    
+
     console.log('[API CREATE BOARD] Step 4: Board saved successfully:', {
       profileId,
       returnedData: {
@@ -1573,10 +1592,10 @@ class API {
 
     // 現在從 profile 入口更新主板：board.id 在新的模型下視為 profileId
     const profileId = board.profileId || board.id;
-    
+
     // Check if this is a metadata-only update (no tiles in request)
     const isMetadataOnlyUpdate = !('tiles' in board);
-    
+
     // For metadata-only updates, create a clean payload without tiles
     let payload = board;
     if (isMetadataOnlyUpdate) {
@@ -1601,7 +1620,7 @@ class API {
       delete payload.tiles_count;
       delete payload.tilesCount;
     }
-    
+
     console.log('[API updateBoard] Sending update request:', {
       profileId,
       boardId: payload.id,
@@ -1613,7 +1632,7 @@ class API {
       isMetadataOnly: isMetadataOnlyUpdate,
       originalHasTiles: 'tiles' in board
     });
-    
+
     const { data } = await this.axiosInstance.put(
       `/profiles/${profileId}/board`,
       payload,
@@ -1641,7 +1660,7 @@ class API {
     // 在 profile 模型下，刪板 = 刪 profile
     console.log('[API] deleteBoard called with boardId:', boardId, 'Type:', typeof boardId);
     console.log('[API] DELETE request to:', `/profiles/${boardId}`);
-    
+
     try {
       const { data } = await this.axiosInstance.delete(`/profiles/${boardId}`, {
         headers
@@ -1685,7 +1704,7 @@ class API {
     let url = null;
     try {
       url = await this.uploadFile(file, filename);
-    } catch (e) {}
+    } catch (e) { }
 
     return url;
   }
@@ -1708,7 +1727,7 @@ class API {
     });
 
     let imageUrl = response.data.url;
-    
+
     // Ensure the URL has /api/ prefix if it's an upload path
     if (imageUrl && typeof imageUrl === 'string') {
       // If it's a relative path like "uploads/..." or "api/uploads/..."
@@ -1720,7 +1739,7 @@ class API {
         imageUrl = imageUrl.replace('/uploads/', '/api/uploads/');
       }
     }
-    
+
     return imageUrl;
   }
 
@@ -1903,10 +1922,10 @@ class API {
     } catch (error) {
       // Location is not critical - fail silently
       // Network errors are expected and shouldn't block the app
-      const isNetworkError = error.code === 'ERR_NETWORK' || 
-                            error.message === 'Network Error' ||
-                            error.code === 'ECONNABORTED' ||
-                            error.message.includes('timeout');
+      const isNetworkError = error.code === 'ERR_NETWORK' ||
+        error.message === 'Network Error' ||
+        error.code === 'ECONNABORTED' ||
+        error.message.includes('timeout');
       if (isNetworkError) {
         // Return null for network errors - location is optional
         return null;
@@ -1926,11 +1945,11 @@ class API {
       requestOrigin,
       purchaseVersion: '1.0.0'
     };
-    
+
     try {
       const response = await this.requestWithOfflineSupport('GET', `/subscriber/${userId}`, { headers }, { enabled: true, maxAge: 5 * 60 * 1000 });
       const data = response.data || response;
-      
+
       if (data && !data.success) {
         throw data;
       }
@@ -2797,7 +2816,7 @@ class API {
       if (profileId) {
         url += `&profile_id=${encodeURIComponent(profileId)}`;
       }
-      
+
       const response = await this.requestWithOfflineSupport(
         'GET',
         url,
@@ -2848,11 +2867,11 @@ class API {
         difficulty,
         profile_id: profileId || undefined
       };
-      
+
       if (questions && Array.isArray(questions)) {
         payload.questions = questions;
       }
-      
+
       const response = await this.axiosInstance.post(
         '/games/submit',
         payload,

@@ -818,87 +818,99 @@ class EyeTrackingIntegration {
             // Call begin() first - this will create the video element
             window.webgazer.begin()
             .then(() => {
-              // After begin() resolves, wait for video element to appear and have valid dimensions
+              // After begin() resolves, wait for video element to appear and ensure it has valid dimensions
               return new Promise((resolveBegin) => {
                 const checkVideoAfterBegin = setInterval(() => {
                   const videoElement = document.getElementById('webgazerVideoFeed');
                   if (videoElement) {
                     clearInterval(checkVideoAfterBegin);
-                    
-                    // Set explicit dimensions if not already set
-                    const w = videoElement.videoWidth || videoElement.width || 0;
-                    const h = videoElement.videoHeight || videoElement.height || 0;
-                    
-                    // Wait for video metadata to load and get actual dimensions
-                    const waitForVideoDimensions = () => {
-                      return new Promise((resolveDims) => {
-                        // Check if metadata is already loaded
-                        if (videoElement.readyState >= 1 && videoElement.videoWidth > 0 && videoElement.videoHeight > 0) {
-                          videoElement.width = videoElement.videoWidth;
-                          videoElement.height = videoElement.videoHeight;
-                          resolveDims();
-                          return;
-                        }
-                        
-                        // Wait for loadedmetadata event
-                        const metadataHandler = () => {
-                          if (videoElement.videoWidth > 0 && videoElement.videoHeight > 0) {
-                            videoElement.width = videoElement.videoWidth;
-                            videoElement.height = videoElement.videoHeight;
-                            resolveDims();
-                          } else {
-                            // Use defaults if still no dimensions after metadata loads
-                            console.warn('[EyeTracking] Video metadata loaded but dimensions still 0, using defaults');
-                            videoElement.width = 640;
-                            videoElement.height = 480;
-                            resolveDims();
-                          }
-                        };
-                        
-                        videoElement.addEventListener('loadedmetadata', metadataHandler, { once: true });
-                        
-                        // Timeout after 2 seconds
-                        setTimeout(() => {
-                          if (videoElement.videoWidth > 0 && videoElement.videoHeight > 0) {
-                            videoElement.width = videoElement.videoWidth;
-                            videoElement.height = videoElement.videoHeight;
-                          } else {
-                            console.warn('[EyeTracking] Video dimensions timeout, using defaults');
-                            videoElement.width = 640;
-                            videoElement.height = 480;
-                          }
-                          resolveDims();
-                        }, 2000);
-                      });
-                    };
-                    
-                    // Wait for valid dimensions before proceeding
-                    waitForVideoDimensions().then(() => {
-                      console.log('[EyeTracking] Video element ready after begin():', {
-                        width: videoElement.width,
-                        height: videoElement.height,
-                        videoWidth: videoElement.videoWidth,
-                        videoHeight: videoElement.videoHeight
-                      });
-                      
-                      resolveBegin();
-                    });
-                  }
-                }, 100);
-                
-                // Timeout after 5 seconds
-                setTimeout(() => {
-                  clearInterval(checkVideoAfterBegin);
-                  const videoElement = document.getElementById('webgazerVideoFeed');
-                  if (videoElement) {
-                    // Set defaults if still no valid dimensions
+
+                    // CRITICAL: Set explicit dimensions IMMEDIATELY to prevent 0x0 texture errors
+                    // TensorFlow.js uses these attributes for texture creation
                     if (!videoElement.width || videoElement.width === 0) {
                       videoElement.width = 640;
                     }
                     if (!videoElement.height || videoElement.height === 0) {
                       videoElement.height = 480;
                     }
-                    console.warn('[EyeTracking] Video element found but dimensions check timeout, using defaults');
+
+                    console.log('[EyeTracking] Video element found and dimensions set:', {
+                      width: videoElement.width,
+                      height: videoElement.height,
+                      videoWidth: videoElement.videoWidth,
+                      videoHeight: videoElement.videoHeight
+                    });
+
+                    // Now wait for video metadata to load and update to actual dimensions if available
+                    const waitForVideoDimensions = () => {
+                      return new Promise((resolveDims) => {
+                        // Check if metadata is already loaded and has valid dimensions
+                        if (videoElement.readyState >= 1 && videoElement.videoWidth > 0 && videoElement.videoHeight > 0) {
+                          videoElement.width = videoElement.videoWidth;
+                          videoElement.height = videoElement.videoHeight;
+                          console.log('[EyeTracking] Updated to actual video dimensions:', videoElement.videoWidth, 'x', videoElement.videoHeight);
+                          resolveDims();
+                          return;
+                        }
+
+                        // Wait for loadedmetadata event
+                        const metadataHandler = () => {
+                          if (videoElement.videoWidth > 0 && videoElement.videoHeight > 0) {
+                            videoElement.width = videoElement.videoWidth;
+                            videoElement.height = videoElement.videoHeight;
+                            console.log('[EyeTracking] Updated to actual video dimensions after metadata:', videoElement.videoWidth, 'x', videoElement.videoHeight);
+                            resolveDims();
+                          } else {
+                            // Keep the defaults we set earlier
+                            console.warn('[EyeTracking] Video metadata loaded but dimensions still 0, keeping defaults');
+                            resolveDims();
+                          }
+                        };
+
+                        videoElement.addEventListener('loadedmetadata', metadataHandler, { once: true });
+
+                        // Timeout after 2 seconds - resolve with current dimensions
+                        setTimeout(() => {
+                          if (videoElement.videoWidth > 0 && videoElement.videoHeight > 0) {
+                            videoElement.width = videoElement.videoWidth;
+                            videoElement.height = videoElement.videoHeight;
+                            console.log('[EyeTracking] Updated to actual video dimensions after timeout:', videoElement.videoWidth, 'x', videoElement.videoHeight);
+                          } else {
+                            console.log('[EyeTracking] Keeping default dimensions after timeout');
+                          }
+                          resolveDims();
+                        }, 2000);
+                      });
+                    };
+
+                    // Wait for dimensions to be finalized, but don't block WebGazer startup
+                    waitForVideoDimensions().then(() => {
+                      console.log('[EyeTracking] Video element fully ready:', {
+                        width: videoElement.width,
+                        height: videoElement.height,
+                        videoWidth: videoElement.videoWidth,
+                        videoHeight: videoElement.videoHeight
+                      });
+                    });
+
+                    // Resolve immediately now that dimensions are set
+                    resolveBegin();
+                  }
+                }, 100);
+
+                // Timeout after 5 seconds
+                setTimeout(() => {
+                  clearInterval(checkVideoAfterBegin);
+                  const videoElement = document.getElementById('webgazerVideoFeed');
+                  if (videoElement) {
+                    // Ensure dimensions are set
+                    if (!videoElement.width || videoElement.width === 0) {
+                      videoElement.width = 640;
+                    }
+                    if (!videoElement.height || videoElement.height === 0) {
+                      videoElement.height = 480;
+                    }
+                    console.warn('[EyeTracking] Video element found but setup timeout, using defaults');
                     resolveBegin();
                   } else {
                     console.warn('[EyeTracking] Video element not found after begin() timeout, but continuing anyway');
@@ -2221,4 +2233,3 @@ export function getEyeTrackingInstance() {
 }
 
 export default EyeTrackingIntegration;
-
