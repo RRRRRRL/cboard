@@ -44,5 +44,25 @@ export default defineMessages({
   noConnection: {
     id: 'cboard.components.SignUp.noConnection',
     defaultMessage: 'Unable to connect to the server. Please try again later.'
+  },
+  selectRole: {
+    id: 'cboard.components.SignUp.selectRole',
+    defaultMessage: 'Select your role'
+  },
+  roleTeacher: {
+    id: 'cboard.components.SignUp.roleTeacher',
+    defaultMessage: 'Teacher/Educator'
+  },
+  roleParent: {
+    id: 'cboard.components.SignUp.roleParent',
+    defaultMessage: 'Parent/Guardian'
+  },
+  roleStudent: {
+    id: 'cboard.components.SignUp.roleStudent',
+    defaultMessage: 'Student'
+  },
+  roleDescription: {
+    id: 'cboard.components.SignUp.roleDescription',
+    defaultMessage: 'Choose the role that best describes you. This will determine your access and features in the system.'
   }
 });

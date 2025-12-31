@@ -205,7 +205,8 @@ function is_valid_full_jyutping(string $hanzi, string $jp): bool {
 }
 
 /**
- * Validate AI‑generated Jyutping: length + basic pattern.
+ * Validate AI‑generated Jyutping: lenient validation for AI suggestions.
+ * More permissive than strict validation since AI may generate valid but uncommon pronunciations.
  */
 function validate_ai_jyutping(string $hanzi, string $aiJp): ?string {
     $jp = trim($aiJp);
@@ -221,7 +222,309 @@ function validate_ai_jyutping(string $hanzi, string $aiJp): ?string {
         return null;
     }
 
+    // 3) Lenient validation: only check basic structure, not strict linguistic rules
+    // AI may generate valid but uncommon pronunciations that aren't in our strict inventory
+    $syllables = explode(' ', $jp);
+    foreach ($syllables as $syllable) {
+        // Only check basic syllable structure, not strict phonological combinations
+        if (!isBasicValidJyutpingSyllable($syllable)) {
+            error_log("AI Jyutping validation failed: invalid syllable structure '$syllable' in '$jp'");
+            return null;
+        }
+    }
+
     return $jp;
+}
+
+/**
+ * Basic validation for Jyutping syllable structure (more lenient than full linguistic validation)
+ */
+function isBasicValidJyutpingSyllable(string $syllable): bool {
+    $syllable = trim($syllable);
+    if (empty($syllable)) return false;
+
+    // Must end with tone number 1-6
+    if (!preg_match('/^[a-z]+[1-6]$/', $syllable)) {
+        return false;
+    }
+
+    // Extract initial and final
+    $initial = extractJyutpingInitial($syllable);
+    $final = extractJyutpingFinal($syllable, $initial);
+
+    // For AI validation, be more lenient:
+    // - Allow any initial from our known set
+    // - Allow finals that are at least plausible (contain vowels)
+    $validInitials = ['b', 'p', 'm', 'f', 'd', 't', 'n', 'l', 'g', 'k', 'ng', 'h', 'gw', 'kw', 'w', 'z', 'c', 's', 'j'];
+
+    // Check initial is valid (or null for vowel-initial)
+    if ($initial !== null && !in_array($initial, $validInitials)) {
+        return false;
+    }
+
+    // Check final contains at least one vowel (basic plausibility)
+    if (empty($final) || !preg_match('/[aeiouyu]/', $final)) {
+        return false;
+    }
+
+    // Check final doesn't contain invalid consonant clusters
+    if (preg_match('/[^aeiouymnptkgwzdclhsjb]+/', $final)) {
+        return false;
+    }
+
+    return true;
+}
+
+/**
+ * Validate a single Jyutping syllable against linguistic rules
+ */
+function isValidJyutpingSyllable(string $syllable): bool {
+    $syllable = trim($syllable);
+    if (empty($syllable)) return false;
+
+    // Must end with tone number 1-6
+    if (!preg_match('/^[a-z]+[1-6]$/', $syllable)) {
+        return false;
+    }
+
+    // Remove tone to get base syllable
+    $base = preg_replace('/[1-6]$/', '', $syllable);
+
+    // Extract initial and final
+    $initial = extractJyutpingInitial($base);
+    $final = extractJyutpingFinal($base, $initial);
+
+    if ($final === null) {
+        return false;
+    }
+
+    // Validate initial-final combination
+    return isValidJyutpingCombination($initial, $final);
+}
+
+/**
+ * Extract initial from Jyutping syllable (without tone)
+ */
+function extractJyutpingInitial(string $base): ?string {
+    // Check for two-character initials first
+    $twoCharInitials = ['ng', 'gw', 'kw'];
+    foreach ($twoCharInitials as $initial) {
+        if (str_starts_with($base, $initial)) {
+            return $initial;
+        }
+    }
+
+    // Check for single-character initials
+    $singleCharInitials = ['b', 'p', 'm', 'f', 'd', 't', 'n', 'l', 'g', 'k', 'h', 'w', 'z', 'c', 's', 'j'];
+    foreach ($singleCharInitials as $initial) {
+        if (str_starts_with($base, $initial)) {
+            return $initial;
+        }
+    }
+
+    return null; // No initial (vowel onset)
+}
+
+/**
+ * Extract final from Jyutping syllable
+ */
+function extractJyutpingFinal(string $base, ?string $initial): ?string {
+    $startPos = $initial ? strlen($initial) : 0;
+    $final = substr($base, $startPos);
+
+    if (empty($final)) return null;
+
+    // Comprehensive list of valid Jyutping finals including all diphthongs and triphthongs
+    $validFinals = [
+        // Monophthongs (single vowels)
+        'aa', 'a', 'e', 'i', 'o', 'u', 'yu', 'oe',
+        // Diphthongs (two vowels): ai, au, ei, eu, iu, oi, ou, ui
+        'aai', 'ai', 'aau', 'au', 'ei', 'eu', 'iu', 'oi', 'ou', 'ui',
+        // Triphthongs (three vowels): eoi, eon, eot
+        'eoi', 'eon', 'eot',
+        // Nasal finals with monophthongs
+        'aam', 'am', 'aan', 'an', 'aang', 'ang', 'aap', 'ap', 'aat', 'at', 'aak', 'ak',
+        // Nasal finals with diphthongs/triphthongs
+        'eong', 'eok', 'im', 'in', 'ing', 'ip', 'it', 'ik',
+        'on', 'ong', 'ot', 'ok', 'un', 'ung', 'ut', 'uk',
+        'yun', 'yut', 'oen', 'oeng', 'oet', 'oek',
+        // Standalone nasal finals
+        'm', 'ng'
+    ];
+
+    // Check for exact match first
+    if (in_array($final, $validFinals)) {
+        return $final;
+    }
+
+    // For longer finals, check if any valid final is a prefix
+    // This handles cases where the final might be extended
+    foreach ($validFinals as $validFinal) {
+        if (str_starts_with($final, $validFinal)) {
+            return $validFinal;
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Calculate confidence score for AI-generated Jyutping by cross-checking against database
+ */
+function calculateAiJyutpingConfidence(PDO $db, string $chineseText, string $aiJyutping): float {
+    // Start with base confidence from linguistic validation (already passed)
+    $confidence = 0.7;
+
+    try {
+        // Check if this exact Jyutping-Chinese pair exists in database
+        $stmt = $db->prepare("
+            SELECT frequency
+            FROM jyutping_dictionary
+            WHERE jyutping_code = ?
+              AND (hanzi = ? OR word = ?)
+            ORDER BY frequency DESC
+            LIMIT 1
+        ");
+        $stmt->execute([$aiJyutping, $chineseText, $chineseText]);
+        $exactMatch = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($exactMatch) {
+            // Exact match found - high confidence
+            $frequency = (int)$exactMatch['frequency'];
+            if ($frequency >= 1000) {
+                return 0.95; // Very common word
+            } elseif ($frequency >= 500) {
+                return 0.90; // Common word
+            } elseif ($frequency >= 100) {
+                return 0.85; // Moderately common
+            } else {
+                return 0.80; // Less common but exact match
+            }
+        }
+
+        // Check if Jyutping exists for other words (potential confusion)
+        $stmt = $db->prepare("
+            SELECT COUNT(*) as count
+            FROM jyutping_dictionary
+            WHERE jyutping_code = ?
+              AND frequency > 50
+        ");
+        $stmt->execute([$aiJyutping]);
+        $jyutpingCount = $stmt->fetch(PDO::FETCH_ASSOC)['count'];
+
+        if ($jyutpingCount > 5) {
+            // This Jyutping is used for many different words - reduce confidence
+            $confidence -= 0.1;
+        }
+
+        // Check syllable structure similarity with known entries
+        $syllables = explode(' ', $aiJyutping);
+        $totalSyllables = count($syllables);
+        $validSyllables = 0;
+
+        foreach ($syllables as $syllable) {
+            $stmt = $db->prepare("
+                SELECT COUNT(*) as count
+                FROM jyutping_dictionary
+                WHERE jyutping_code LIKE ?
+                  AND frequency > 20
+                LIMIT 1
+            ");
+            $stmt->execute([$syllable . '%']);
+            if ($stmt->fetch(PDO::FETCH_ASSOC)['count'] > 0) {
+                $validSyllables++;
+            }
+        }
+
+        // Adjust confidence based on syllable validity
+        $syllableRatio = $validSyllables / $totalSyllables;
+        $confidence = $confidence * (0.8 + 0.2 * $syllableRatio); // 80-100% of current confidence
+
+        // Penalize very rare syllable combinations
+        if ($syllableRatio < 0.5) {
+            $confidence -= 0.2;
+        }
+
+        // Ensure minimum confidence
+        return max(0.1, min(0.95, $confidence));
+
+    } catch (Exception $e) {
+        error_log("Error calculating AI Jyutping confidence: " . $e->getMessage());
+        return 0.5; // Default moderate confidence on error
+    }
+}
+
+/**
+ * Validate initial-final combination in Jyutping
+ * Based on authoritative Jyutping phonology (CUHK Jyutping resources)
+ * Reference: https://humanum.arts.cuhk.edu.hk/Lexis/lexi-can/
+ */
+function isValidJyutpingCombination(?string $initial, string $final): bool {
+    // Comprehensive Jyutping syllable inventory based on authoritative sources
+    // All valid initial-final combinations in Cantonese Jyutping
+    $validCombinations = [
+        // b + finals
+        'b' => ['aa', 'aai', 'aak', 'aan', 'aang', 'aat', 'ai', 'ak', 'am', 'an', 'ang', 'ap', 'at', 'ei', 'ik', 'in', 'ing', 'it', 'iu', 'o', 'oi', 'ok', 'ong', 'ou', 'uk', 'ung', 'ut'],
+        // p + finals
+        'p' => ['aa', 'aai', 'aak', 'aan', 'aang', 'aat', 'ai', 'ak', 'am', 'an', 'ang', 'ap', 'at', 'ei', 'ik', 'in', 'ing', 'it', 'iu', 'o', 'oi', 'ok', 'ong', 'ou', 'uk', 'ung', 'ut'],
+        // m + finals
+        'm' => ['aa', 'aai', 'aak', 'aan', 'aang', 'aat', 'ai', 'ak', 'am', 'an', 'ang', 'ap', 'at', 'e', 'ei', 'ik', 'in', 'ing', 'it', 'iu', 'o', 'ou', 'ui', 'uk', 'ung', 'ut'],
+        // f + finals
+        'f' => ['aa', 'aai', 'aak', 'aan', 'aang', 'aat', 'ai', 'an', 'ang', 'at', 'e', 'ei', 'ik', 'o', 'oi', 'ok', 'ong', 'u', 'ui', 'uk', 'ung', 'ut'],
+        // d + finals
+        'd' => ['aa', 'aai', 'aak', 'aan', 'aang', 'aat', 'ai', 'ak', 'am', 'an', 'ang', 'ap', 'at', 'e', 'ei', 'ek', 'eng', 'eoi', 'eon', 'eot', 'ik', 'im', 'in', 'ing', 'ip', 'it', 'iu', 'o', 'oe', 'oek', 'oeng', 'oi', 'ok', 'ong', 'ou', 'uk', 'ung', 'ut'],
+        // t + finals
+        't' => ['aa', 'aai', 'aak', 'aan', 'aang', 'aat', 'ai', 'ak', 'am', 'an', 'ang', 'ap', 'at', 'e', 'ei', 'ek', 'eng', 'eoi', 'eon', 'eot', 'ik', 'im', 'in', 'ing', 'ip', 'it', 'iu', 'o', 'oe', 'oek', 'oeng', 'oi', 'ok', 'ong', 'ou', 'uk', 'ung', 'ut'],
+        // n + finals
+        'n' => ['aa', 'aai', 'aak', 'aan', 'aang', 'aat', 'ai', 'ak', 'am', 'an', 'ang', 'ap', 'at', 'e', 'ei', 'ek', 'eng', 'eoi', 'eon', 'eot', 'ik', 'im', 'in', 'ing', 'ip', 'it', 'iu', 'o', 'oe', 'oek', 'oeng', 'oi', 'ok', 'ong', 'ou', 'uk', 'ung', 'ut'],
+        // l + finals
+        'l' => ['aa', 'aai', 'aak', 'aan', 'aang', 'aat', 'ai', 'ak', 'am', 'an', 'ang', 'ap', 'at', 'e', 'ei', 'ek', 'eng', 'eoi', 'eon', 'eot', 'ik', 'im', 'in', 'ing', 'ip', 'it', 'iu', 'o', 'oe', 'oek', 'oeng', 'oi', 'ok', 'ong', 'ou', 'uk', 'ung', 'ut'],
+        // g + finals
+        'g' => ['aa', 'aai', 'aak', 'aan', 'aang', 'aat', 'ai', 'ak', 'am', 'an', 'ang', 'ap', 'at', 'e', 'ei', 'ek', 'eng', 'eoi', 'eon', 'eot', 'ik', 'im', 'in', 'ing', 'ip', 'it', 'iu', 'o', 'oe', 'oek', 'oeng', 'oi', 'ok', 'ong', 'ou', 'uk', 'ung', 'ut'],
+        // k + finals
+        'k' => ['aa', 'aai', 'aak', 'aan', 'aang', 'aat', 'ai', 'ak', 'am', 'an', 'ang', 'ap', 'at', 'e', 'ei', 'ek', 'eng', 'eoi', 'eon', 'eot', 'ik', 'im', 'in', 'ing', 'ip', 'it', 'iu', 'o', 'oe', 'oek', 'oeng', 'oi', 'ok', 'ong', 'ou', 'uk', 'ung', 'ut'],
+        // ng + finals (authoritative: ng is very restricted, mainly nasal finals only)
+        'ng' => ['aa', 'aai', 'aak', 'aan', 'aang', 'aat', 'ai', 'ak', 'am', 'an', 'ang', 'ap', 'at'],
+        // h + finals
+        'h' => ['aa', 'aai', 'aak', 'aan', 'aang', 'aat', 'ai', 'ak', 'am', 'an', 'ang', 'ap', 'at', 'e', 'ei', 'ek', 'eng', 'eoi', 'eon', 'eot', 'ik', 'im', 'in', 'ing', 'ip', 'it', 'iu', 'o', 'oe', 'oek', 'oeng', 'oi', 'ok', 'ong', 'ou', 'uk', 'ung', 'ut'],
+        // gw + finals (labialized velars)
+        'gw' => ['aa', 'aai', 'aak', 'aan', 'aang', 'aat', 'ai', 'ak', 'an', 'ang', 'at', 'o', 'ok', 'ong', 'u', 'ui', 'un', 'ung', 'ut', 'uk'],
+        // kw + finals (labialized velars)
+        'kw' => ['aa', 'aai', 'aak', 'aan', 'aang', 'aat', 'ai', 'ak', 'an', 'ang', 'at', 'o', 'ok', 'ong', 'u', 'ui', 'un', 'ung', 'ut', 'uk'],
+        // w + finals (labial approximant)
+        'w' => ['aa', 'aai', 'aak', 'aan', 'aang', 'aat', 'ai', 'ak', 'an', 'ang', 'at', 'e', 'ui', 'un', 'ut'],
+        // z + finals (alveolar sibilants)
+        'z' => ['aa', 'aai', 'aak', 'aan', 'aang', 'aat', 'ai', 'ak', 'am', 'an', 'ang', 'ap', 'at', 'e', 'ei', 'ek', 'eng', 'eoi', 'eon', 'eot', 'ik', 'im', 'in', 'ing', 'ip', 'it', 'iu', 'o', 'oe', 'oek', 'oeng', 'oi', 'ok', 'ong', 'ou', 'uk', 'ung', 'ut'],
+        // c + finals (alveolar sibilants)
+        'c' => ['aa', 'aai', 'aak', 'aan', 'aang', 'aat', 'ai', 'ak', 'am', 'an', 'ang', 'ap', 'at', 'e', 'ei', 'ek', 'eng', 'eoi', 'eon', 'eot', 'ik', 'im', 'in', 'ing', 'ip', 'it', 'iu', 'o', 'oe', 'oek', 'oeng', 'oi', 'ok', 'ong', 'ou', 'uk', 'ung', 'ut'],
+        // s + finals (alveolar sibilants)
+        's' => ['aa', 'aai', 'aak', 'aan', 'aang', 'aat', 'ai', 'ak', 'am', 'an', 'ang', 'ap', 'at', 'e', 'ei', 'ek', 'eng', 'eoi', 'eon', 'eot', 'ik', 'im', 'in', 'ing', 'ip', 'it', 'iu', 'o', 'oe', 'oek', 'oeng', 'oi', 'ok', 'ong', 'ou', 'uk', 'ung', 'ut'],
+        // j + finals (alveolar-palatal sibilants)
+        'j' => ['aa', 'aai', 'aak', 'aan', 'aang', 'aat', 'ai', 'ak', 'am', 'an', 'ang', 'ap', 'at', 'e', 'ei', 'ek', 'eng', 'eoi', 'eon', 'eot', 'ik', 'im', 'in', 'ing', 'ip', 'it', 'iu', 'o', 'oe', 'oek', 'oeng', 'oi', 'ok', 'ong', 'ou', 'uk', 'ung', 'ut']
+    ];
+
+    // Special case: standalone finals (no initial) - authoritative list
+    $standaloneFinals = ['aa', 'a', 'e', 'i', 'o', 'u', 'yu', 'oe', 'm', 'ng'];
+    if ($initial === null) {
+        return in_array($final, $standaloneFinals);
+    }
+
+    // Check if combination is valid
+    $initialLower = strtolower($initial);
+    if (!isset($validCombinations[$initialLower])) {
+        return false;
+    }
+
+    // Allow partial matches for finals (e.g., "aang" matches if "aan" is in list)
+    // This handles cases where the syllable might have additional coda elements
+    $finalLower = strtolower($final);
+    foreach ($validCombinations[$initialLower] as $validFinal) {
+        if (str_starts_with($finalLower, $validFinal) || $finalLower === $validFinal) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 /**
@@ -1100,7 +1403,7 @@ function handleGamesRoutes($method, $pathParts, $data, $authToken) {
                     // Step 2: Find Jyutping using improved search function
                     // Apply student-specific matching rules if profileId is provided
                     if ($chineseText) {
-                        $jyutping = findFullWordJyutpingForGame($db, $chineseText, false, $userId, $profileId);
+                        $jyutping = findFullWordJyutpingForGame($db, $chineseText, false, $studentUserId, $profileId);
                         $jyutpingCode = $jyutping ? $jyutping['jyutping_code'] : null;
                         // Enable debug
                     } else {
@@ -1109,9 +1412,9 @@ function handleGamesRoutes($method, $pathParts, $data, $authToken) {
                         }
                     }
                     
-                    // Step 3: 根據匹配方式估算置信度，低於 0.5 則嘗試用 AI 修正粵拼
+                    // Step 3: For games, be much more lenient - accept any match that has a jyutping code
                     $jyutpingCode = null;
-                    $confidence = 0.0;
+                    $confidence = 0.5; // Default confidence for games
                     if ($jyutping && !empty($jyutping['jyutping_code'])) {
                         $jyutpingCode = $jyutping['jyutping_code'];
                         $matchType = $jyutping['_match_type'] ?? 'unknown';
@@ -1119,59 +1422,93 @@ function handleGamesRoutes($method, $pathParts, $data, $authToken) {
                         $totalLen  = $chineseText ? mb_strlen($chineseText, 'UTF-8') : $matchLen;
 
                         if ($matchType === 'exact') {
-                            $confidence = 1.0;
+                            $confidence = 1.0; // Exact matches get high confidence
                         } elseif ($matchType === 'substring' && $totalLen > 0) {
-                            // 子串長度佔原文比例，作為簡單置信度指標
-                            $confidence = max(0.1, min(1.0, $matchLen / $totalLen));
+                            // Substring matches get moderate confidence based on length ratio
+                            $confidence = max(0.6, min(0.9, $matchLen / $totalLen));
                         } elseif ($matchType === 'single_char') {
-                            // 多字詞語只命中單字，視為極低置信度
-                            $confidence = ($totalLen > 1) ? 0.0 : 0.3;
+                            // Single character matches get reasonable confidence for games
+                            $confidence = 0.7;
                         } else {
-                            $confidence = 0.6;
+                            // Unknown match types get moderate confidence
+                            $confidence = 0.8;
                         }
                     }
 
-                    // 若置信度低於 0.5，嘗試用 AI 重新標注粵拼（僅影響本局遊戲，不直接寫回資料庫）
-                    if ($chineseText && $confidence < 0.5) {
+                    // For games, try AI correction for any confidence level (be much more lenient)
+                    if ($chineseText && $jyutpingCode) {
                         if ($gameType === 'jyutping-picture') {
-                            error_log("  [jyutping] Low confidence match (type=" . ($jyutping['_match_type'] ?? 'none') . ", conf=$confidence), trying AI for '$chineseText'");
+                            error_log("  [jyutping] Trying AI enhancement for '$chineseText' (current conf=$confidence)");
                         }
-                        // 延遲載入 AI helper，避免無用開銷
-                        require_once __DIR__ . '/../helpers/ollama.php';
-                        $aiJyutping = predictJyutpingForChinese($chineseText);
-                        $validatedAi = $aiJyutping ? validate_ai_jyutping($chineseText, $aiJyutping) : null;
-                        if ($validatedAi) {
-                            $jyutpingCode = $validatedAi;
-                            $confidence = 0.9;
-                            if ($gameType === 'jyutping-picture') {
-                                error_log("  [jyutping] ✓ AI corrected jyutping for '$chineseText' -> '$jyutpingCode'");
+
+                        try {
+                            require_once __DIR__ . '/../helpers/ollama.php';
+                            $aiJyutping = predictJyutpingForChinese($chineseText);
+
+                            if ($aiJyutping && trim($aiJyutping) !== '') {
+                                $validatedAi = validate_ai_jyutping($chineseText, $aiJyutping);
+
+                                if ($validatedAi) {
+                                    // For games, be much more lenient with AI confidence
+                                    $aiConfidence = calculateAiJyutpingConfidence($db, $chineseText, $validatedAi);
+                                    // Accept AI if it's at least as good as our current match, or if AI confidence >= 0.6
+                                    if ($aiConfidence >= 0.6 && $aiConfidence >= $confidence) {
+                                        $jyutpingCode = $validatedAi;
+                                        $confidence = $aiConfidence;
+                                        if ($gameType === 'jyutping-picture') {
+                                            error_log("  [jyutping] ✓ AI enhanced jyutping for '$chineseText' -> '$jyutpingCode' (conf=$confidence)");
+                                        }
+                                    } else {
+                                        if ($gameType === 'jyutping-picture') {
+                                            error_log("  [jyutping] Keeping original jyutping (AI conf=$aiConfidence < threshold)");
+                                        }
+                                    }
+                                } else {
+                                    if ($gameType === 'jyutping-picture') {
+                                        error_log("  [jyutping] AI jyutping validation failed, keeping original");
+                                    }
+                                }
+                            } else {
+                                if ($gameType === 'jyutping-picture') {
+                                    error_log("  [jyutping] AI returned empty response, keeping original jyutping");
+                                }
                             }
-                        } else {
-                            if ($gameType === 'jyutping-picture') {
-                                error_log("  [jyutping] ✗ AI jyutping rejected for '$chineseText' -> '" . ($aiJyutping ?? '') . "'");
-                            }
-                            if (($jyutping['_match_type'] ?? null) === 'single_char' || $confidence < 0.5) {
-                                $jyutpingCode = null;
-                            }
+                        } catch (Exception $e) {
+                            error_log("  [jyutping] AI service exception: " . $e->getMessage() . " - keeping original jyutping");
                         }
                     }
 
+                    // For games, be much more lenient - accept any jyutping match
                     if ($jyutpingCode) {
-                        $pair['jyutping'] = $jyutpingCode;
-                        $pair['character'] = $jyutping['hanzi'] ?? $jyutping['word'] ?? $chineseText;
-                        // Only add pair if it has jyutping code
-                        $pairs[] = $pair;
-                        $matchedCount++;
-                        if ($gameType === 'jyutping-picture') {
-                            error_log("✓ Matched #$matchedCount: title='$title' (source=$sourceType) -> jyutping='$jyutpingCode' (conf=$confidence)");
+                        // Filter out words/phrases with more than 3 syllables for educational purposes
+                        $syllableCount = count_jyutping_syllables($jyutpingCode);
+                        if ($syllableCount <= 3) {
+                            $pair['jyutping'] = $jyutpingCode;
+                            $pair['character'] = $jyutping['hanzi'] ?? $jyutping['word'] ?? $chineseText;
+                            // For games, accept any match with jyutping code (much more lenient than strict validation)
+                            $pairs[] = $pair;
+                            $matchedCount++;
+                            if ($gameType === 'jyutping-picture') {
+                                error_log("✓ Matched #$matchedCount: title='$title' (source=$sourceType) -> jyutping='$jyutpingCode' ($syllableCount syllables, conf=$confidence)");
+                            }
+                        } else {
+                            if ($gameType === 'jyutping-picture') {
+                                error_log("✗ Skipped #$skippedNoJyutping: title='$title' (source=$sourceType) -> jyutping='$jyutpingCode' ($syllableCount syllables > 3 limit)");
+                            }
+                            $skippedNoJyutping++;
                         }
                     } else {
-                        // Skip this pair if no jyutping found for jyutping-picture game
-                        $skippedNoJyutping++;
+                        // For games, even if no jyutping found, still try to use this item
+                        // This allows the game to work with more content, even if jyutping is not perfect
                         if ($gameType === 'jyutping-picture') {
+                            // Skip for jyutping-picture games if no jyutping (we need jyutping for these games)
+                            $skippedNoJyutping++;
                             error_log("✗ No jyutping #$skippedNoJyutping: title='$title' (source=$sourceType), chineseText='$chineseText', labelKey='" . ($item['labelKey'] ?? 'none') . "'");
+                            continue;
+                        } else {
+                            // For word-picture games, we can still use the item even without jyutping
+                            $pairs[] = $pair;
                         }
-                        continue;
                     }
                 } else {
                     // For word-picture, add all pairs
@@ -1775,4 +2112,3 @@ function handleGamesRoutes($method, $pathParts, $data, $authToken) {
     
     return errorResponse('Games route not found', 404);
 }
-

@@ -18,7 +18,8 @@ export class PeopleContainer extends PureComponent {
   state = {
     name: this.props.user.name,
     email: this.props.user.email,
-    birthdate: this.props.user.birthdate
+    birthdate: this.props.user.birthdate,
+    role: this.props.user.role
   };
 
   handleChange = name => event => {
@@ -34,13 +35,15 @@ export class PeopleContainer extends PureComponent {
         id: this.props.user.id,
         name: this.state.name,
         email: this.state.email,
-        birthdate: this.state.birthdate
+        birthdate: this.state.birthdate,
+        role: this.state.role
       });
       this.props.updateUserData({
         ...this.props.user,
         name: this.state.name,
         email: this.state.email,
-        birthdate: this.state.birthdate
+        birthdate: this.state.birthdate,
+        role: this.state.role
       });
     } catch (e) {
     } finally {
@@ -84,6 +87,7 @@ export class PeopleContainer extends PureComponent {
         name={this.state.name}
         email={this.state.email}
         birthdate={this.state.birthdate}
+        role={this.state.role}
         location={location}
         onChangePeople={this.handleChange}
         onSubmitPeople={this.handleSubmit}

@@ -71,7 +71,7 @@ function sendEmail($to, $subject, $body, $attachments = []) {
  */
 function generateProfileZIP($profileData, $outputPath = null) {
     if (!class_exists('ZipArchive')) {
-        error_log("ZipArchive class not available");
+        error_log("ZipArchive class not available. The PHP zip extension needs to be enabled in php.ini. On Windows, uncomment 'extension=zip' in php.ini and restart your web server.");
         return false;
     }
     
@@ -107,4 +107,3 @@ function generateProfileZIP($profileData, $outputPath = null) {
     
     return file_exists($outputPath) ? $outputPath : false;
 }
-

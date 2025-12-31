@@ -235,6 +235,14 @@ export default defineMessages({
     id: 'cboard.components.Settings.adminPanel',
     defaultMessage: 'Admin Panel'
   },
+  teacherDashboard: {
+    id: 'cboard.components.Settings.teacherDashboard',
+    defaultMessage: 'Teacher Dashboard'
+  },
+  parentDashboard: {
+    id: 'cboard.components.Settings.parentDashboard',
+    defaultMessage: 'Parent Dashboard'
+  },
   learningGames: {
     id: 'cboard.components.Settings.learningGames',
     defaultMessage: 'Learning Games'

@@ -11,7 +11,7 @@ import DialogContent from '@material-ui/core/DialogContent';
 import DialogActions from '@material-ui/core/DialogActions';
 import FormControlLabel from '@material-ui/core/FormControlLabel';
 import Checkbox from '@material-ui/core/Checkbox';
-import { TextField } from '../../UI/FormItems';
+import { TextField, SelectField } from '../../UI/FormItems';
 import LoadingIcon from '../../UI/LoadingIcon';
 import validationSchema from './validationSchema';
 import { signUp } from './SignUp.actions';
@@ -86,6 +86,7 @@ function SignUp(props) {
     email: '',
     password: '',
     passwordConfirm: '',
+    role: 'student', // Default to student
     isTermsAccepted: false
   };
 
@@ -140,6 +141,23 @@ function SignUp(props) {
                   name="passwordConfirm"
                   onChange={handleChange}
                 />
+
+                {/* Role Selection */}
+                <Typography variant="body2" color="textSecondary" style={{ marginTop: '1rem', marginBottom: '0.5rem' }}>
+                  <FormattedMessage {...messages.roleDescription} />
+                </Typography>
+                <SelectField
+                  name="role"
+                  label={intl.formatMessage(messages.selectRole)}
+                  error={errors.role}
+                  onChange={handleChange}
+                  options={[
+                    { value: 'student', label: intl.formatMessage(messages.roleStudent) },
+                    { value: 'teacher', label: intl.formatMessage(messages.roleTeacher) },
+                    { value: 'parent', label: intl.formatMessage(messages.roleParent) }
+                  ]}
+                />
+
                 <FormControlLabel
                   control={
                     <Checkbox

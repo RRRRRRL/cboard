@@ -1298,6 +1298,29 @@ class API {
     }
   }
 
+  async translateToJyutping(text) {
+    try {
+      const authToken = getAuthToken();
+      const headers = {
+        'Content-Type': 'application/json'
+      };
+
+      if (authToken && authToken.length) {
+        headers.Authorization = `Bearer ${authToken}`;
+      }
+
+      const { data } = await this.axiosInstance.post(`/jyutping/translate`, {
+        text
+      }, {
+        headers: Object.keys(headers).length ? headers : undefined
+      });
+      return data;
+    } catch (err) {
+      console.error('Jyutping translation error:', err);
+      throw err;
+    }
+  }
+
 
   async generateJyutpingAudio(audioData) {
     // Audio endpoint doesn't require authentication for basic playback
@@ -3201,6 +3224,32 @@ class API {
   }
 
   /**
+   * Get admin dashboard data (system admin only)
+   * @returns {Promise<Object>} Dashboard data
+   */
+  async getAdminDashboard() {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    try {
+      const response = await this.axiosInstance.get(
+        '/admin/dashboard',
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Get admin dashboard error:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Get admin statistics (admin only)
    * @returns {Promise<Object>} Statistics data
    */
@@ -3222,6 +3271,333 @@ class API {
       return response.data;
     } catch (error) {
       console.error('Get admin statistics error:', error);
+      throw error;
+    }
+  }
+
+  // ============================================================================
+  // ROLE-BASED ADMIN PANEL
+  // ============================================================================
+
+  /**
+   * Get organizations (system admin only)
+   * @returns {Promise<Object>} Organizations list
+   */
+  async getAdminOrganizations() {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    try {
+      const response = await this.axiosInstance.get(
+        '/admin/organizations',
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Get admin organizations error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get organizations (system admin only) - alias for backward compatibility
+   * @returns {Promise<Object>} Organizations list
+   */
+  async getOrganizations() {
+    return this.getAdminOrganizations();
+  }
+
+  /**
+   * Create organization (system admin only)
+   * @param {Object} orgData - Organization data
+   * @returns {Promise<Object>} Created organization
+   */
+  async createOrganization(orgData) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`,
+      'Content-Type': 'application/json'
+    };
+
+    try {
+      const response = await this.axiosInstance.post(
+        '/admin/organizations',
+        orgData,
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Create organization error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get organization classes (org admin or system admin)
+   * @param {number} orgId - Organization ID
+   * @returns {Promise<Object>} Classes list
+   */
+  async getOrganizationClasses(orgId) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    try {
+      const response = await this.axiosInstance.get(
+        `/admin/organizations/${orgId}/classes`,
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Get organization classes error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Create class in organization
+   * @param {number} orgId - Organization ID
+   * @param {Object} classData - Class data
+   * @returns {Promise<Object>} Created class
+   */
+  async createOrganizationClass(orgId, classData) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`,
+      'Content-Type': 'application/json'
+    };
+
+    try {
+      const response = await this.axiosInstance.post(
+        `/admin/organizations/${orgId}/classes`,
+        classData,
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Create organization class error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get organization users
+   * @param {number} orgId - Organization ID
+   * @returns {Promise<Object>} Users list
+   */
+  async getOrganizationUsers(orgId) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    try {
+      const response = await this.axiosInstance.get(
+        `/admin/organizations/${orgId}/users`,
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Get organization users error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Assign user to organization
+   * @param {number} orgId - Organization ID
+   * @param {Object} assignmentData - Assignment data (user_id, role, class_id)
+   * @returns {Promise<Object>} Assignment result
+   */
+  async assignUserToOrganization(orgId, assignmentData) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`,
+      'Content-Type': 'application/json'
+    };
+
+    try {
+      const response = await this.axiosInstance.post(
+        `/admin/organizations/${orgId}/users`,
+        assignmentData,
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Assign user to organization error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get teacher students (teacher view)
+   * @param {Object} filters - Optional filters (organization_id, class_id)
+   * @returns {Promise<Object>} Students list
+   */
+  async getTeacherStudents(filters = {}) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    try {
+      const params = new URLSearchParams();
+      Object.keys(filters).forEach(key => {
+        if (filters[key] !== null && filters[key] !== undefined) {
+          params.append(key, filters[key]);
+        }
+      });
+
+      const response = await this.axiosInstance.get(
+        `/admin/teacher/students?${params.toString()}`,
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Get teacher students error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get parent children (parent view)
+   * @returns {Promise<Object>} Children list
+   */
+  async getParentChildren() {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    try {
+      const response = await this.axiosInstance.get(
+        '/admin/parent/children',
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Get parent children error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get student progress (for teachers/parents)
+   * @param {number} studentId - Student user ID
+   * @returns {Promise<Object>} Student progress data
+   */
+  async getStudentProgress(studentId) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    try {
+      const response = await this.axiosInstance.get(
+        `/admin/student/progress/${studentId}`,
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Get student progress error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Create learning objective (for teachers)
+   * @param {Object} objectiveData - Objective data
+   * @returns {Promise<Object>} Created objective
+   */
+  async createLearningObjective(objectiveData) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`,
+      'Content-Type': 'application/json'
+    };
+
+    try {
+      const response = await this.axiosInstance.post(
+        '/admin/learning-objectives',
+        objectiveData,
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Create learning objective error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update learning objective (for teachers)
+   * @param {number} objectiveId - Objective ID
+   * @param {Object} updateData - Update data
+   * @returns {Promise<Object>} Updated objective
+   */
+  async updateLearningObjective(objectiveId, updateData) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`,
+      'Content-Type': 'application/json'
+    };
+
+    try {
+      const response = await this.axiosInstance.put(
+        `/admin/learning-objectives/${objectiveId}`,
+        updateData,
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Update learning objective error:', error);
       throw error;
     }
   }

@@ -15,6 +15,11 @@ import NotFound from '../NotFound';
 import Settings from '../Settings';
 import WelcomeScreen from '../WelcomeScreen';
 import Analytics from '../Analytics';
+import AdminDashboard from '../Admin/AdminDashboard';
+import TeacherDashboard from '../Settings/Teacher/TeacherDashboard';
+import ParentDashboard from '../Settings/Parent/ParentDashboard';
+import AdminOrganizations from '../Admin/AdminOrganizations/AdminOrganizations.component';
+import AdminUsers from '../Admin/AdminUsers/AdminUsers.component';
 import './App.css';
 import LoginRequiredModal from '../LoggedInFeature/LoginRequiredModal';
 
@@ -70,6 +75,17 @@ export class App extends Component {
             path="/login-signup"
             to="/"
           />
+          {/* Role-based dashboard routes - specific routes first */}
+          <Route path="/admin/dashboard" component={AdminDashboard} />
+          <Route path="/settings/admin" component={AdminDashboard} />
+          <Route path="/admin/organizations/new" component={AdminOrganizations} />
+          <Route path="/admin/organizations" component={AdminOrganizations} />
+          <Route path="/admin/users" component={AdminUsers} />
+          <Route path="/teacher/dashboard" component={TeacherDashboard} />
+          <Route path="/settings/teacher" component={TeacherDashboard} />
+          <Route path="/parent/dashboard" component={ParentDashboard} />
+          <Route path="/settings/parent" component={ParentDashboard} />
+
           <Route path="/settings" component={Settings} />
           <Route path="/analytics" component={Analytics} />
           <Route path="/activate/:url" component={Activate} />
@@ -94,6 +110,7 @@ export class App extends Component {
           />
           {/* 主溝通頁：改用 profile 路徑，id 視為 profileId */}
           <Route path="/profile/:id" component={BoardContainer} />
+
           {isDownloadingLang && (
             <Route exact path={'/'}>
               <Redirect to={'/settings/language'} />

@@ -71,5 +71,13 @@ export default defineMessages({
   cancelDeleteAccount: {
     id: 'cboard.components.Settings.People.cancelDeleteAccount',
     defaultMessage: 'Cancel'
+  },
+  role: {
+    id: 'cboard.components.Settings.People.role',
+    defaultMessage: 'Role'
+  },
+  roleSecondary: {
+    id: 'cboard.components.Settings.People.roleSecondary',
+    defaultMessage: 'Your account role'
   }
 });

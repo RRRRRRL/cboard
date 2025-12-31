@@ -693,9 +693,9 @@ function handleTransferRoutes($method, $pathParts, $data, $authToken) {
             
             // Generate ZIP file
             $zipPath = generateProfileZIP($exportData);
-            
+
             if (!$zipPath) {
-                return errorResponse('Failed to generate ZIP file', 500);
+                return errorResponse('Failed to generate ZIP file. The PHP zip extension may not be enabled. Please contact your server administrator to enable the zip extension in php.ini.', 500);
             }
             
             // Prepare email
@@ -788,4 +788,3 @@ function handleTransferRoutes($method, $pathParts, $data, $authToken) {
     
     return errorResponse('Transfer route not found', 404);
 }
-

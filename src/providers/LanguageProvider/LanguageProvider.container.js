@@ -73,7 +73,7 @@ export class LanguageProvider extends Component {
   render() {
     const { lang, children } = this.props;
 
-    const locale = lang.slice(0, 2);
+    const locale = lang;
 
     if (!this.state.messages) {
       return null;

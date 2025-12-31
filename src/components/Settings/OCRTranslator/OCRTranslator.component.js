@@ -21,160 +21,7 @@ import FullScreenDialog from '../../UI/FullScreenDialog';
 import messages from './OCRTranslator.messages';
 import './OCRTranslator.css';
 
-/**
- * Advanced image preprocessing for better OCR recognition, optimized for Traditional Chinese
- * @param {string} base64Image - Base64 encoded image
- * @returns {Promise<string>} - Preprocessed base64 image
- */
-async function preprocessImageForOCR(base64Image) {
-  return new Promise((resolve) => {
-    try {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        
-        // Scale up image for better recognition (minimum 300 DPI equivalent)
-        const scale = Math.max(1, 300 / 72); // Assume 72 DPI, scale to 300 DPI
-        canvas.width = img.width * scale;
-        canvas.height = img.height * scale;
-        
-        // Use high-quality image rendering
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = 'high';
-        
-        // Draw scaled image
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        
-        // Get image data
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const data = imageData.data;
-        
-        // Step 1: Convert to grayscale with better luminance formula
-        const grayscale = [];
-        for (let i = 0; i < data.length; i += 4) {
-          // Use ITU-R BT.709 luminance formula (better for modern displays)
-          const gray = data[i] * 0.2126 + data[i + 1] * 0.7152 + data[i + 2] * 0.0722;
-          grayscale.push(gray);
-        }
-        
-        // Step 2: Calculate adaptive threshold using Otsu's method
-        const threshold = calculateOtsuThreshold(grayscale);
-        
-        // Step 3: Apply noise reduction (median filter for small kernel)
-        const denoised = applyMedianFilter(grayscale, canvas.width, canvas.height, 3);
-        
-        // Step 4: Apply adaptive thresholding and contrast enhancement
-        for (let i = 0; i < data.length; i += 4) {
-          const gray = denoised[i / 4];
-          
-          // Adaptive thresholding with slight smoothing
-          let enhanced;
-          if (gray > threshold) {
-            // Bright areas - enhance contrast
-            enhanced = Math.min(255, gray * 1.2);
-          } else {
-            // Dark areas - make darker
-            enhanced = Math.max(0, gray * 0.8);
-          }
-          
-          // Apply to RGB channels
-          data[i] = enhanced;     // R
-          data[i + 1] = enhanced; // G
-          data[i + 2] = enhanced; // B
-          // data[i + 3] remains alpha
-        }
-        
-        // Put processed image data back
-        ctx.putImageData(imageData, 0, 0);
-        
-        // Convert to base64
-        const processedBase64 = canvas.toDataURL('image/png', 1.0);
-        resolve(processedBase64);
-      };
-      
-      img.onerror = () => {
-        resolve(base64Image);
-      };
-      
-      img.src = base64Image;
-    } catch (error) {
-      console.warn('Image preprocessing failed, using original:', error);
-      resolve(base64Image);
-    }
-  });
-}
 
-/**
- * Calculate Otsu's threshold for adaptive binarization
- */
-function calculateOtsuThreshold(grayscale) {
-  const histogram = new Array(256).fill(0);
-  const total = grayscale.length;
-  
-  // Build histogram
-  grayscale.forEach(gray => {
-    histogram[Math.round(gray)]++;
-  });
-  
-  // Calculate Otsu's threshold
-  let sum = 0;
-  for (let i = 0; i < 256; i++) {
-    sum += i * histogram[i];
-  }
-  
-  let sumB = 0;
-  let wB = 0;
-  let wF = 0;
-  let maxVariance = 0;
-  let threshold = 128;
-  
-  for (let i = 0; i < 256; i++) {
-    wB += histogram[i];
-    if (wB === 0) continue;
-    
-    wF = total - wB;
-    if (wF === 0) break;
-    
-    sumB += i * histogram[i];
-    const mB = sumB / wB;
-    const mF = (sum - sumB) / wF;
-    const variance = wB * wF * (mB - mF) * (mB - mF);
-    
-    if (variance > maxVariance) {
-      maxVariance = variance;
-      threshold = i;
-    }
-  }
-  
-  return threshold;
-}
-
-/**
- * Apply median filter for noise reduction
- */
-function applyMedianFilter(grayscale, width, height, kernelSize) {
-  const filtered = [...grayscale];
-  const halfKernel = Math.floor(kernelSize / 2);
-  
-  for (let y = halfKernel; y < height - halfKernel; y++) {
-    for (let x = halfKernel; x < width - halfKernel; x++) {
-      const neighbors = [];
-      for (let dy = -halfKernel; dy <= halfKernel; dy++) {
-        for (let dx = -halfKernel; dx <= halfKernel; dx++) {
-          const idx = (y + dy) * width + (x + dx);
-          neighbors.push(grayscale[idx]);
-        }
-      }
-      // Get median
-      neighbors.sort((a, b) => a - b);
-      const median = neighbors[Math.floor(neighbors.length / 2)];
-      filtered[y * width + x] = median;
-    }
-  }
-  
-  return filtered;
-}
 
 const styles = theme => ({
   tabPanel: {
@@ -219,6 +66,10 @@ function OCRTranslator({
   const [recognizedText, setRecognizedText] = useState('');
   const [jyutpingResult, setJyutpingResult] = useState(null);
   const [annotatedImageUrl, setAnnotatedImageUrl] = useState(null);
+  const [ocrJobId, setOcrJobId] = useState(null);
+  const [ocrStatusUrl, setOcrStatusUrl] = useState(null);
+  const [ocrTimeout, setOcrTimeout] = useState(false);
+  const [ocrStatusCheck, setOcrStatusCheck] = useState(null);
   const fileInputRef = useRef(null);
 
   const handleTabChange = (event, newValue) => {
@@ -242,127 +93,185 @@ function OCRTranslator({
 
   const handleRecognize = async () => {
     if (!imageFile) return;
-    
+
+    console.log('[OCR DEBUG] Starting OCR recognition for file:', imageFile.name, 'Size:', imageFile.size, 'bytes');
+
+    // Reset states
+    setRecognizedText('');
+    setOcrJobId(null);
+    setOcrStatusUrl(null);
+    setOcrTimeout(false);
+    if (ocrStatusCheck) {
+      clearInterval(ocrStatusCheck);
+      setOcrStatusCheck(null);
+    }
+
     try {
       const reader = new FileReader();
       reader.onload = async (e) => {
         try {
           const base64Image = e.target.result;
-          
-          // Try backend OCR first
+          console.log('[OCR DEBUG] Image converted to base64, length:', base64Image.length, 'characters');
+
+          // Try backend OCR first - according to API docs, this is a blocking request (up to 2 minutes)
           let result;
           try {
+            console.log('[OCR DEBUG] Starting backend OCR request (blocking, up to 2 minutes)...');
             result = await onRecognizeImage(base64Image);
-            console.log('Backend OCR result:', result);
-          } catch (backendError) {
-            console.warn('Backend OCR failed, trying client-side:', backendError);
-            result = null;
-          }
-          
-          // Handle different possible response structures
-          let text = result?.recognized_text || result?.data?.recognized_text || result?.text || '';
-          
-          // If backend OCR didn't return text, try client-side OCR (Tesseract.js)
-          if (!text && window.Tesseract) {
-            try {
-              console.log('Attempting client-side OCR with Tesseract.js...');
-              
-              // Preprocess image for better Traditional Chinese recognition
-              const preprocessedImage = await preprocessImageForOCR(base64Image);
-              
-              // Priority: Traditional Chinese > English > Simplified Chinese
-              // Try multiple configurations for best results
-              const recognitionAttempts = [
-                {
-                  lang: 'chi_tra+eng+chi_sim', // Traditional Chinese first
-                  psm: '6', // Uniform block of text
-                  description: 'Traditional Chinese + English + Simplified (PSM 6)'
-                },
-                {
-                  lang: 'chi_tra+eng', // Traditional Chinese + English only
-                  psm: '6',
-                  description: 'Traditional Chinese + English (PSM 6)'
-                },
-                {
-                  lang: 'chi_tra+eng+chi_sim',
-                  psm: '11', // Sparse text
-                  description: 'Traditional Chinese + English + Simplified (PSM 11)'
-                },
-                {
-                  lang: 'chi_tra', // Traditional Chinese only
-                  psm: '6',
-                  description: 'Traditional Chinese only (PSM 6)'
-                }
-              ];
-              
-              let bestResult = '';
-              let bestConfidence = 0;
-              
-              for (const attempt of recognitionAttempts) {
+            console.log('[OCR DEBUG] Backend OCR response received:', result);
+
+            // Check if it's a timeout response with status URL
+            if (result?.error && result?.check_status_url) {
+              console.log('OCR timed out, status URL provided:', result.check_status_url);
+              setOcrJobId(result.job_id);
+              setOcrStatusUrl(result.check_status_url);
+              setOcrTimeout(true);
+
+              // Start polling the status URL
+              const statusInterval = setInterval(async () => {
                 try {
-                  console.log(`Trying OCR with: ${attempt.description}`);
-                  const result = await window.Tesseract.recognize(
-                    preprocessedImage || base64Image,
-                    attempt.lang,
-                    {
-                      logger: m => {
-                        if (m.status === 'recognizing text') {
-                          console.log(`OCR progress: ${Math.round(m.progress * 100)}%`);
-                        }
-                      },
-                      tessedit_pageseg_mode: attempt.psm,
-                      tessedit_ocr_engine_mode: '1', // Neural nets LSTM engine only
-                      // Optimize for Traditional Chinese characters
-                      tessedit_char_whitelist: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz\u4e00-\u9fff\u3400-\u4dbf\u20000-\u2a6df\u2a700-\u2b73f\u2b740-\u2b81f\u2b820-\u2ceaf',
-                    }
-                  );
-                  
-                  const recognizedText = result.data.text.trim();
-                  const confidence = result.data.confidence || 0;
-                  
-                  // Prefer results with higher confidence and more text
-                  if (recognizedText.length > 0 && (confidence > bestConfidence || recognizedText.length > bestResult.length)) {
-                    bestResult = recognizedText;
-                    bestConfidence = confidence;
-                    console.log(`Better result found: ${recognizedText.substring(0, 50)}... (confidence: ${confidence})`);
+                  console.log('Checking OCR job status...');
+                  const statusResponse = await fetch(result.check_status_url);
+                  const statusData = await statusResponse.json();
+
+                  if (statusData.status === 'completed' && statusData.original_text) {
+                    console.log('OCR job completed:', statusData);
+                    setRecognizedText(statusData.original_text);
+                    setOcrTimeout(false);
+                    setOcrJobId(null);
+                    setOcrStatusUrl(null);
+                    clearInterval(statusInterval);
+                    setOcrStatusCheck(null);
+                  } else if (statusData.status === 'failed') {
+                    console.error('OCR job failed');
+                    setOcrTimeout(false);
+                    setOcrJobId(null);
+                    setOcrStatusUrl(null);
+                    clearInterval(statusInterval);
+                    setOcrStatusCheck(null);
+                    // Fall back to client-side OCR
+                    throw new Error('OCR job failed');
                   }
-                  
-                  // If we got a good result, we can stop early
-                  if (confidence > 80 && recognizedText.length > 5) {
-                    break;
-                  }
-                } catch (attemptError) {
-                  console.warn(`OCR attempt failed: ${attempt.description}`, attemptError);
-                  continue;
+                  // Continue polling if still processing
+                } catch (statusError) {
+                  console.error('Error checking OCR status:', statusError);
                 }
-              }
-              
-              if (bestResult) {
-                text = bestResult;
-                console.log(`Final OCR result: ${text.substring(0, 100)}... (confidence: ${bestConfidence})`);
-              } else {
-                // Final fallback: simplified Chinese
-                console.log('Trying final fallback with Simplified Chinese...');
-                const { data: { text: fallbackText } } = await window.Tesseract.recognize(
-                  base64Image,
-                  'chi_sim+eng',
-                  { tessedit_pageseg_mode: '6' }
-                );
-                text = fallbackText.trim();
-                console.log('Fallback OCR result:', text);
-              }
-            } catch (tesseractError) {
-              console.error('Tesseract.js OCR error:', tesseractError);
+              }, 5000); // Check every 5 seconds
+
+              setOcrStatusCheck(statusInterval);
+              return; // Exit early, status checking will handle the result
             }
+          } catch (backendError) {
+            console.warn('Backend OCR failed:', backendError);
+            // Continue to client-side fallback
           }
-          
+
+          // Handle successful backend OCR response
+          let text = result?.recognized_text || result?.data?.recognized_text || result?.original_text || result?.text || '';
+
           if (text) {
             setRecognizedText(text);
-          } else {
-            console.warn('No text recognized from image');
-            // Show message to user that they can manually enter text
+            return; // Success, no need for fallback
+          }
+
+          // If backend OCR didn't return text, try client-side OCR (Tesseract.js)
+          console.log('Backend OCR returned no text, trying client-side OCR...');
+
+          if (!window.Tesseract) {
+            console.warn('Tesseract.js not available for client-side OCR');
             setRecognizedText('');
-            // Optionally show a notification that manual input is available
+            return;
+          }
+
+          try {
+            console.log('Attempting client-side OCR with Tesseract.js...');
+
+            // Priority: Traditional Chinese > English > Simplified Chinese
+            // Try multiple configurations for best results
+            const recognitionAttempts = [
+              {
+                lang: 'chi_tra+eng+chi_sim', // Traditional Chinese first
+                psm: '6', // Uniform block of text
+                description: 'Traditional Chinese + English + Simplified (PSM 6)'
+              },
+              {
+                lang: 'chi_tra+eng', // Traditional Chinese + English only
+                psm: '6',
+                description: 'Traditional Chinese + English (PSM 6)'
+              },
+              {
+                lang: 'chi_tra+eng+chi_sim',
+                psm: '11', // Sparse text
+                description: 'Traditional Chinese + English + Simplified (PSM 11)'
+              },
+              {
+                lang: 'chi_tra', // Traditional Chinese only
+                psm: '6',
+                description: 'Traditional Chinese only (PSM 6)'
+              }
+            ];
+
+            let bestResult = '';
+            let bestConfidence = 0;
+
+            for (const attempt of recognitionAttempts) {
+              try {
+                console.log(`Trying OCR with: ${attempt.description}`);
+                const ocrResult = await window.Tesseract.recognize(
+                  base64Image,
+                  attempt.lang,
+                  {
+                    logger: m => {
+                      if (m.status === 'recognizing text') {
+                        console.log(`OCR progress: ${Math.round(m.progress * 100)}%`);
+                      }
+                    },
+                    tessedit_pageseg_mode: attempt.psm,
+                    tessedit_ocr_engine_mode: '1', // Neural nets LSTM engine only
+                    // Optimize for Traditional Chinese characters
+                    tessedit_char_whitelist: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz\u4e00-\u9fff\u3400-\u4dbf\u20000-\u2a6df\u2a700-\u2b73f\u2b740-\u2b81f\u2b820-\u2ceaf',
+                  }
+                );
+
+                const recognizedText = ocrResult.data.text.trim();
+                const confidence = ocrResult.data.confidence || 0;
+
+                // Prefer results with higher confidence and more text
+                if (recognizedText.length > 0 && (confidence > bestConfidence || recognizedText.length > bestResult.length)) {
+                  bestResult = recognizedText;
+                  bestConfidence = confidence;
+                  console.log(`Better result found: ${recognizedText.substring(0, 50)}... (confidence: ${confidence})`);
+                }
+
+                // If we got a good result, we can stop early
+                if (confidence > 80 && recognizedText.length > 5) {
+                  break;
+                }
+              } catch (attemptError) {
+                console.warn(`OCR attempt failed: ${attempt.description}`, attemptError);
+                continue;
+              }
+            }
+
+            if (bestResult) {
+              text = bestResult;
+              console.log(`Final OCR result: ${text.substring(0, 100)}... (confidence: ${bestConfidence})`);
+            } else {
+              // Final fallback: simplified Chinese
+              console.log('Trying final fallback with Simplified Chinese...');
+              const { data: { text: fallbackText } } = await window.Tesseract.recognize(
+                base64Image,
+                'chi_sim+eng',
+                { tessedit_pageseg_mode: '6' }
+              );
+              text = fallbackText.trim();
+              console.log('Fallback OCR result:', text);
+            }
+
+            setRecognizedText(text || '');
+          } catch (tesseractError) {
+            console.error('Tesseract.js OCR error:', tesseractError);
+            setRecognizedText('');
           }
         } catch (error) {
           console.error('OCR recognize error:', error);
@@ -472,19 +381,35 @@ function OCRTranslator({
           </Button>
         )}
 
-        {(recognizedText || imageFile) && (
+        {(recognizedText || imageFile || ocrTimeout) && (
           <Paper className={classes.resultArea}>
             <Typography variant="h6" gutterBottom>
               <FormattedMessage {...messages.recognizedText} />
             </Typography>
-            {!recognizedText && (
+
+            {ocrTimeout && (
+              <Typography variant="body2" color="textSecondary" style={{ marginBottom: '8px', padding: '8px', backgroundColor: '#fff3cd', borderRadius: '4px' }}>
+                <FormattedMessage
+                  id="cboard.components.Settings.OCRTranslator.processing"
+                  defaultMessage="OCR is being processed in the background. The result will appear here when ready..."
+                />
+                {ocrJobId && (
+                  <span style={{ display: 'block', marginTop: '4px', fontSize: '0.8rem' }}>
+                    Job ID: {ocrJobId}
+                  </span>
+                )}
+              </Typography>
+            )}
+
+            {!recognizedText && !ocrTimeout && (
               <Typography variant="body2" color="textSecondary" style={{ marginBottom: '8px' }}>
-                <FormattedMessage 
+                <FormattedMessage
                   id="cboard.components.Settings.OCRTranslator.noTextRecognized"
                   defaultMessage="No text was recognized. Please enter the text manually below."
                 />
               </Typography>
             )}
+
             <TextField
               fullWidth
               multiline
@@ -496,12 +421,14 @@ function OCRTranslator({
                 id: 'cboard.components.Settings.OCRTranslator.enterTextManually',
                 defaultMessage: 'Enter text manually if OCR did not recognize it...'
               })}
+              disabled={ocrTimeout}
             />
+
             <Button
               variant="contained"
               color="primary"
               onClick={handleConvert}
-              disabled={loading || !recognizedText}
+              disabled={loading || !recognizedText || ocrTimeout}
               fullWidth
               style={{ marginTop: '16px' }}
             >
@@ -754,4 +681,3 @@ OCRTranslator.propTypes = {
 };
 
 export default withStyles(styles)(OCRTranslator);
-

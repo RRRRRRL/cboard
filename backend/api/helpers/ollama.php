@@ -195,12 +195,20 @@ function callOllamaAI(string $question, ?string $model = null, ?string $clientIp
         ];
     }
 
-    // Extract text content (OpenAI-style)
-    $content = $responseData['choices'][0]['message']['content']
-        ?? $responseData['choices'][0]['text']
-        ?? $responseData['message']['content']
-        ?? $responseData['content']
-        ?? '';
+    // Extract text content (OpenAI-style) - with safer access
+    $content = '';
+    if (isset($responseData['choices']) && is_array($responseData['choices']) && count($responseData['choices']) > 0) {
+        $choice = $responseData['choices'][0];
+        if (isset($choice['message']) && is_array($choice['message'])) {
+            $content = $choice['message']['content'] ?? '';
+        } elseif (isset($choice['text'])) {
+            $content = $choice['text'];
+        }
+    } elseif (isset($responseData['message']) && is_array($responseData['message'])) {
+        $content = $responseData['message']['content'] ?? '';
+    } elseif (isset($responseData['content'])) {
+        $content = $responseData['content'];
+    }
 
     return [
         'success'      => true,
@@ -471,18 +479,38 @@ function predictJyutpingForChinese(string $chineseText): ?string {
         return null;
     }
 
-    $prompt = "你是一個粵語粵拼標註專家，使用「粵拼 Jyutping」方案並帶數字聲調。\n\n" .
-              "請將下面的中文詞語或短句轉換為「粵拼（帶聲調數字）」：\n" .
+    $prompt = "你是一個香港粵語專家，專門使用標準粵拼（Jyutping）標註香港口語發音，絕對不要使用普通話拼音。\n\n" .
+              "請將下面的中文詞語轉換為「標準香港粵語粵拼（帶數字聲調）」：\n" .
               "【{$chineseText}】\n\n" .
-              "嚴格要求：\n" .
-              "1. 只輸出粵拼，不要輸出中文、解釋或其他符號。\n" .
-              "2. 多個音節之間用單一空格分隔，例如：hok6 haau6。\n" .
-              "3. 每個音節必須由小寫英文字母開頭，結尾是 1–6 的數字聲調，例如: ngo5, hok6, haau6。\n" .
-              "4. 不要加標點符號，不要加引號，不要加前綴或後綴文字。\n" .
-              "5. 如果無法確定正確粵拼，就直接回答一個字：\"NA\"。\n" .
-              "6. 請確保音節數量與中文字數相同。\n" .
-              "7. 請確保是粵拼而非普通話。\n" .
-              "只輸出粵拼本身，例如：ngo5, hok6 haau6。";
+              "重要規則：\n" .
+              "- 這是香港廣東話，不是普通話！必須使用粵拼，不是漢語拼音\n" .
+              "- 聲調數字：1(高平) 2(高升) 3(中平) 4(低降) 5(低升) 6(低平)\n" .
+              "- 普通話→粵語常見轉換：x→s/h, q→c, zh→z, ch→c, sh→s, j→z, ∅(零聲母)→ng/j\n" .
+              "- 粵語獨特音節：ng(aa/ai/au/am/an/ang/at), aa(aai/aau/aam/aan/aang/aat), oe(eoi)\n\n" .
+              "常見正確發音（務必記住）：\n" .
+              "- 橙(caang4), 橙色(caang4 sik1), 橙汁(caang4 zap1)\n" .
+              "- 飯(faan6), 吃飯(sik6 faan6), 白飯(baak6 faan6)\n" .
+              "- 書(syu1), 書包(syu1 baau1), 讀書(duk6 syu1)\n" .
+              "- 車(ce4), 巴士(baa1 si2), 火車(fo2 ce4)\n" .
+              "- 學(hok6), 學校(hok6 haau6), 學生(hok6 saang1)\n" .
+              "- 水(seoi2), 喝水(hot3 seoi2), 白開水(baak6 hoi1 seoi2)\n" .
+              "- 魚(jyu4), 食魚(sik6 jyu4), 金魚(gam1 jyu4)\n" .
+              "- 茶(caa4), 喝茶(hot3 caa4), 奶茶(naai5 caa4)\n\n" .
+              "嚴格禁止的錯誤發音：\n" .
+              "- 不要說：cheng2(普通話), cheng4(普通話), ngau4(錯), zou3(普通話)\n" .
+              "- 不要說：fan4(普通話), shu1(普通話), che4(普通話), xue2(普通話)\n" .
+              "- 不要說：shui3(普通話), yu2(普通話), cha2(普通話)\n" .
+              "- 必須用：caang4, faan6, syu1, ce4, hok6, seoi2, jyu4, caa4\n\n" .
+              "輸出要求：\n" .
+              "1. 只輸出標準粵拼，不要輸出中文、普通話拼音、解釋\n" .
+              "2. 多音節用空格分隔，例如：hok6 haau6\n" .
+              "3. 每個音節必須以小寫字母開頭，以1-6數字聲調結尾\n" .
+              "4. 不要加標點符號，不要加引號，不要加任何額外文字\n" .
+              "5. 如果無法確定，就輸出：\"NA\"\n" .
+              "6. 音節數量必須與中文字數完全相同\n" .
+              "7. 絕對是香港粵語發音，不是普通話發音\n\n" .
+              "標準粵拼示例：ngo5(我), nei5(你), keoi5(佢), maa1(媽), sik6(食), heoi3(去), caang4(橙), faan6(飯), syu1(書), ce4(車), hok6(學), seoi2(水), jyu4(魚), caa4(茶)\n\n" .
+              "只輸出粵拼，例如：ngo5, hok6 haau6, caang4 sik1。";
 
     $model = normalizeModel(_env('OLLAMA_MODEL', 'llama3:latest'));
     $result = callOllamaAI($prompt, $model, null, ['temperature' => 0.1, 'max_tokens' => 32]);
@@ -491,10 +519,19 @@ function predictJyutpingForChinese(string $chineseText): ?string {
         return null;
     }
 
-    $raw = trim($result['content']);
+    $raw = trim($result['content'] ?? '');
     // 移除可能的引號或前綴
     $raw = trim($raw, " \t\n\r\0\x0B\"'「」『』");
-    if ($raw === '' || strcasecmp($raw, 'NA') === 0) {
+
+    // Handle empty or invalid responses
+    if ($raw === '' || strcasecmp($raw, 'NA') === 0 || $raw === null) {
+        error_log("AI Jyutping prediction failed: empty or invalid response");
+        return null;
+    }
+
+    // Check for obvious errors in the response
+    if (strpos($raw, 'error') !== false || strpos($raw, 'Error') !== false) {
+        error_log("AI Jyutping prediction failed: error in response - $raw");
         return null;
     }
 

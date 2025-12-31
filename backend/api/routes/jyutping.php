@@ -5,6 +5,7 @@
  *
  * Endpoints:
  * - GET /api/jyutping/search?code={code} - Search Jyutping dictionary
+ * - POST /api/jyutping/translate - Translate Chinese text to Jyutping
  * - GET /api/jyutping/suggestions?input={input} - Get word suggestions
  * - POST /api/jyutping/audio - Generate audio for Jyutping
  * - POST /api/jyutping/learning-log - Log learning progress
@@ -511,6 +512,156 @@ function handleJyutpingRoutes($method, $pathParts, $data, $authToken) {
         return errorResponse('Failed to search Jyutping dictionary', 500);
     }
 }
+
+    // POST /jyutping/translate - Translate Chinese text to Jyutping
+    if ($method === 'POST' && isset($pathParts[1]) && $pathParts[1] === 'translate') {
+        try {
+            $chineseText = $data['text'] ?? '';
+
+            if (empty($chineseText)) {
+                return errorResponse('Chinese text is required', 400);
+            }
+
+            // For translation, we want to find ALL characters in dictionary
+            // Use a very low frequency threshold (0) to include all entries
+            $translationFrequencyThreshold = 0;
+
+            // Convert Chinese characters to Jyutping
+            $characters = preg_split('//u', $chineseText, -1, PREG_SPLIT_NO_EMPTY);
+            $jyutpingResults = [];
+            $unknownCharacters = [];
+
+            foreach ($characters as $char) {
+                if (preg_match('/[\x{4e00}-\x{9fff}]/u', $char)) {
+                    // Chinese character - find Jyutping
+                    // For translation, we search without restrictive frequency filtering
+                    // to ensure we can translate all known characters
+                    error_log("Jyutping translate: Looking up character '$char' (mb_ord: " . mb_ord($char, 'UTF-8') . ", hex: " . bin2hex($char) . ", length: " . strlen($char) . ")");
+
+                    // Ensure database connection uses UTF-8
+                    $db->exec("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
+
+                    // Debug: Check what we're actually querying
+                    error_log("Jyutping translate: Executing query for char '$char' with threshold $translationFrequencyThreshold");
+
+                    $stmt = $db->prepare("
+                        SELECT hanzi, jyutping_code, word, frequency
+                        FROM jyutping_dictionary
+                        WHERE hanzi = ? COLLATE utf8mb4_unicode_ci
+                          AND frequency > ?
+                        ORDER BY frequency DESC
+                        LIMIT 1
+                    ");
+                    $stmt->execute([$char, $translationFrequencyThreshold]);
+                    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+
+                    // Debug: Log the result
+                    if ($result) {
+                        error_log("Jyutping translate: Query returned: hanzi='{$result['hanzi']}', jyutping='{$result['jyutping_code']}', freq={$result['frequency']}");
+                    } else {
+                        error_log("Jyutping translate: Query returned null/empty result");
+
+                        // Debug: Try a broader query to see if the character exists at all
+                        $debugStmt = $db->prepare("SELECT COUNT(*) as count FROM jyutping_dictionary WHERE hanzi = ?");
+                        $debugStmt->execute([$char]);
+                        $countResult = $debugStmt->fetch(PDO::FETCH_ASSOC);
+                        error_log("Jyutping translate: Total entries for '$char': " . ($countResult['count'] ?? 0));
+
+                        // Debug: Try without frequency filter
+                        $debugStmt2 = $db->prepare("SELECT hanzi, jyutping_code, frequency FROM jyutping_dictionary WHERE hanzi = ? ORDER BY frequency DESC LIMIT 1");
+                        $debugStmt2->execute([$char]);
+                        $debugResult = $debugStmt2->fetch(PDO::FETCH_ASSOC);
+                        if ($debugResult) {
+                            error_log("Jyutping translate: Without frequency filter, found: hanzi='{$debugResult['hanzi']}', jyutping='{$debugResult['jyutping_code']}', freq={$debugResult['frequency']}");
+                        } else {
+                            error_log("Jyutping translate: Character '$char' not found even without frequency filter");
+                        }
+                    }
+
+                    if ($result) {
+                        error_log("Jyutping translate: Found '$char' -> '{$result['jyutping_code']}' (freq: {$result['frequency']})");
+                        $jyutpingResults[] = [
+                            'character' => $char,
+                            'jyutping' => $result['jyutping_code'],
+                            'meaning' => $result['word'] ?? $result['hanzi'] ?? '',
+                            'frequency' => (int)$result['frequency'],
+                            'confidence' => min(1.0, $result['frequency'] / 1000)
+                        ];
+                    } else {
+                        error_log("Jyutping translate: Character '$char' NOT FOUND in dictionary (threshold: $translationFrequencyThreshold)");
+
+                        // Try without frequency threshold as absolute fallback
+                        $fallbackStmt = $db->prepare("
+                            SELECT hanzi, jyutping_code, word, frequency
+                            FROM jyutping_dictionary
+                            WHERE hanzi = ?
+                            ORDER BY frequency DESC
+                            LIMIT 1
+                        ");
+                        $fallbackStmt->execute([$char]);
+                        $fallbackResult = $fallbackStmt->fetch(PDO::FETCH_ASSOC);
+
+                        if ($fallbackResult) {
+                            error_log("Jyutping translate: Fallback found '$char' -> '{$fallbackResult['jyutping_code']}' (freq: {$fallbackResult['frequency']})");
+                            $jyutpingResults[] = [
+                                'character' => $char,
+                                'jyutping' => $fallbackResult['jyutping_code'],
+                                'meaning' => $fallbackResult['word'] ?? $fallbackResult['hanzi'] ?? '',
+                                'frequency' => (int)$fallbackResult['frequency'],
+                                'confidence' => min(1.0, $fallbackResult['frequency'] / 1000)
+                            ];
+                        } else {
+                            error_log("Jyutping translate: Character '$char' NOT FOUND even with no frequency threshold");
+                            // Character not found in dictionary
+                            $jyutpingResults[] = [
+                                'character' => $char,
+                                'jyutping' => null,
+                                'meaning' => null,
+                                'frequency' => 0,
+                                'confidence' => 0.0
+                            ];
+                            $unknownCharacters[] = $char;
+                        }
+                    }
+                } else {
+                    // Non-Chinese character (punctuation, space, etc.)
+                    $jyutpingResults[] = [
+                        'character' => $char,
+                        'jyutping' => $char,
+                        'meaning' => null,
+                        'frequency' => 0,
+                        'confidence' => 1.0
+                    ];
+                }
+            }
+
+            // Build full Jyutping string
+            $fullJyutping = '';
+            foreach ($jyutpingResults as $result) {
+                if ($result['jyutping']) {
+                    $fullJyutping .= $result['jyutping'] . ' ';
+                }
+            }
+            $fullJyutping = trim($fullJyutping);
+
+            // Get keyboard matching rules for the response
+            $rules = getKeyboardMatchingRules($db, $userId, $profileId);
+
+            return successResponse([
+                'original_text' => $chineseText,
+                'jyutping' => $fullJyutping,
+                'characters' => $jyutpingResults,
+                'unknown_characters' => $unknownCharacters,
+                'coverage' => count($characters) > 0 ? (count($characters) - count($unknownCharacters)) / count($characters) : 0,
+                'rules_used' => $rules,
+                'translation_type' => 'traditional_chinese_to_jyutping'
+            ]);
+
+        } catch (Exception $e) {
+            error_log("Jyutping translation error: " . $e->getMessage());
+            return errorResponse('Failed to translate to Jyutping', 500);
+        }
+    }
 
     // GET /jyutping/suggestions?input={input}
     if ($method === 'GET' && isset($pathParts[1]) && $pathParts[1] === 'suggestions') {

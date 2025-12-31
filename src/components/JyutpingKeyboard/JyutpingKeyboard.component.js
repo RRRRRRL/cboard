@@ -51,9 +51,11 @@ class JyutpingKeyboard extends Component {
       currentLayout: LAYOUT_TYPES.JYUTPING_1,
       jyutpingInput: '',
       textOutput: '',
+      jyutpingOutput: '', // Display Jyutping pronunciation below text output
       suggestions: [],
       relatedWords: [], // Related word suggestions
       isSearching: false,
+      isTranslating: false,
       isPlayingAudio: false,
       validationError: null,
       lastSelectedWord: null, // Track last selected word for related suggestions
@@ -112,6 +114,106 @@ class JyutpingKeyboard extends Component {
       }
     } catch (error) {
       console.error('Error loading common words:', error);
+    }
+  }
+
+  // Translate text output to Jyutping - database first, AI fallback
+  translateTextOutput = async (text) => {
+    if (!text || text.trim().length === 0) {
+      this.setState({ jyutpingOutput: '', isTranslating: false });
+      return;
+    }
+
+    this.setState({ isTranslating: true });
+
+    try {
+      // First try database translation
+      const dbResult = await API.translateToJyutping(text.trim());
+
+      if (dbResult && dbResult.jyutping && dbResult.coverage > 0) {
+        // Database translation successful
+        this.setState({
+          jyutpingOutput: dbResult.jyutping,
+          isTranslating: false
+        });
+        return;
+      }
+
+      // If database doesn't have full coverage, try AI fallback
+      console.log('Database translation incomplete, trying AI fallback...');
+
+      // For AI fallback, we'll use the AI helper to get Jyutping predictions
+      // This is a simplified approach - in production you'd want more sophisticated AI integration
+      const aiResult = await this.getAIJyutpingFallback(text.trim());
+
+      this.setState({
+        jyutpingOutput: aiResult || 'Translation unavailable',
+        isTranslating: false
+      });
+
+    } catch (error) {
+      console.error('Translation error:', error);
+      this.setState({
+        jyutpingOutput: 'Translation error',
+        isTranslating: false
+      });
+    }
+  }
+
+  // AI fallback for Jyutping translation when database doesn't have matches
+  getAIJyutpingFallback = async (text) => {
+    try {
+      const characters = text.split('');
+      const jyutpingParts = [];
+
+      // For multi-character text, process character by character to ensure complete translation
+      for (const char of characters) {
+        // First try database lookup for individual character
+        try {
+          const dbResult = await API.translateToJyutping(char);
+          if (dbResult && dbResult.jyutping) {
+            jyutpingParts.push(dbResult.jyutping);
+          } else {
+            // Try AI prediction for single character
+            const aiResult = await API.getJyutpingPredictions(char, 1);
+            if (aiResult && aiResult.predictions && aiResult.predictions.length > 0) {
+              jyutpingParts.push(aiResult.predictions[0].jyutping_code || aiResult.predictions[0].jyutping);
+            } else {
+              jyutpingParts.push('?'); // Still unknown
+            }
+          }
+        } catch (error) {
+          jyutpingParts.push('?'); // Error
+        }
+      }
+
+      const result = jyutpingParts.join(' ');
+
+      // If we got a complete result (no ? marks), return it
+      if (!result.includes('?') && jyutpingParts.length === characters.length) {
+        return result;
+      }
+
+      // If we have ? marks, try AI prediction for the full text as a last resort
+      // Sometimes AI works better for full phrases
+      try {
+        const fullTextResult = await API.getJyutpingPredictions(text, 1);
+        if (fullTextResult && fullTextResult.predictions && fullTextResult.predictions.length > 0) {
+          const aiPrediction = fullTextResult.predictions[0].jyutping_code || fullTextResult.predictions[0].jyutping;
+          if (aiPrediction && !aiPrediction.includes('?')) {
+            return aiPrediction;
+          }
+        }
+      } catch (error) {
+        // Ignore AI full-text prediction errors
+      }
+
+      // Return character-by-character result even if it has ? marks
+      return result;
+
+    } catch (error) {
+      console.error('AI fallback error:', error);
+      return text.split('').map(() => '?').join(' '); // Return ? for each character
     }
   }
 
@@ -638,8 +740,12 @@ class JyutpingKeyboard extends Component {
       // Immediately search for updated suggestions
       await this.searchJyutping(newInput);
     } else if (textOutput.length > 0) {
-      // Remove last character from output
-      this.setState({ textOutput: textOutput.slice(0, -1) });
+      // Remove last character from output and update translation
+      const newText = textOutput.slice(0, -1);
+      this.setState({ textOutput: newText });
+
+      // Update translation for the new text
+      this.translateTextOutput(newText);
     }
   };
 
@@ -647,6 +753,7 @@ class JyutpingKeyboard extends Component {
     this.setState({
       jyutpingInput: '',
       textOutput: '',
+      jyutpingOutput: '',
       suggestions: []
     });
   };
@@ -1146,9 +1253,11 @@ class JyutpingKeyboard extends Component {
       currentLayout,
       jyutpingInput,
       textOutput,
+      jyutpingOutput,
       suggestions,
       relatedWords,
       isSearching,
+      isTranslating,
       isPlayingAudio,
       validationError,
       speechProfile,
@@ -1192,10 +1301,13 @@ class JyutpingKeyboard extends Component {
           <JyutpingTextEditor
             jyutpingInput={jyutpingInput}
             textOutput={textOutput}
+            jyutpingOutput={jyutpingOutput}
             onClear={this.handleClear}
             onBackspace={this.handleBackspace}
             onTextChange={text => {
               this.setState({ textOutput: text });
+              // Translate text output to Jyutping in real-time
+              this.translateTextOutput(text);
               // Update related words based on the new output box content
               // Use debounce to avoid too many API calls while user is typing
               if (this.relatedWordsTimeout) {
@@ -1224,6 +1336,7 @@ class JyutpingKeyboard extends Component {
             onPlayback={this.handleBatchPronunciation}
             validationError={validationError}
             isPlayingAudio={isPlayingAudio}
+            isTranslating={isTranslating}
           />
 
           {/* Voice type + speed controls for batch playback */}

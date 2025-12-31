@@ -162,25 +162,25 @@ function AdminPanel({
         {statistics && (
           <Paper className={classes.statsSection}>
             <Paper className={classes.statCard}>
-              <Typography variant="h6">{statistics.total_users || 0}</Typography>
+              <Typography variant="h6">{statistics.user_stats?.total_users || 0}</Typography>
               <Typography variant="caption">
                 <FormattedMessage {...messages.totalUsers} />
               </Typography>
             </Paper>
             <Paper className={classes.statCard}>
-              <Typography variant="h6">{statistics.active_users || 0}</Typography>
+              <Typography variant="h6">{statistics.user_stats?.active_users || 0}</Typography>
               <Typography variant="caption">
                 <FormattedMessage {...messages.activeUsers} />
               </Typography>
             </Paper>
             <Paper className={classes.statCard}>
-              <Typography variant="h6">{statistics.total_profiles || 0}</Typography>
+              <Typography variant="h6">{statistics.profile_stats?.total_profiles || 0}</Typography>
               <Typography variant="caption">
                 <FormattedMessage {...messages.totalProfiles} />
               </Typography>
             </Paper>
             <Paper className={classes.statCard}>
-              <Typography variant="h6">{statistics.recent_registrations || 0}</Typography>
+              <Typography variant="h6">{statistics.user_stats?.recent_registrations || 0}</Typography>
               <Typography variant="caption">
                 <FormattedMessage {...messages.recentRegistrations} />
               </Typography>
@@ -284,7 +284,7 @@ function AdminPanel({
                           <Chip label={<FormattedMessage {...messages.inactive} />} size="small" />
                         )}
                       </TableCell>
-                      <TableCell>{user.profile_count || 0}</TableCell>
+                      <TableCell>{user.profiles_count || 0}</TableCell>
                       <TableCell>{formatDate(user.created_at)}</TableCell>
                       <TableCell>{formatDate(user.last_login)}</TableCell>
                       <TableCell>
@@ -406,4 +406,3 @@ AdminPanel.propTypes = {
 };
 
 export default withStyles(styles)(AdminPanel);
-

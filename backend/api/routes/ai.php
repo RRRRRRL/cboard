@@ -1187,11 +1187,16 @@ function handleAIRoutes($method, $pathParts, $data, $authToken) {
         $user = requireAuth($authToken);
         $profileId = $_GET['profile_id'] ?? null;
         $locale = $_GET['locale'] ?? null; // Get locale from frontend (user's selected language)
-        
+
+        error_log("[Learning Suggestions] ===== START REQUEST =====");
+        error_log("[Learning Suggestions] Received locale: " . ($locale ?: 'null'));
+        error_log("[Learning Suggestions] Profile ID: " . ($profileId ?: 'null'));
+        error_log("[Learning Suggestions] User ID: " . ($user['id'] ?? 'unknown'));
+
         try {
             // Priority: 1. Frontend locale (user's selected language), 2. Profile language, 3. User settings, 4. Default
-            $userLanguage = 'zh-CN'; // Default to Simplified Chinese
-            
+            $userLanguage = 'zh-TW'; // Default to Traditional Chinese
+
             // First priority: Use locale from frontend (user's selected language in UI)
             if ($locale) {
                 // Normalize generic 'zh' to 'zh-CN' (can be overridden by user settings)
@@ -1314,15 +1319,16 @@ function handleAIRoutes($method, $pathParts, $data, $authToken) {
             }
             
             if ($isTraditionalChinese) {
-                $prompt = "你是一位粵語學習助手。根據以下學習者的常見錯誤，提供個性化的學習建議和練習方法。\n\n";
-                $prompt .= "常見錯誤記錄：\n";
+                $prompt .= "You are a Cantonese learning assistant.The user cannot understand english.Please write in Traditional Chinese.";
+                $prompt .= "你是一位專門教導粵語的學習助手。請根據以下學習者常犯的錯誤，請用繁體中文提供個人化的學習建議和練習方法。\n\n";
+                $prompt .= "學習者常見錯誤記錄：\n";
                 $prompt .= $mistakesText;
-                $prompt .= "\n請提供：\n";
-                $prompt .= "1. 針對這些錯誤的針對性學習建議\n";
-                $prompt .= "2. 記憶技巧或聯想方法\n";
+                $prompt .= "\n請用繁體中文提供以下內容：\n";
+                $prompt .= "1. 針對這些錯誤的具體學習建議\n";
+                $prompt .= "2. 幫助記憶的技巧或聯想方法\n";
                 $prompt .= "3. 推薦的練習方式\n";
-                $prompt .= "4. 鼓勵性的話語\n\n";
-                $prompt .= "請用繁體中文回答，語言要友好、鼓勵，並提供實用的建議。";
+                $prompt .= "4. 鼓勵學習者的話語\n\n";
+                $prompt .= "注意：你必須完全使用繁體中文回答。不要使用簡體中文或英文。使用這些繁體字詞：學習、建議、練習、錯誤、正確、方法、技巧等。";
             } elseif ($isEnglish) {
                 $prompt = "You are a Cantonese learning assistant. Based on the following common mistakes made by the learner, provide personalized learning suggestions and practice methods.\n\n";
                 $prompt .= "Common mistakes record:\n";
@@ -1345,16 +1351,64 @@ function handleAIRoutes($method, $pathParts, $data, $authToken) {
                 $prompt .= "请用简体中文回答，语言要友好、鼓励，并提供实用的建议。";
             }
             
+            error_log("[Learning Suggestions] AI Prompt: " . substr($prompt, 0, 500) . "...");
+
             // Call Ollama to generate suggestions
             require_once __DIR__ . '/../helpers/ollama.php';
             $ollamaResponse = callOllamaAI($prompt, null, null, [
                 'temperature' => 0.7,
                 'max_tokens' => 1000
             ]);
-            
+
+            error_log("[Learning Suggestions] AI Response success: " . ($ollamaResponse['success'] ? 'true' : 'false'));
+            if (isset($ollamaResponse['error'])) {
+                error_log("[Learning Suggestions] AI Error: " . $ollamaResponse['error']);
+            }
+            error_log("[Learning Suggestions] AI Response content preview: " . substr($ollamaResponse['content'] ?? '', 0, 200));
+
             $aiSuggestions = '';
             if ($ollamaResponse['success'] && !empty($ollamaResponse['content'])) {
                 $aiSuggestions = trim($ollamaResponse['content']);
+
+                // Post-process: For Traditional Chinese, filter out any English content
+                if ($isTraditionalChinese) {
+                    // Remove any lines that are entirely in English (contain only English letters, numbers, and punctuation)
+                    $lines = explode("\n", $aiSuggestions);
+                    $filteredLines = [];
+                    foreach ($lines as $line) {
+                        $trimmedLine = trim($line);
+                        // If line contains Chinese characters, keep it
+                        if (preg_match('/[\x{4e00}-\x{9fff}]/u', $trimmedLine)) {
+                            $filteredLines[] = $line;
+                        }
+                        // If line is empty or contains only punctuation/whitespace, keep it
+                        elseif (preg_match('/^[\s\p{P}]*$/u', $trimmedLine)) {
+                            $filteredLines[] = $line;
+                        }
+                        // If line contains numbers or is very short, might be part of a list, keep it
+                        elseif (preg_match('/^\d+\.?\s*/', $trimmedLine) || strlen($trimmedLine) < 10) {
+                            $filteredLines[] = $line;
+                        }
+                        // Otherwise, it's likely pure English - skip it
+                        else {
+                            error_log("[Learning Suggestions] Filtered out English line: " . substr($trimmedLine, 0, 50));
+                        }
+                    }
+                    $aiSuggestions = implode("\n", $filteredLines);
+                    $aiSuggestions = trim($aiSuggestions);
+
+                    // If filtering removed too much content, fall back to static response
+                    if (strlen($aiSuggestions) < 50) {
+                        error_log("[Learning Suggestions] AI response too short after filtering, using fallback");
+                        $aiSuggestions = "建議：\n";
+                        $aiSuggestions .= "1. 針對這些常見錯誤，建議多練習相關的粵拼代碼。\n";
+                        $aiSuggestions .= "2. 可以嘗試將正確答案和錯誤答案進行對比記憶。\n";
+                        $aiSuggestions .= "3. 建議每天花一些時間複習這些容易混淆的內容。\n";
+                        $aiSuggestions .= "4. 保持練習，你會越來越好的！";
+                    }
+                }
+
+                error_log("[Learning Suggestions] Using AI-generated suggestions (length: " . strlen($aiSuggestions) . ")");
             } else {
                 // Fallback if Ollama fails
                 if ($isTraditionalChinese) {
@@ -1392,4 +1446,3 @@ function handleAIRoutes($method, $pathParts, $data, $authToken) {
     
     return errorResponse('AI route not found', 404);
 }
-

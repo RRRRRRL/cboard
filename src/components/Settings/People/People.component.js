@@ -9,10 +9,15 @@ import ListItem from '@material-ui/core/ListItem';
 import ListItemText from '@material-ui/core/ListItemText';
 import ListItemSecondaryAction from '@material-ui/core/ListItemSecondaryAction';
 import TextField from '@material-ui/core/TextField';
+import MenuItem from '@material-ui/core/MenuItem';
+import FormControl from '@material-ui/core/FormControl';
+import InputLabel from '@material-ui/core/InputLabel';
+import Select from '@material-ui/core/Select';
 
 import FullScreenDialog from '../../UI/FullScreenDialog';
 import messages from './People.messages';
 import UserIcon from '../../UI/UserIcon';
+import { injectIntl, intlShape } from 'react-intl';
 import DeleteIcon from '@material-ui/icons/Delete';
 import '../Settings.css';
 import DeleteConfirmationDialog from './DeleteConfirmationDialog';
@@ -42,6 +47,14 @@ const propTypes = {
    * User birthdate
    */
   birthdate: PropTypes.string.isRequired,
+  /**
+   * User role
+   */
+  role: PropTypes.string,
+  /**
+   * Intl object for translations
+   */
+  intl: intlShape.isRequired,
   onDeleteAccount: PropTypes.func
 };
 
@@ -59,6 +72,7 @@ const People = ({
   name,
   email,
   birthdate,
+  role,
   location: { country, countryCode },
   onChangePeople,
   onSubmitPeople,
@@ -169,6 +183,30 @@ const People = ({
                 />
               </ListItemSecondaryAction>
             </ListItem>
+            {isLogged && (
+              <ListItem>
+                <ListItemText
+                  primary={<FormattedMessage {...messages.role} />}
+                  secondary={<FormattedMessage {...messages.roleSecondary} />}
+                />
+                <ListItemSecondaryAction className="Settings--secondaryAction">
+                  <FormControl className="Settings--secondaryAction--textField">
+                    <InputLabel><FormattedMessage {...messages.role} /></InputLabel>
+                    <Select
+                      value={role || ''}
+                      disabled={role === 'student'} // Disable for students
+                      onChange={onChangePeople('role')}
+                    >
+                      <MenuItem value="student">Student</MenuItem>
+                      <MenuItem value="parent">Parent</MenuItem>
+                      <MenuItem value="teacher">Teacher</MenuItem>
+                      <MenuItem value="therapist">Therapist</MenuItem>
+                      <MenuItem value="admin">Admin</MenuItem>
+                    </Select>
+                  </FormControl>
+                </ListItemSecondaryAction>
+              </ListItem>
+            )}
             {country && (
               <ListItem>
                 <ListItemText
@@ -230,4 +268,4 @@ const People = ({
 People.propTypes = propTypes;
 People.defaultProps = defaultProps;
 
-export default People;
+export default injectIntl(People);

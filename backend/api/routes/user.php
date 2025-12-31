@@ -25,18 +25,25 @@ function handleUserRoutes($method, $pathParts, $data, $authToken) {
         $email = trim($data['email'] ?? '');
         $password = $data['password'] ?? '';
         $name = trim($data['name'] ?? '');
-        
+        $role = $data['role'] ?? 'student'; // Get role from signup form, default to student
+
         // Validation
         if (empty($email) || empty($password)) {
             return errorResponse('Email and password are required', 400);
         }
-        
+
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             return errorResponse('Invalid email format', 400);
         }
-        
+
         if (strlen($password) < 6) {
             return errorResponse('Password must be at least 6 characters', 400);
+        }
+
+        // Validate role
+        $validRoles = ['student', 'teacher', 'parent'];
+        if (!in_array($role, $validRoles)) {
+            return errorResponse('Invalid role selected', 400);
         }
         
         try {
@@ -62,9 +69,9 @@ function handleUserRoutes($method, $pathParts, $data, $authToken) {
             
             $stmt = $db->prepare("
                 INSERT INTO users (email, password_hash, name, role, is_active, is_verified, created_at)
-                VALUES (?, ?, ?, 'student', 1, 0, NOW())
+                VALUES (?, ?, ?, ?, 1, 0, NOW())
             ");
-            $stmt->execute([$email, $passwordHash, $name ?: $email]);
+            $stmt->execute([$email, $passwordHash, $name ?: $email, $role]);
             $userId = $db->lastInsertId();
             
             if (!$userId) {

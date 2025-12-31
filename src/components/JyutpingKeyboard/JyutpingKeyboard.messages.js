@@ -116,6 +116,9 @@ export default defineMessages({
   searching: {
     id: 'cboard.components.JyutpingKeyboard.searching',
     defaultMessage: 'Searching...'
+  },
+  jyutpingOutputLabel: {
+    id: 'cboard.components.JyutpingKeyboard.jyutpingOutputLabel',
+    defaultMessage: 'Jyutping Pronunciation:'
   }
 });
-

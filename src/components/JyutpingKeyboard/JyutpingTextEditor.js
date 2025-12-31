@@ -12,12 +12,14 @@ import messages from './JyutpingKeyboard.messages';
 const JyutpingTextEditor = ({
   jyutpingInput,
   textOutput,
+  jyutpingOutput,
   onClear,
   onBackspace,
   onTextChange,
   onPlayback,
   validationError,
   isPlayingAudio,
+  isTranslating,
   intl
 }) => {
   return (
@@ -92,6 +94,34 @@ const JyutpingTextEditor = ({
           }}
         />
       </div>
+
+      {/* Jyutping Output Display */}
+      {textOutput && (
+        <div className="JyutpingTextEditor__jyutping-wrapper">
+          <TextField
+            multiline
+            minRows={2}
+            fullWidth
+            value={jyutpingOutput || (isTranslating ? 'Translating...' : '')}
+            placeholder={isTranslating ? 'Translating...' : 'Jyutping will appear here'}
+            variant="outlined"
+            className="JyutpingTextEditor__jyutping-output"
+            InputProps={{
+              readOnly: true,
+              className: 'JyutpingTextEditor__jyutping-input',
+              style: {
+                fontFamily: 'monospace',
+                fontSize: '16px',
+                color: jyutpingOutput ? '#0056b3' : '#999'
+              }
+            }}
+            inputProps={{
+              readOnly: true
+            }}
+            label={<FormattedMessage {...messages.jyutpingOutputLabel} />}
+          />
+        </div>
+      )}
 
       {/* Action Buttons */}
       <div className="JyutpingTextEditor__actions">

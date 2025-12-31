@@ -94,10 +94,10 @@ export class WelcomeScreen extends Component {
   handleContinueAsGuest = () => {
     const { finishFirstVisit } = this.props;
     console.log('[WelcomeScreen] Continue as Guest clicked');
-    
+
     // Dispatch action to finish first visit
     finishFirstVisit();
-    
+
     // Force navigation to home page
     // Use setTimeout to ensure Redux state updates before navigation
     setTimeout(() => {
@@ -163,7 +163,7 @@ export class WelcomeScreen extends Component {
         console.log('[WelcomeScreen] Cleaning up eye tracking on mount...');
         eyeTrackingInstance.cleanup();
       }
-      
+
       // Also ensure WebGazer video element is removed if it exists
       const videoElement = document.getElementById('webgazerVideoFeed');
       if (videoElement) {
@@ -181,7 +181,7 @@ export class WelcomeScreen extends Component {
           console.warn('[WelcomeScreen] Error removing video element:', e);
         }
       }
-      
+
       // Remove video container
       const videoContainer = document.getElementById('webgazer-video-container');
       if (videoContainer) {

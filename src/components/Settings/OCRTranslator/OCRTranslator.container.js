@@ -26,6 +26,14 @@ export class OCRTranslatorContainer extends PureComponent {
       this.setState({ ocrResult: result, loading: false });
       return result;
     } catch (error) {
+      // Check if this is a timeout response (which is expected behavior per API docs)
+      const isTimeoutError = error.response?.data?.error && error.response?.data?.check_status_url;
+      if (isTimeoutError) {
+        console.log('OCR timeout detected, returning timeout response for status polling');
+        this.setState({ loading: false });
+        return error.response.data; // Return the timeout response with status URL
+      }
+
       // Suppress error logging for expected network errors (frontend will use client-side OCR)
       const isNetworkError = error.code === 'ERR_NETWORK' || error.message === 'Network Error';
       if (!isNetworkError || navigator.onLine) {
@@ -125,4 +133,3 @@ export default connect(
   null,
   mapDispatchToProps
 )(injectIntl(OCRTranslatorContainer));
-

@@ -22,6 +22,8 @@ import SymbolsIcon from '@material-ui/icons/EmojiSymbols';
 import SwapHorizIcon from '@material-ui/icons/SwapHoriz';
 import ListIcon from '@material-ui/icons/List';
 import AdminPanelIcon from '@material-ui/icons/Security';
+import TeacherIcon from '@material-ui/icons/School';
+import ParentIcon from '@material-ui/icons/SupervisorAccount';
 import GamesIcon from '@material-ui/icons/Games';
 import CameraAltIcon from '@material-ui/icons/CameraAlt';
 import MemoryIcon from '@material-ui/icons/Memory';
@@ -165,14 +167,35 @@ export class Settings extends PureComponent {
       }
     ];
 
-    // Add admin panel if user is admin
+    // Add role-based dashboard panels
     const currentUser = userData || user;
-    if (isLogged && currentUser && (currentUser.role === 'admin' || (user && user.role === 'admin'))) {
-      systemSettings.push({
-        icon: <AdminPanelIcon />,
-        text: messages.adminPanel,
-        url: '/settings/admin'
-      });
+    if (isLogged && currentUser) {
+      // Add teacher dashboard if user is teacher
+      if (currentUser.role === 'teacher' || (user && user.role === 'teacher')) {
+        systemSettings.push({
+          icon: <TeacherIcon />,
+          text: messages.teacherDashboard,
+          url: '/settings/teacher'
+        });
+      }
+
+      // Add parent dashboard if user is parent
+      if (currentUser.role === 'parent' || (user && user.role === 'parent')) {
+        systemSettings.push({
+          icon: <ParentIcon />,
+          text: messages.parentDashboard,
+          url: '/settings/parent'
+        });
+      }
+
+      // Add admin panel if user is admin
+      if (currentUser.role === 'admin' || (user && user.role === 'admin')) {
+        systemSettings.push({
+          icon: <AdminPanelIcon />,
+          text: messages.adminPanel,
+          url: '/settings/admin'
+        });
+      }
     }
 
     return [
