@@ -119,6 +119,9 @@ require_once __DIR__ . '/routes/ai.php';
 require_once __DIR__ . '/routes/games.php';
 require_once __DIR__ . '/routes/ocr.php';
 require_once __DIR__ . '/routes/admin.php';
+require_once __DIR__ . '/routes/teacher.php';
+require_once __DIR__ . '/routes/parent.php';
+require_once __DIR__ . '/routes/messaging.php';
 require_once __DIR__ . '/routes/data-retention.php';
 
 // Get request method and path
@@ -403,7 +406,22 @@ function routeRequest($method, $pathParts, $data, $authToken) {
     if ($route === 'admin') {
         return handleAdminRoutes($method, $pathParts, $data, $authToken);
     }
-    
+
+    // Teacher routes
+    if ($route === 'teacher') {
+        return handleTeacherRoutes($method, $pathParts, $data, $authToken);
+    }
+
+    // Parent routes
+    if ($route === 'parent') {
+        return handleParentRoutes($method, $pathParts, $data, $authToken);
+    }
+
+    // Messaging routes
+    if ($route === 'messaging') {
+        return handleMessagingRoutes($method, $pathParts, $data, $authToken);
+    }
+
     // Data retention routes
     if ($route === 'data-retention') {
         return handleDataRetentionRoutes($method, $pathParts, $data, $authToken);
@@ -412,4 +430,3 @@ function routeRequest($method, $pathParts, $data, $authToken) {
     // 404 - Route not found
     return ['status' => 404, 'data' => ['success' => false, 'message' => 'Route not found']];
 }
-

@@ -68,26 +68,60 @@ function canAccessStudentData($userId, $studentUserId, $organizationId = null) {
     // Users can access their own data
     if ($userId == $studentUserId) return true;
 
-    // Check teacher-student relationships
-    $stmt = $db->prepare("
-        SELECT 1 FROM student_teacher_assignments
-        WHERE teacher_user_id = ? AND student_user_id = ?
-          AND (organization_id = ? OR ? IS NULL)
-          AND (end_date IS NULL OR end_date >= CURDATE())
-    ");
-    $stmt->execute([$userId, $studentUserId, $organizationId, $organizationId]);
-    if ($stmt->fetch()) return true;
+    try {
+        // Check teacher-student relationships (with graceful error handling)
+        $checkTableStmt = $db->prepare("SHOW TABLES LIKE 'student_teacher_assignments'");
+        $checkTableStmt->execute();
+        if ($checkTableStmt->fetch()) {
+            // Table exists, check for teacher-student relationship
+            $teacherQuery = "
+                SELECT 1 FROM student_teacher_assignments
+                WHERE teacher_user_id = ? AND student_user_id = ?
+                  AND (end_date IS NULL OR end_date >= CURDATE())
+            ";
+            $params = [$userId, $studentUserId];
 
-    // Check parent-child relationships
-    $stmt = $db->prepare("
-        SELECT 1 FROM parent_child_relationships
-        WHERE parent_user_id = ? AND child_user_id = ?
-    ");
-    $stmt->execute([$userId, $studentUserId]);
-    if ($stmt->fetch()) return true;
+            // Only add organization filter if organization_id column exists
+            $checkColumnStmt = $db->prepare("SHOW COLUMNS FROM student_teacher_assignments LIKE 'organization_id'");
+            $checkColumnStmt->execute();
+            if ($checkColumnStmt->fetch() && $organizationId) {
+                $teacherQuery .= " AND (organization_id = ? OR ? IS NULL)";
+                $params[] = $organizationId;
+                $params[] = $organizationId;
+            }
 
-    // Check organization admin access
-    if ($organizationId && isOrgAdmin($userId, $organizationId)) return true;
+            $stmt = $db->prepare($teacherQuery);
+            $stmt->execute($params);
+            if ($stmt->fetch()) return true;
+        }
+    } catch (Exception $e) {
+        // If there's any error with teacher-student checking, continue to parent-child check
+        error_log('Teacher-student access check failed: ' . $e->getMessage());
+    }
+
+    try {
+        // Check parent-child relationships
+        $checkTableStmt = $db->prepare("SHOW TABLES LIKE 'parent_child_relationships'");
+        $checkTableStmt->execute();
+        if ($checkTableStmt->fetch()) {
+            $stmt = $db->prepare("
+                SELECT 1 FROM parent_child_relationships
+                WHERE parent_user_id = ? AND child_user_id = ?
+            ");
+            $stmt->execute([$userId, $studentUserId]);
+            if ($stmt->fetch()) return true;
+        }
+    } catch (Exception $e) {
+        // If there's any error with parent-child checking, continue
+        error_log('Parent-child access check failed: ' . $e->getMessage());
+    }
+
+    // Check organization admin access (with error handling)
+    try {
+        if ($organizationId && isOrgAdmin($userId, $organizationId)) return true;
+    } catch (Exception $e) {
+        error_log('Organization admin access check failed: ' . $e->getMessage());
+    }
 
     return false;
 }

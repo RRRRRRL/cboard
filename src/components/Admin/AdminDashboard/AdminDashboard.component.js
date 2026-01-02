@@ -30,7 +30,8 @@ import {
   PersonAdd,
   GroupAdd,
   ArrowBack,
-  Settings
+  Settings,
+  SupervisorAccount
 } from '@material-ui/icons';
 import { injectIntl, intlShape } from 'react-intl';
 
@@ -53,54 +54,21 @@ const AdminDashboard = ({ intl, user, history }) => {
 
   const loadDashboardData = async () => {
     try {
-      // Try to load real data from API
-      try {
-        const response = await API.getAdminDashboard();
-        if (response && response.success && response.data) {
-          setStats(response.data.stats || response.data);
-        } else {
-          throw new Error('No data returned');
-        }
-      } catch (apiError) {
-        console.warn('API call failed, using sample data:', apiError);
-        // Use sample data when API fails
-        const sampleStats = {
-          users: {
-            admin: 5,
-            teacher: 12,
-            parent: 25,
-            student: 85
-          },
-          organizations: 8,
-          classes: 24,
-          recent_activities: [
-            {
-              id: 1,
-              action_type: 'game_completed',
-              user_name: 'Alex Chen',
-              metadata: JSON.stringify({ game_type: 'spelling', accuracy: 85 }),
-              created_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
-            },
-            {
-              id: 2,
-              action_type: 'profile_created',
-              user_name: 'Jamie Wong',
-              profile_name: 'Communication Board',
-              created_at: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString()
-            },
-            {
-              id: 3,
-              action_type: 'card_click',
-              user_name: 'Sam Liu',
-              metadata: JSON.stringify({ card_label: 'Hello' }),
-              created_at: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString()
-            }
-          ]
-        };
-        setStats(sampleStats);
+      const response = await API.getAdminDashboard();
+      if (response && response.stats) {
+        setStats(response.stats);
+      } else {
+        throw new Error('No data returned from API');
       }
     } catch (error) {
       console.error('Failed to load admin dashboard data:', error);
+      // Set empty state when API fails
+      setStats({
+        users: {},
+        organizations: 0,
+        classes: 0,
+        recent_activities: []
+      });
     } finally {
       setLoading(false);
     }
@@ -116,6 +84,10 @@ const AdminDashboard = ({ intl, user, history }) => {
 
   const handleViewOrganizations = () => {
     history.push('/admin/organizations');
+  };
+
+  const handleManageParentChild = () => {
+    history.push('/admin/parent-child');
   };
 
   const handleBackToSettings = () => {
@@ -192,6 +164,14 @@ const AdminDashboard = ({ intl, user, history }) => {
           onClick={handleManageUsers}
         >
           {intl.formatMessage(messages.manageUsers)}
+        </Button>
+        <Button
+          variant="outlined"
+          color="primary"
+          startIcon={<SupervisorAccount />}
+          onClick={handleManageParentChild}
+        >
+          {intl.formatMessage(messages.manageParentChild)}
         </Button>
       </Box>
 

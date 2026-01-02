@@ -2649,6 +2649,108 @@ class API {
     }
   }
 
+  // ============================================================================
+  // ADMIN PARENT-CHILD RELATIONSHIP MANAGEMENT
+  // ============================================================================
+
+  /**
+   * Get all parent-child relationships (admin only)
+   * @returns {Promise<Object>} Relationships data
+   */
+  async getAdminParentChildRelationships() {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    try {
+      const response = await this.axiosInstance.get('/admin/parent-child', { headers });
+      return response.data;
+    } catch (error) {
+      console.error('Get parent-child relationships error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Create parent-child relationship (admin only)
+   * @param {Object} relationshipData - Relationship data
+   * @returns {Promise<Object>} Created relationship
+   */
+  async createAdminParentChildRelationship(relationshipData) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`,
+      'Content-Type': 'application/json'
+    };
+
+    try {
+      const response = await this.axiosInstance.post('/admin/parent-child', relationshipData, { headers });
+      return response.data;
+    } catch (error) {
+      console.error('Create parent-child relationship error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update parent-child relationship (admin only)
+   * @param {number} relationshipId - Relationship ID
+   * @param {Object} updateData - Update data
+   * @returns {Promise<Object>} Updated relationship
+   */
+  async updateAdminParentChildRelationship(relationshipId, updateData) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`,
+      'Content-Type': 'application/json'
+    };
+
+    try {
+      const response = await this.axiosInstance.put(`/admin/parent-child/${relationshipId}`, updateData, { headers });
+      return response.data;
+    } catch (error) {
+      console.error('Update parent-child relationship error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete parent-child relationship (admin only)
+   * @param {number} relationshipId - Relationship ID
+   * @returns {Promise<Object>} Delete result
+   */
+  async deleteAdminParentChildRelationship(relationshipId) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    try {
+      const response = await this.axiosInstance.delete(`/admin/parent-child/${relationshipId}`, { headers });
+      return response.data;
+    } catch (error) {
+      console.error('Delete parent-child relationship error:', error);
+      throw error;
+    }
+  }
+
   /**
    * Get recommended difficulty adjustment for learning games
    * @param {number} profileId - Optional profile ID
@@ -3106,6 +3208,101 @@ class API {
   // ============================================================================
 
   /**
+   * Get teacher students (teacher view)
+   * @param {Object} filters - Optional filters (organization_id, class_id)
+   * @returns {Promise<Object>} Students list
+   */
+  async getTeacherStudents(filters = {}) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    try {
+      const params = new URLSearchParams();
+      Object.keys(filters).forEach(key => {
+        if (filters[key] !== null && filters[key] !== undefined) {
+          params.append(key, filters[key]);
+        }
+      });
+
+      const response = await this.axiosInstance.get(
+        `/teacher/students?${params.toString()}`,
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Get teacher students error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get available students for teacher assignment
+   * @returns {Promise<Object>} Available students list
+   */
+  async getTeacherAvailableStudents() {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    try {
+      const response = await this.axiosInstance.get(
+        '/teacher/available-students',
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Get teacher available students error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Assign a student to the current teacher
+   * @param {number} studentId - Student ID to assign
+   * @param {number|null} organizationId - Optional organization ID
+   * @param {number|null} classId - Optional class ID
+   * @returns {Promise<Object>} Assignment result
+   */
+  async assignStudentToTeacher(studentId, organizationId = null, classId = null) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`,
+      'Content-Type': 'application/json'
+    };
+
+    try {
+      const response = await this.axiosInstance.post(
+        '/teacher/assign-student',
+        {
+          student_id: studentId,
+          organization_id: organizationId,
+          class_id: classId
+        },
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Assign student to teacher error:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Get all users (admin only)
    * @param {Object} filters - Filter options (page, limit, search, role, is_active)
    * @returns {Promise<Object>} Users data with pagination
@@ -3456,39 +3653,7 @@ class API {
     }
   }
 
-  /**
-   * Get teacher students (teacher view)
-   * @param {Object} filters - Optional filters (organization_id, class_id)
-   * @returns {Promise<Object>} Students list
-   */
-  async getTeacherStudents(filters = {}) {
-    const authToken = getAuthToken();
-    if (!(authToken && authToken.length)) {
-      throw new Error('Need to be authenticated to perform this request');
-    }
 
-    const headers = {
-      Authorization: `Bearer ${authToken}`
-    };
-
-    try {
-      const params = new URLSearchParams();
-      Object.keys(filters).forEach(key => {
-        if (filters[key] !== null && filters[key] !== undefined) {
-          params.append(key, filters[key]);
-        }
-      });
-
-      const response = await this.axiosInstance.get(
-        `/admin/teacher/students?${params.toString()}`,
-        { headers }
-      );
-      return response.data;
-    } catch (error) {
-      console.error('Get teacher students error:', error);
-      throw error;
-    }
-  }
 
   /**
    * Get parent children (parent view)
@@ -3506,12 +3671,364 @@ class API {
 
     try {
       const response = await this.axiosInstance.get(
-        '/admin/parent/children',
+        '/parent/children',
         { headers }
       );
       return response.data;
     } catch (error) {
       console.error('Get parent children error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get parent messages and available teachers (parent view)
+   * @returns {Promise<Object>} Messages and teachers list
+   */
+  async getParentMessages() {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    try {
+      const response = await this.axiosInstance.get(
+        '/parent/messages',
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Get parent messages error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get parent progress reports (parent view)
+   * @returns {Promise<Object>} Progress reports list
+   */
+  async getParentProgressReports() {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    try {
+      const response = await this.axiosInstance.get(
+        '/parent/progress-reports',
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Get parent progress reports error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get detailed progress for a specific child
+   * @param {number} childId - Child user ID
+   * @returns {Promise<Object>} Child progress data
+   */
+  async getParentChildProgress(childId) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    try {
+      const response = await this.axiosInstance.get(
+        `/parent/child-progress/${childId}`,
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Get parent child progress error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send message from parent to teacher
+   * @param {Object} messageData - Message data (recipient_id, student_id, subject, message)
+   * @returns {Promise<Object>} Send result
+   */
+  async sendParentMessage(messageData) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`,
+      'Content-Type': 'application/json'
+    };
+
+    try {
+      const response = await this.axiosInstance.post(
+        '/parent/send-message',
+        messageData,
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Send parent message error:', error);
+      throw error;
+    }
+  }
+
+  // ============================================================================
+  // PARENT-TEACHER MESSAGING
+  // ============================================================================
+
+  /**
+   * Get messaging contacts for the current user
+   * @returns {Promise<Object>} Contacts list
+   */
+  async getMessagingContacts() {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    try {
+      const response = await this.axiosInstance.get('/messaging/contacts', { headers });
+      return response.data;
+    } catch (error) {
+      console.error('Get messaging contacts error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get message conversations for the current user
+   * @param {Object} filters - Optional filters (page, limit)
+   * @returns {Promise<Object>} Conversations list
+   */
+  async getMessageConversations(filters = {}) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    const params = new URLSearchParams();
+    if (filters.page) params.append('page', filters.page);
+    if (filters.limit) params.append('limit', filters.limit);
+
+    try {
+      const response = await this.axiosInstance.get(
+        `/messaging/conversations?${params.toString()}`,
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Get message conversations error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get messages with a specific user
+   * @param {number} otherUserId - The other user's ID
+   * @param {number|null} studentId - Optional student ID to filter messages
+   * @returns {Promise<Object>} Messages list
+   */
+  async getMessagesWithUser(otherUserId, studentId = null) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    const params = new URLSearchParams();
+    if (studentId) params.append('student_id', studentId);
+
+    try {
+      const response = await this.axiosInstance.get(
+        `/messaging/messages/${otherUserId}?${params.toString()}`,
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Get messages with user error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send a message
+   * @param {Object} messageData - Message data (recipient_user_id, subject, message_body, student_user_id, priority)
+   * @returns {Promise<Object>} Send result
+   */
+  async sendMessage(messageData) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`,
+      'Content-Type': 'application/json'
+    };
+
+    try {
+      const response = await this.axiosInstance.post('/messaging/send', messageData, { headers });
+      return response.data;
+    } catch (error) {
+      console.error('Send message error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Mark a message as read
+   * @param {number} messageId - Message ID to mark as read
+   * @returns {Promise<Object>} Mark read result
+   */
+  async markMessageAsRead(messageId) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    try {
+      const response = await this.axiosInstance.put(`/messaging/mark-read/${messageId}`, {}, { headers });
+      return response.data;
+    } catch (error) {
+      console.error('Mark message as read error:', error);
+      throw error;
+    }
+  }
+
+  // ============================================================================
+  // CHILD SETTINGS MANAGEMENT
+  // ============================================================================
+
+  /**
+   * Get child settings managed by parent
+   * @param {number} childUserId - Child user ID
+   * @returns {Promise<Object>} Child settings
+   */
+  async getChildSettings(childUserId) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    try {
+      const response = await this.axiosInstance.get(`/messaging/child-settings/${childUserId}`, { headers });
+      return response.data;
+    } catch (error) {
+      console.error('Get child settings error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Save child settings managed by parent
+   * @param {Object} settingsData - Settings data with child_user_id and settings_data
+   * @returns {Promise<Object>} Save result
+   */
+  async saveChildSettings(settingsData) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`,
+      'Content-Type': 'application/json'
+    };
+
+    try {
+      const response = await this.axiosInstance.post('/messaging/child-settings', settingsData, { headers });
+      return response.data;
+    } catch (error) {
+      console.error('Save child settings error:', error);
+      throw error;
+    }
+  }
+
+  // ============================================================================
+  // PROGRESS REPORTING SYSTEM
+  // ============================================================================
+
+  /**
+   * Get progress reports for a child
+   * @param {number} childUserId - Child user ID
+   * @returns {Promise<Object>} Progress reports list
+   */
+  async getProgressReports(childUserId) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    try {
+      const response = await this.axiosInstance.get(`/messaging/progress-reports/${childUserId}`, { headers });
+      return response.data;
+    } catch (error) {
+      console.error('Get progress reports error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Generate a new progress report
+   * @param {Object} reportData - Report generation data
+   * @returns {Promise<Object>} Generated report
+   */
+  async generateProgressReport(reportData) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`,
+      'Content-Type': 'application/json'
+    };
+
+    try {
+      const response = await this.axiosInstance.post('/messaging/progress-reports', reportData, { headers });
+      return response.data;
+    } catch (error) {
+      console.error('Generate progress report error:', error);
       throw error;
     }
   }
@@ -3532,12 +4049,26 @@ class API {
     };
 
     try {
+      // Try teacher endpoint first, fallback to admin if needed
       const response = await this.axiosInstance.get(
-        `/admin/student/progress/${studentId}`,
+        `/teacher/student-progress/${studentId}`,
         { headers }
       );
       return response.data;
     } catch (error) {
+      // If teacher endpoint fails, try admin endpoint
+      if (error.response?.status === 403 || error.response?.status === 404) {
+        try {
+          const response = await this.axiosInstance.get(
+            `/admin/student/progress/${studentId}`,
+            { headers }
+          );
+          return response.data;
+        } catch (adminError) {
+          console.error('Get student progress error (both teacher and admin):', adminError);
+          throw adminError;
+        }
+      }
       console.error('Get student progress error:', error);
       throw error;
     }
@@ -3560,13 +4091,28 @@ class API {
     };
 
     try {
+      // Try teacher endpoint first for teachers, fallback to admin endpoint
       const response = await this.axiosInstance.post(
-        '/admin/learning-objectives',
+        '/teacher/learning-objectives',
         objectiveData,
         { headers }
       );
       return response.data;
     } catch (error) {
+      // If teacher endpoint fails (403/404), try admin endpoint
+      if (error.response?.status === 403 || error.response?.status === 404) {
+        try {
+          const adminResponse = await this.axiosInstance.post(
+            '/admin/learning-objectives',
+            objectiveData,
+            { headers }
+          );
+          return adminResponse.data;
+        } catch (adminError) {
+          console.error('Create learning objective error (both teacher and admin):', adminError);
+          throw adminError;
+        }
+      }
       console.error('Create learning objective error:', error);
       throw error;
     }

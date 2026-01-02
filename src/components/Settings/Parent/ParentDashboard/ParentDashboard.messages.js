@@ -253,10 +253,6 @@ export default defineMessages({
     id: 'cboard.components.ParentDashboard.saveSettings',
     defaultMessage: 'Save Settings'
   },
-  loadingParentDashboard: {
-    id: 'cboard.components.ParentDashboard.loadingParentDashboard',
-    defaultMessage: 'Loading parent dashboard...'
-  },
   traditionalChinese: {
     id: 'cboard.components.ParentDashboard.traditionalChinese',
     defaultMessage: '繁體中文 (香港)'
@@ -268,5 +264,65 @@ export default defineMessages({
   english: {
     id: 'cboard.components.ParentDashboard.english',
     defaultMessage: 'English'
+  },
+  messageSent: {
+    id: 'cboard.components.ParentDashboard.messageSent',
+    defaultMessage: 'Message sent successfully!'
+  },
+  sendFailed: {
+    id: 'cboard.components.ParentDashboard.sendFailed',
+    defaultMessage: 'Failed to send message. Please try again.'
+  },
+  messageRequired: {
+    id: 'cboard.components.ParentDashboard.messageRequired',
+    defaultMessage: 'Please fill in all required fields.'
+  },
+  settingsSaved: {
+    id: 'cboard.components.ParentDashboard.settingsSaved',
+    defaultMessage: 'Child settings saved successfully!'
+  },
+  generateReports: {
+    id: 'cboard.components.ParentDashboard.generateReports',
+    defaultMessage: 'Generate All Reports'
+  },
+  generateReport: {
+    id: 'cboard.components.ParentDashboard.generateReport',
+    defaultMessage: 'Generate Report'
+  },
+  reportsGenerated: {
+    id: 'cboard.components.ParentDashboard.reportsGenerated',
+    defaultMessage: 'reports generated successfully!'
+  },
+  reportGenerated: {
+    id: 'cboard.components.ParentDashboard.reportGenerated',
+    defaultMessage: 'Report generated for'
+  },
+  reportGenerationFailed: {
+    id: 'cboard.components.ParentDashboard.reportGenerationFailed',
+    defaultMessage: 'Failed to generate reports. Please try again.'
+  },
+  accessDenied: {
+    id: 'cboard.components.ParentDashboard.accessDenied',
+    defaultMessage: 'Access Denied'
+  },
+  parentRoleRequired: {
+    id: 'cboard.components.ParentDashboard.parentRoleRequired',
+    defaultMessage: 'You need parent role to access this dashboard.'
+  },
+  backToSettings: {
+    id: 'cboard.components.ParentDashboard.backToSettings',
+    defaultMessage: 'Back to Settings'
+  },
+  saveFailed: {
+    id: 'cboard.components.ParentDashboard.saveFailed',
+    defaultMessage: 'Failed to save settings. Please try again.'
+  },
+  messageHistory: {
+    id: 'cboard.components.ParentDashboard.messageHistory',
+    defaultMessage: 'Message History'
+  },
+  noMessagesYet: {
+    id: 'cboard.components.ParentDashboard.noMessagesYet',
+    defaultMessage: 'No messages yet. Start a conversation with your child\'s teachers.'
   }
 });

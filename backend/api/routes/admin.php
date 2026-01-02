@@ -14,7 +14,9 @@ function handleAdminRoutes($method, $pathParts, $data, $authToken) {
  * GET /admin/dashboard - Get admin dashboard data
  */
 if ($method === 'GET' && $pathParts[1] === 'dashboard') {
-    requireRole('system_admin'); // Only system admins can see global dashboard
+    if ($user['role'] !== 'admin') {
+        return errorResponse('Access denied', 403);
+    }
 
     $db = getDB();
     if (!$db) return errorResponse('Database connection failed', 500);
@@ -32,12 +34,14 @@ if ($method === 'GET' && $pathParts[1] === 'dashboard') {
         // Organization statistics
         $stmt = $db->prepare("SELECT COUNT(*) as total_orgs FROM organizations WHERE is_active = 1");
         $stmt->execute();
-        $stats['organizations'] = $stmt->fetch(PDO::FETCH_ASSOC)['total_orgs'];
+        $orgResult = $stmt->fetch(PDO::FETCH_ASSOC);
+        $stats['organizations'] = $orgResult['total_orgs'];
 
         // Active classes
         $stmt = $db->prepare("SELECT COUNT(*) as total_classes FROM classes WHERE is_active = 1");
         $stmt->execute();
-        $stats['classes'] = $stmt->fetch(PDO::FETCH_ASSOC)['total_classes'];
+        $classResult = $stmt->fetch(PDO::FETCH_ASSOC);
+        $stats['classes'] = $classResult['total_classes'];
 
         // Recent activities
         $stmt = $db->prepare("
@@ -61,7 +65,9 @@ if ($method === 'GET' && $pathParts[1] === 'dashboard') {
  * GET /admin/organizations - List all organizations (system admin only)
  */
 if ($method === 'GET' && $pathParts[1] === 'organizations') {
-    requireRole('system_admin');
+    if (!requireRole($user, 'system_admin')) {
+        return errorResponse('Access denied', 403);
+    }
 
     $db = getDB();
     if (!$db) return errorResponse('Database connection failed', 500);
@@ -287,28 +293,7 @@ if ($method === 'POST' && $pathParts[1] === 'organizations' && isset($pathParts[
     }
 }
 
-/**
- * GET /admin/teacher/students - Get students accessible by current teacher
- */
-if ($method === 'GET' && $pathParts[1] === 'teacher' && $pathParts[2] === 'students') {
-    // Check if user is a teacher (both organizational roles and legacy role)
-    $userRoles = getUserRoles($user['id']);
-    $isTeacher = array_filter($userRoles, fn($r) => in_array($r['role'], ['teacher', 'therapist']));
 
-    // Also check legacy role in users table
-    $isLegacyTeacher = isset($user['role']) && in_array($user['role'], ['teacher', 'therapist']);
-
-    if (empty($isTeacher) && !$isLegacyTeacher && !isSystemAdmin($user['id'])) {
-        return errorResponse('Access denied - teacher role required', 403);
-    }
-
-    $orgId = isset($_GET['organization_id']) ? (int)$_GET['organization_id'] : null;
-    $classId = isset($_GET['class_id']) ? (int)$_GET['class_id'] : null;
-
-    $students = getAccessibleStudents($user['id'], $orgId, $classId);
-
-    return successResponse(['students' => $students]);
-}
 
 /**
  * GET /admin/parent/children - Get children accessible by current parent
@@ -712,6 +697,203 @@ if ($method === 'DELETE' && $pathParts[1] === 'users' && isset($pathParts[2])) {
 
     } catch (Exception $e) {
         return errorResponse('Failed to deactivate user: ' . $e->getMessage(), 500);
+    }
+}
+
+/**
+ * GET /admin/parent-child - Get all parent-child relationships (admin only)
+ */
+if ($method === 'GET' && $pathParts[1] === 'parent-child') {
+    if (!isSystemAdmin($user['id']) && $user['role'] !== 'admin') {
+        return errorResponse('Access denied', 403);
+    }
+
+    $db = getDB();
+    if (!$db) return errorResponse('Database connection failed', 500);
+
+    try {
+        $stmt = $db->prepare("
+            SELECT pcr.*,
+                   p.name as parent_name, p.email as parent_email,
+                   c.name as child_name, c.email as child_email,
+                   u.name as verified_by_name
+            FROM parent_child_relationships pcr
+            JOIN users p ON pcr.parent_user_id = p.id
+            JOIN users c ON pcr.child_user_id = c.id
+            LEFT JOIN users u ON pcr.verified_by = u.id
+            ORDER BY pcr.created_at DESC
+        ");
+        $stmt->execute();
+        $relationships = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        return successResponse(['relationships' => $relationships]);
+
+    } catch (Exception $e) {
+        return errorResponse('Failed to load parent-child relationships: ' . $e->getMessage(), 500);
+    }
+}
+
+/**
+ * POST /admin/parent-child - Create parent-child relationship
+ */
+if ($method === 'POST' && $pathParts[1] === 'parent-child') {
+    if (!isSystemAdmin($user['id']) && $user['role'] !== 'admin') {
+        return errorResponse('Access denied', 403);
+    }
+
+    $data = json_decode(file_get_contents('php://input'), true);
+    if (!$data || !isset($data['parent_user_id']) || !isset($data['child_user_id'])) {
+        return errorResponse('Parent and child user IDs are required', 400);
+    }
+
+    $db = getDB();
+    if (!$db) return errorResponse('Database connection failed', 500);
+
+    try {
+        // Check if relationship already exists
+        $stmt = $db->prepare("
+            SELECT id FROM parent_child_relationships
+            WHERE parent_user_id = ? AND child_user_id = ?
+        ");
+        $stmt->execute([$data['parent_user_id'], $data['child_user_id']]);
+        if ($stmt->fetch()) {
+            return errorResponse('Relationship already exists', 409);
+        }
+
+        // Create relationship
+        $stmt = $db->prepare("
+            INSERT INTO parent_child_relationships
+            (parent_user_id, child_user_id, relationship_type, custody_type,
+             can_manage_profile, can_view_progress, can_receive_notifications,
+             emergency_contact, notes, verified_at, verified_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?)
+        ");
+
+        $stmt->execute([
+            $data['parent_user_id'],
+            $data['child_user_id'],
+            $data['relationship_type'] ?? 'guardian',
+            $data['custody_type'] ?? 'full',
+            isset($data['can_manage_profile']) ? ($data['can_manage_profile'] ? 1 : 0) : 1,
+            isset($data['can_view_progress']) ? ($data['can_view_progress'] ? 1 : 0) : 1,
+            isset($data['can_receive_notifications']) ? ($data['can_receive_notifications'] ? 1 : 0) : 1,
+            isset($data['emergency_contact']) ? ($data['emergency_contact'] ? 1 : 0) : 0,
+            $data['notes'] ?? null,
+            $user['id']
+        ]);
+
+        $relationshipId = $db->lastInsertId();
+
+        return successResponse([
+            'relationship_id' => $relationshipId,
+            'message' => 'Parent-child relationship created successfully'
+        ], 201);
+
+    } catch (Exception $e) {
+        return errorResponse('Failed to create relationship: ' . $e->getMessage(), 500);
+    }
+}
+
+/**
+ * PUT /admin/parent-child/{id} - Update parent-child relationship
+ */
+if ($method === 'PUT' && $pathParts[1] === 'parent-child' && isset($pathParts[2])) {
+    if (!isSystemAdmin($user['id']) && $user['role'] !== 'admin') {
+        return errorResponse('Access denied', 403);
+    }
+
+    $relationshipId = (int)$pathParts[2];
+    $data = json_decode(file_get_contents('php://input'), true);
+
+    if (!$data) {
+        return errorResponse('Invalid data', 400);
+    }
+
+    $db = getDB();
+    if (!$db) return errorResponse('Database connection failed', 500);
+
+    try {
+        $updates = [];
+        $params = [];
+
+        if (isset($data['relationship_type'])) {
+            $updates[] = 'relationship_type = ?';
+            $params[] = $data['relationship_type'];
+        }
+
+        if (isset($data['custody_type'])) {
+            $updates[] = 'custody_type = ?';
+            $params[] = $data['custody_type'];
+        }
+
+        if (isset($data['can_manage_profile'])) {
+            $updates[] = 'can_manage_profile = ?';
+            $params[] = $data['can_manage_profile'] ? 1 : 0;
+        }
+
+        if (isset($data['can_view_progress'])) {
+            $updates[] = 'can_view_progress = ?';
+            $params[] = $data['can_view_progress'] ? 1 : 0;
+        }
+
+        if (isset($data['can_receive_notifications'])) {
+            $updates[] = 'can_receive_notifications = ?';
+            $params[] = $data['can_receive_notifications'] ? 1 : 0;
+        }
+
+        if (isset($data['emergency_contact'])) {
+            $updates[] = 'emergency_contact = ?';
+            $params[] = $data['emergency_contact'] ? 1 : 0;
+        }
+
+        if (isset($data['notes'])) {
+            $updates[] = 'notes = ?';
+            $params[] = $data['notes'];
+        }
+
+        if (empty($updates)) {
+            return errorResponse('No valid updates provided', 400);
+        }
+
+        $updates[] = 'updated_at = NOW()';
+        $params[] = $relationshipId;
+
+        $sql = "UPDATE parent_child_relationships SET " . implode(', ', $updates) . " WHERE id = ?";
+        $stmt = $db->prepare($sql);
+        $stmt->execute($params);
+
+        return successResponse(['message' => 'Relationship updated successfully']);
+
+    } catch (Exception $e) {
+        return errorResponse('Failed to update relationship: ' . $e->getMessage(), 500);
+    }
+}
+
+/**
+ * DELETE /admin/parent-child/{id} - Delete parent-child relationship
+ */
+if ($method === 'DELETE' && $pathParts[1] === 'parent-child' && isset($pathParts[2])) {
+    if (!isSystemAdmin($user['id']) && $user['role'] !== 'admin') {
+        return errorResponse('Access denied', 403);
+    }
+
+    $relationshipId = (int)$pathParts[2];
+
+    $db = getDB();
+    if (!$db) return errorResponse('Database connection failed', 500);
+
+    try {
+        $stmt = $db->prepare("DELETE FROM parent_child_relationships WHERE id = ?");
+        $stmt->execute([$relationshipId]);
+
+        if ($stmt->rowCount() === 0) {
+            return errorResponse('Relationship not found', 404);
+        }
+
+        return successResponse(['message' => 'Relationship deleted successfully']);
+
+    } catch (Exception $e) {
+        return errorResponse('Failed to delete relationship: ' . $e->getMessage(), 500);
     }
 }
 

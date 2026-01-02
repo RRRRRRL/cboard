@@ -153,6 +153,10 @@ export default defineMessages({
     id: 'cboard.components.TeacherDashboard.jyutpingRules',
     defaultMessage: 'Jyutping Rules'
   },
+  communication: {
+    id: 'cboard.components.TeacherDashboard.communication',
+    defaultMessage: 'Communication'
+  },
   jyutpingRulesDescription: {
     id: 'cboard.components.TeacherDashboard.jyutpingRulesDescription',
     defaultMessage: 'Configure Jyutping pronunciation matching rules for students'
@@ -241,6 +245,10 @@ export default defineMessages({
     id: 'cboard.components.TeacherDashboard.manageStudent',
     defaultMessage: 'Manage'
   },
+  manageStudents: {
+    id: 'cboard.components.TeacherDashboard.manageStudents',
+    defaultMessage: 'Manage Students'
+  },
   updateStudent: {
     id: 'cboard.components.TeacherDashboard.updateStudent',
     defaultMessage: 'Update'
@@ -280,5 +288,69 @@ export default defineMessages({
   selectStudentsToAssign: {
     id: 'cboard.components.TeacherDashboard.selectStudentsToAssign',
     defaultMessage: 'Select students to assign to your class'
+  },
+  selectStudent: {
+    id: 'cboard.components.TeacherDashboard.selectStudent',
+    defaultMessage: 'Select Student'
+  },
+  selectParent: {
+    id: 'cboard.components.TeacherDashboard.selectParent',
+    defaultMessage: 'Select Parent'
+  },
+  composeMessage: {
+    id: 'cboard.components.TeacherDashboard.composeMessage',
+    defaultMessage: 'Compose Message'
+  },
+  sendMessage: {
+    id: 'cboard.components.TeacherDashboard.sendMessage',
+    defaultMessage: 'Send Message'
+  },
+  subject: {
+    id: 'cboard.components.TeacherDashboard.subject',
+    defaultMessage: 'Subject'
+  },
+  message: {
+    id: 'cboard.components.TeacherDashboard.message',
+    defaultMessage: 'Message'
+  },
+  priority: {
+    id: 'cboard.components.TeacherDashboard.priority',
+    defaultMessage: 'Priority'
+  },
+  normal: {
+    id: 'cboard.components.TeacherDashboard.priority.normal',
+    defaultMessage: 'Normal'
+  },
+  urgent: {
+    id: 'cboard.components.TeacherDashboard.priority.urgent',
+    defaultMessage: 'Urgent'
+  },
+  low: {
+    id: 'cboard.components.TeacherDashboard.priority.low',
+    defaultMessage: 'Low'
+  },
+  noMessagesYet: {
+    id: 'cboard.components.TeacherDashboard.noMessagesYet',
+    defaultMessage: 'No messages yet'
+  },
+  messagesWillAppearHere: {
+    id: 'cboard.components.TeacherDashboard.messagesWillAppearHere',
+    defaultMessage: 'Messages will appear here when you communicate with parents'
+  },
+  recentMessages: {
+    id: 'cboard.components.TeacherDashboard.recentMessages',
+    defaultMessage: 'Recent Messages'
+  },
+  refreshMessages: {
+    id: 'cboard.components.TeacherDashboard.refreshMessages',
+    defaultMessage: 'Refresh Messages'
+  },
+  sendMessageToParent: {
+    id: 'cboard.components.TeacherDashboard.sendMessageToParent',
+    defaultMessage: 'Send Message to Parent'
+  },
+  sendMessagesToParents: {
+    id: 'cboard.components.TeacherDashboard.sendMessagesToParents',
+    defaultMessage: 'Send messages to parents about their children\'s progress.'
   }
 });

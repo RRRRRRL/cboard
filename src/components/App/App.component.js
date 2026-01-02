@@ -20,6 +20,7 @@ import TeacherDashboard from '../Settings/Teacher/TeacherDashboard';
 import ParentDashboard from '../Settings/Parent/ParentDashboard';
 import AdminOrganizations from '../Admin/AdminOrganizations/AdminOrganizations.component';
 import AdminUsers from '../Admin/AdminUsers/AdminUsers.component';
+import AdminParentChild from '../Admin/AdminParentChild/AdminParentChild.component';
 import './App.css';
 import LoginRequiredModal from '../LoggedInFeature/LoginRequiredModal';
 
@@ -81,9 +82,13 @@ export class App extends Component {
           <Route path="/admin/organizations/new" component={AdminOrganizations} />
           <Route path="/admin/organizations" component={AdminOrganizations} />
           <Route path="/admin/users" component={AdminUsers} />
+          <Route path="/admin/parent-child" component={AdminParentChild} />
           <Route path="/teacher/dashboard" component={TeacherDashboard} />
+          <Route path="/teacher/messages" component={TeacherDashboard} />
+          <Route path="/teacher/students/:studentId/progress" component={TeacherDashboard} />
           <Route path="/settings/teacher" component={TeacherDashboard} />
           <Route path="/parent/dashboard" component={ParentDashboard} />
+          <Route path="/parent/children/:childId/progress" component={ParentDashboard} />
           <Route path="/settings/parent" component={ParentDashboard} />
 
           <Route path="/settings" component={Settings} />

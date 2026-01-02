@@ -45,6 +45,10 @@ export default defineMessages({
     id: 'cboard.components.AdminDashboard.manageUsers',
     defaultMessage: 'Manage Users'
   },
+  manageParentChild: {
+    id: 'cboard.components.AdminDashboard.manageParentChild',
+    defaultMessage: 'Manage Parent-Child Relationships'
+  },
   loadingDashboard: {
     id: 'cboard.components.AdminDashboard.loadingDashboard',
     defaultMessage: 'Loading dashboard...'
