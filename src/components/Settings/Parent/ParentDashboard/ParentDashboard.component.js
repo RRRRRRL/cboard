@@ -13,6 +13,7 @@ import {
   ListItem,
   ListItemText,
   ListItemAvatar,
+  ListItemSecondaryAction,
   Avatar,
   Chip,
   LinearProgress,
@@ -50,6 +51,7 @@ import {
   ChildCare,
   Send,
   Edit,
+  Delete,
   Settings,
   AccountTree,
   BarChart,
@@ -80,6 +82,8 @@ const ParentDashboard = ({ intl, user, history, match }) => {
 
   const [messageDialog, setMessageDialog] = useState(false);
   const [manageChildDialog, setManageChildDialog] = useState(false);
+  const [selectedMessage, setSelectedMessage] = useState(null);
+  const [messageConversation, setMessageConversation] = useState([]);
   const [newMessage, setNewMessage] = useState({
     teacher_id: '',
     subject: '',
@@ -95,6 +99,7 @@ const ParentDashboard = ({ intl, user, history, match }) => {
   // Communication data
   const [availableTeachers, setAvailableTeachers] = useState([]);
   const [parentMessages, setParentMessages] = useState([]);
+  const [expandedThreads, setExpandedThreads] = useState(new Set());
 
   // Child Settings Management
   const [childSettings, setChildSettings] = useState({
@@ -157,7 +162,7 @@ const ParentDashboard = ({ intl, user, history, match }) => {
         // Load progress for each child
         const progressPromises = childrenList.map(async (child) => {
           try {
-            const progressResponse = await API.getStudentProgress(child.id);
+            const progressResponse = await API.getParentChildProgress(child.id);
             return { childId: child.id, data: progressResponse.data };
           } catch (error) {
             console.error(`Failed to load progress for child ${child.id}:`, error);
@@ -236,6 +241,78 @@ const ParentDashboard = ({ intl, user, history, match }) => {
       message: ''
     });
     setMessageDialog(true);
+  };
+
+  const handleReplyToMessage = (message) => {
+    // Set up conversation view with the selected message
+    setSelectedMessage(message);
+    setMessageDialog(true);
+    // Load the full conversation thread
+    loadMessageConversation(message);
+
+    // Pre-fill the message with recipient information for reply
+    setNewMessage({
+      teacher_id: message.sender_user_id, // Reply to the sender
+      subject: message.subject.startsWith('Re:') ? message.subject : `Re: ${message.subject}`,
+      message: ''
+    });
+  };
+
+  const handleDeleteMessage = async (message) => {
+    if (window.confirm(intl.formatMessage(messages.deleteMessageConfirm))) {
+      try {
+        // Call delete API - we'll need to implement this in the backend
+        // For now, just remove from local state
+        setParentMessages(prev => prev.filter(m => m.id !== message.id));
+        alert('Message deleted successfully!');
+        // Refresh messages to show updated data
+        loadDashboardData();
+      } catch (error) {
+        console.error('Failed to delete message:', error);
+        alert('Failed to delete message. Please try again.');
+      }
+    }
+  };
+
+  const loadMessageConversation = async (message) => {
+    try {
+      // Get all messages in this conversation thread using parent_message_id chain
+      const response = await API.getParentMessages();
+      if (response.success && response.data && response.data.messages) {
+        // Build conversation thread by following parent_message_id chain
+        const allMessages = response.data.messages;
+        const conversationMessages = [];
+
+        // Find the root message (original message with no parent_message_id)
+        let rootMessage = message;
+        while (rootMessage.parent_message_id) {
+          const parentMsg = allMessages.find(m => m.id === rootMessage.parent_message_id);
+          if (!parentMsg) break;
+          rootMessage = parentMsg;
+        }
+
+        // Collect all messages in this conversation thread
+        const collectThread = (msgId) => {
+          const msg = allMessages.find(m => m.id === msgId);
+          if (msg) {
+            conversationMessages.push(msg);
+            // Find all replies to this message
+            const replies = allMessages.filter(m => m.parent_message_id === msgId);
+            replies.forEach(reply => collectThread(reply.id));
+          }
+        };
+
+        collectThread(rootMessage.id);
+
+        // Sort by creation date
+        conversationMessages.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+
+        setMessageConversation(conversationMessages);
+      }
+    } catch (error) {
+      console.error('Failed to load message conversation:', error);
+      setMessageConversation([message]); // Fallback to just the original message
+    }
   };
 
   const handleCloseMessageDialog = () => {
@@ -881,7 +958,7 @@ const ParentDashboard = ({ intl, user, history, match }) => {
 
         {activeTab === 3 && (
           /* Communication Tab */
-          <Box>
+          <Box style={{ height: 'calc(100vh - 200px)', overflow: 'auto' }}>
             <Typography variant="h5" gutterBottom>
               {intl.formatMessage(messages.communication)}
             </Typography>
@@ -893,46 +970,183 @@ const ParentDashboard = ({ intl, user, history, match }) => {
                   <Typography variant="h6" gutterBottom>
                     {intl.formatMessage(messages.messageHistory)}
                   </Typography>
-                  <List>
-                    {parentMessages.slice(0, 10).map((message, index) => (
-                      <ListItem key={message.id || index} divider>
-                        <ListItemAvatar>
-                          <Avatar>
-                            {message.sender_name ? message.sender_name.charAt(0).toUpperCase() : 'U'}
-                          </Avatar>
-                        </ListItemAvatar>
-                        <ListItemText
-                          primary={
-                            <Box display="flex" justifyContent="space-between" alignItems="center">
-                              <Typography variant="body1" style={{ fontWeight: 'bold' }}>
-                                {message.subject}
-                              </Typography>
-                              <Typography variant="caption" color="textSecondary">
-                                {message.created_at ? new Date(message.created_at).toLocaleDateString() : ''}
-                              </Typography>
-                            </Box>
+                  <List style={{ maxHeight: '400px', overflow: 'auto' }}>
+                    {/* Group messages by conversation threads - show only root messages */}
+                    {(() => {
+                      // Group messages by conversation thread
+                      const threadMap = new Map();
+                      const rootMessages = [];
+
+                      parentMessages.forEach(message => {
+                        if (!message.parent_message_id) {
+                          // This is a root message
+                          rootMessages.push(message);
+                          threadMap.set(message.id, [message]);
+                        } else {
+                          // This is a reply - add to its thread
+                          const rootId = findRootMessageId(message.id, parentMessages);
+                          if (threadMap.has(rootId)) {
+                            threadMap.get(rootId).push(message);
                           }
-                          secondary={
-                            <Box>
-                              <Typography variant="body2" color="textSecondary" gutterBottom>
-                                {message.sender_name} → {message.recipient_name}
-                              </Typography>
-                              <Typography variant="body2">
-                                {message.message && message.message.length > 100
-                                  ? `${message.message.substring(0, 100)}...`
-                                  : message.message}
-                              </Typography>
-                            </Box>
-                          }
-                        />
-                      </ListItem>
-                    ))}
+                        }
+                      });
+
+                      // Helper function to find root message ID
+                      function findRootMessageId(messageId, messages) {
+                        const msg = messages.find(m => m.id === messageId);
+                        if (!msg || !msg.parent_message_id) return messageId;
+                        return findRootMessageId(msg.parent_message_id, messages);
+                      }
+
+                      return rootMessages.map((rootMessage) => {
+                        const threadMessages = threadMap.get(rootMessage.id) || [rootMessage];
+                        const replyCount = threadMessages.length - 1;
+                        const isExpanded = expandedThreads.has(rootMessage.id);
+
+                        return (
+                          <Box key={rootMessage.id}>
+                            <ListItem
+                              button
+                              onClick={() => {
+                                const newExpanded = new Set(expandedThreads);
+                                if (isExpanded) {
+                                  newExpanded.delete(rootMessage.id);
+                                } else {
+                                  newExpanded.add(rootMessage.id);
+                                }
+                                setExpandedThreads(newExpanded);
+                              }}
+                              divider={!isExpanded}
+                            >
+                              <ListItemAvatar>
+                                <Avatar>
+                                  {rootMessage.sender_name ? rootMessage.sender_name.charAt(0).toUpperCase() : 'U'}
+                                </Avatar>
+                              </ListItemAvatar>
+                              <ListItemText
+                                primary={
+                                  <Box display="flex" justifyContent="space-between" alignItems="center">
+                                    <Box display="flex" alignItems="center" gap={1}>
+                                      <Typography variant="body1" style={{ fontWeight: 'bold' }}>
+                                        {rootMessage.subject}
+                                      </Typography>
+                                      {replyCount > 0 && (
+                                        <Chip
+                                          label={`${replyCount} ${replyCount === 1 ? 'reply' : 'replies'}`}
+                                          size="small"
+                                          color="primary"
+                                          variant="outlined"
+                                        />
+                                      )}
+                                    </Box>
+                                    <Typography variant="caption" color="textSecondary">
+                                      {rootMessage.created_at ? new Date(rootMessage.created_at).toLocaleDateString() : ''}
+                                    </Typography>
+                                  </Box>
+                                }
+                                secondary={
+                                  <Box>
+                                    <Typography variant="body2" color="textSecondary" gutterBottom>
+                                      {rootMessage.sender_name} → {rootMessage.recipient_name}
+                                    </Typography>
+                                    <Typography variant="body2">
+                                      {(rootMessage.message_body || rootMessage.message) && (rootMessage.message_body || rootMessage.message).length > 100
+                                        ? `${(rootMessage.message_body || rootMessage.message).substring(0, 100)}...`
+                                        : (rootMessage.message_body || rootMessage.message)}
+                                    </Typography>
+                                  </Box>
+                                }
+                              />
+                              <ListItemSecondaryAction>
+                                <Box display="flex" alignItems="center" gap={1}>
+                                  {rootMessage.sender_user_id === user.id && (
+                                    <Button
+                                      size="small"
+                                      variant="outlined"
+                                      color="secondary"
+                                      startIcon={<Delete />}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDeleteMessage(rootMessage);
+                                      }}
+                                    >
+                                      {intl.formatMessage(messages.delete)}
+                                    </Button>
+                                  )}
+                                  {rootMessage.sender_user_id !== user.id && (
+                                    <Button
+                                      size="small"
+                                      variant="outlined"
+                                      startIcon={<Message />}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleReplyToMessage(rootMessage);
+                                      }}
+                                    >
+                                      {intl.formatMessage(messages.reply)}
+                                    </Button>
+                                  )}
+                                  <Typography variant="caption" color="textSecondary">
+                                    {isExpanded ? '▼' : '▶'}
+                                  </Typography>
+                                </Box>
+                              </ListItemSecondaryAction>
+                            </ListItem>
+
+                            {/* Expanded thread view */}
+                            {isExpanded && threadMessages.length > 1 && (
+                              <Box ml={9} mr={2} mb={2}>
+                                {threadMessages.slice(1).map((replyMsg, replyIndex) => (
+                                  <Box
+                                    key={replyMsg.id}
+                                    style={{
+                                      borderLeft: '2px solid #e0e0e0',
+                                      paddingLeft: '16px',
+                                      marginBottom: '8px',
+                                      paddingBottom: '8px'
+                                    }}
+                                  >
+                                    <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                                      <Typography variant="body2" style={{ fontWeight: 'bold' }}>
+                                        {replyMsg.sender_name}
+                                      </Typography>
+                                      <Typography variant="caption" color="textSecondary">
+                                        {new Date(replyMsg.created_at).toLocaleString()}
+                                      </Typography>
+                                    </Box>
+                                        <Typography variant="body2" style={{ whiteSpace: 'pre-wrap', lineHeight: '1.4' }}>
+                                          {replyMsg.message_body || replyMsg.message}
+                                        </Typography>
+                                        <Box mt={1} display="flex" gap={1}>
+                                          {replyMsg.sender_user_id === user.id && (
+                                            <Button
+                                              size="small"
+                                              variant="outlined"
+                                              color="secondary"
+                                              onClick={() => handleDeleteMessage(replyMsg)}
+                                            >
+                                              {intl.formatMessage(messages.delete)}
+                                            </Button>
+                                          )}
+                                          {replyMsg.sender_user_id !== user.id && replyIndex === threadMessages.length - 2 && (
+                                            <Button
+                                              size="small"
+                                              variant="outlined"
+                                              onClick={() => handleReplyToMessage(replyMsg)}
+                                            >
+                                              {intl.formatMessage(messages.reply)}
+                                            </Button>
+                                          )}
+                                        </Box>
+                                  </Box>
+                                ))}
+                              </Box>
+                            )}
+                          </Box>
+                        );
+                      });
+                    })()}
                   </List>
-                  {parentMessages.length === 0 && (
-                    <Typography variant="body2" color="textSecondary" style={{ padding: '1rem' }}>
-                      {intl.formatMessage(messages.noMessagesYet)}
-                    </Typography>
-                  )}
                 </CardContent>
               </Card>
             )}
@@ -942,48 +1156,50 @@ const ParentDashboard = ({ intl, user, history, match }) => {
               {intl.formatMessage(messages.contactTeachers)}
             </Typography>
 
-            <Grid container spacing={3}>
-              {children.map((child) => {
-                const teachers = getTeachersForChild(child.id);
+            <Box style={{ maxHeight: '400px', overflow: 'auto' }}>
+              <Grid container spacing={3}>
+                {children.map((child) => {
+                  const teachers = getTeachersForChild(child.id);
 
-                return (
-                  <Grid item xs={12} md={6} key={child.id}>
-                    <Card>
-                      <CardContent>
-                        <Typography variant="h6" gutterBottom>
-                          {intl.formatMessage(messages.contactFor)} {child.name}
-                        </Typography>
-
-                        {teachers.map((teacher, index) => (
-                          <Box key={index} display="flex" justifyContent="space-between" alignItems="center" mb={1}>
-                            <Box>
-                              <Typography variant="body1">{teacher.name}</Typography>
-                              <Typography variant="body2" color="textSecondary">
-                                {teacher.role}
-                              </Typography>
-                            </Box>
-                            <Button
-                              variant="outlined"
-                              size="small"
-                              startIcon={<Message />}
-                              onClick={() => handleSendMessage(teacher.id, child)}
-                            >
-                              {intl.formatMessage(messages.contact)}
-                            </Button>
-                          </Box>
-                        ))}
-
-                        {teachers.length === 0 && (
-                          <Typography variant="body2" color="textSecondary">
-                            {intl.formatMessage(messages.noTeachersAssigned)}
+                  return (
+                    <Grid item xs={12} md={6} key={child.id}>
+                      <Card>
+                        <CardContent>
+                          <Typography variant="h6" gutterBottom>
+                            {intl.formatMessage(messages.contactFor)} {child.name}
                           </Typography>
-                        )}
-                      </CardContent>
-                    </Card>
-                  </Grid>
-                );
-              })}
-            </Grid>
+
+                          {teachers.map((teacher, index) => (
+                            <Box key={index} display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                              <Box>
+                                <Typography variant="body1">{teacher.name}</Typography>
+                                <Typography variant="body2" color="textSecondary">
+                                  {teacher.role}
+                                </Typography>
+                              </Box>
+                              <Button
+                                variant="outlined"
+                                size="small"
+                                startIcon={<Message />}
+                                onClick={() => handleSendMessage(teacher.id, child)}
+                              >
+                                {intl.formatMessage(messages.contact)}
+                              </Button>
+                            </Box>
+                          ))}
+
+                          {teachers.length === 0 && (
+                            <Typography variant="body2" color="textSecondary">
+                              {intl.formatMessage(messages.noTeachersAssigned)}
+                            </Typography>
+                          )}
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                  );
+                })}
+              </Grid>
+            </Box>
           </Box>
         )}
 
@@ -1129,38 +1345,80 @@ const ParentDashboard = ({ intl, user, history, match }) => {
           </DialogActions>
         </Dialog>
 
-        {/* Send Message Dialog */}
+        {/* Send Message Dialog - Email-like Conversation View */}
         <Dialog
           open={messageDialog}
           onClose={handleCloseMessageDialog}
-          maxWidth="sm"
           fullWidth
+          maxWidth={false}
+          style={{ maxWidth: '800px', margin: 'auto' }}
         >
           <DialogTitle>
-            {intl.formatMessage(messages.sendMessageToTeacher)}
+            {selectedMessage ? `Re: ${selectedMessage.subject}` : intl.formatMessage(messages.sendMessageToTeacher)}
           </DialogTitle>
-          <DialogContent>
-            <Typography variant="body2" color="textSecondary" gutterBottom>
-              {intl.formatMessage(messages.regarding)} {selectedChild?.name}
-            </Typography>
+          <DialogContent style={{ padding: '24px' }}>
+            {/* Conversation Thread - Read Only */}
+            {messageConversation && messageConversation.length > 0 && (
+              <Box mb={3}>
+                <Typography variant="h6" gutterBottom>
+                  Conversation
+                </Typography>
+                <Box style={{ maxHeight: '400px', overflow: 'auto', border: '1px solid #e0e0e0', borderRadius: '8px', padding: '16px' }}>
+                  {messageConversation.map((msg, index) => (
+                    <Box key={msg.id || index} mb={3} style={{ borderBottom: index < messageConversation.length - 1 ? '1px solid #f0f0f0' : 'none', paddingBottom: '16px' }}>
+                      <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                        <Typography variant="subtitle2" style={{ fontWeight: 'bold' }}>
+                          {msg.sender_name}
+                        </Typography>
+                        <Typography variant="caption" color="textSecondary">
+                          {new Date(msg.created_at).toLocaleString()}
+                        </Typography>
+                      </Box>
+                      <Typography variant="body2" color="textSecondary" gutterBottom>
+                        Subject: {msg.subject}
+                      </Typography>
+                      <Typography variant="body1" style={{ whiteSpace: 'pre-wrap', lineHeight: '1.5' }}>
+                        {msg.message_body || msg.message}
+                      </Typography>
+                    </Box>
+                  ))}
+                </Box>
+              </Box>
+            )}
 
-            <TextField
-              autoFocus
-              margin="dense"
-              label={intl.formatMessage(messages.subject)}
-              fullWidth
-              value={newMessage.subject}
-              onChange={(e) => setNewMessage({ ...newMessage, subject: e.target.value })}
-            />
-            <TextField
-              margin="dense"
-              label={intl.formatMessage(messages.message)}
-              fullWidth
-              multiline
-              rows={4}
-              value={newMessage.message}
-              onChange={(e) => setNewMessage({ ...newMessage, message: e.target.value })}
-            />
+            {/* Reply Section */}
+            <Box>
+              <Typography variant="h6" gutterBottom>
+                {selectedMessage ? 'Your Reply' : 'New Message'}
+              </Typography>
+
+              {!selectedMessage && (
+                <Typography variant="body2" color="textSecondary" gutterBottom style={{ marginBottom: '16px' }}>
+                  {intl.formatMessage(messages.regarding)} {selectedChild?.name}
+                </Typography>
+              )}
+
+              <TextField
+                autoFocus={!selectedMessage}
+                margin="dense"
+                label={intl.formatMessage(messages.subject)}
+                fullWidth
+                value={newMessage.subject}
+                onChange={(e) => setNewMessage({ ...newMessage, subject: e.target.value })}
+                style={{ marginBottom: '16px' }}
+              />
+              <TextField
+                autoFocus={selectedMessage}
+                margin="dense"
+                label={selectedMessage ? intl.formatMessage(messages.reply) : intl.formatMessage(messages.message)}
+                fullWidth
+                multiline
+                rows={6}
+                value={newMessage.message}
+                onChange={(e) => setNewMessage({ ...newMessage, message: e.target.value })}
+                placeholder={selectedMessage ? "Type your reply here..." : "Type your message here..."}
+              />
+            </Box>
           </DialogContent>
           <DialogActions>
             <Button onClick={handleCloseMessageDialog}>
@@ -1171,8 +1429,9 @@ const ParentDashboard = ({ intl, user, history, match }) => {
               color="primary"
               variant="contained"
               startIcon={<Send />}
+              disabled={!newMessage.subject.trim() || !newMessage.message.trim()}
             >
-              {intl.formatMessage(messages.sendMessage)}
+              {selectedMessage ? intl.formatMessage(messages.reply) : intl.formatMessage(messages.sendMessage)}
             </Button>
           </DialogActions>
         </Dialog>

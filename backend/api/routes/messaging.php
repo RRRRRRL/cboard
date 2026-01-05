@@ -59,49 +59,72 @@ function handleMessagingRoutes($method, $pathParts, $data, $authToken) {
         $db = getDB();
         if (!$db) return false;
 
-        // If no specific student, check general relationship
-        if (!$studentId) {
-            // Check if they have any shared students
-            $stmt = $db->prepare("
-                SELECT COUNT(*) as shared_students
-                FROM parent_child_relationships pcr1
-                JOIN parent_child_relationships pcr2 ON pcr1.child_user_id = pcr2.child_user_id
-                JOIN student_teacher_assignments sta ON pcr1.child_user_id = sta.student_user_id
-                WHERE pcr1.parent_user_id = ? AND pcr2.parent_user_id = ?
-                AND sta.teacher_user_id IN (?, ?)
-                AND sta.end_date IS NULL
-            ");
-            $stmt->execute([$senderId, $recipientId, $senderId, $recipientId]);
-            $result = $stmt->fetch(PDO::FETCH_ASSOC);
-            return $result['shared_students'] > 0;
+        // Get user roles to determine if sender is parent/teacher
+        $senderRoles = getUserRoles($senderId);
+        $recipientRoles = getUserRoles($recipientId);
+
+        // Check legacy roles as fallback
+        $stmt = $db->prepare("SELECT role FROM users WHERE id = ?");
+        $stmt->execute([$senderId]);
+        $senderLegacy = $stmt->fetch(PDO::FETCH_ASSOC);
+        $stmt->execute([$recipientId]);
+        $recipientLegacy = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        $isSenderParent = !empty(array_filter($senderRoles, fn($r) => $r['role'] === 'parent')) ||
+                         ($senderLegacy && $senderLegacy['role'] === 'parent');
+        $isSenderTeacher = !empty(array_filter($senderRoles, fn($r) => in_array($r['role'], ['teacher', 'therapist']))) ||
+                          ($senderLegacy && in_array($senderLegacy['role'], ['teacher', 'therapist']));
+        $isRecipientParent = !empty(array_filter($recipientRoles, fn($r) => $r['role'] === 'parent')) ||
+                           ($recipientLegacy && $recipientLegacy['role'] === 'parent');
+        $isRecipientTeacher = !empty(array_filter($recipientRoles, fn($r) => in_array($r['role'], ['teacher', 'therapist']))) ||
+                            ($recipientLegacy && in_array($recipientLegacy['role'], ['teacher', 'therapist']));
+
+        // Debug logging
+        error_log("DEBUG: Messaging permission check - Sender: $senderId (parent: " . ($isSenderParent ? 'yes' : 'no') . ", teacher: " . ($isSenderTeacher ? 'yes' : 'no') . ")");
+        error_log("DEBUG: Messaging permission check - Recipient: $recipientId (parent: " . ($isRecipientParent ? 'yes' : 'no') . ", teacher: " . ($isRecipientTeacher ? 'yes' : 'no') . ")");
+        error_log("DEBUG: Messaging permission check - Student: " . ($studentId ?: 'null'));
+
+        // Check if this is a valid parent-teacher communication
+        if (($isSenderParent && $isRecipientTeacher) || ($isSenderTeacher && $isRecipientParent)) {
+            if (!$studentId) {
+                // If no specific student, check if they have any shared students
+                error_log("DEBUG: Checking for shared students");
+                $stmt = $db->prepare("
+                    SELECT COUNT(*) as shared_students
+                    FROM parent_child_relationships pcr
+                    JOIN student_teacher_assignments sta ON pcr.child_user_id = sta.student_user_id
+                    WHERE ((pcr.parent_user_id = ? AND sta.teacher_user_id = ?) OR (pcr.parent_user_id = ? AND sta.teacher_user_id = ?))
+                    AND sta.end_date IS NULL
+                ");
+                $stmt->execute([$senderId, $recipientId, $recipientId, $senderId]);
+                $result = $stmt->fetch(PDO::FETCH_ASSOC);
+                $canMessage = $result['shared_students'] > 0;
+                error_log("DEBUG: Shared students check result: $canMessage");
+                return $canMessage;
+            } else {
+                // Check specific student relationship
+                error_log("DEBUG: Checking specific student relationship");
+                $stmt = $db->prepare("
+                    SELECT COUNT(*) as can_message FROM parent_child_relationships pcr
+                    JOIN student_teacher_assignments sta ON pcr.child_user_id = sta.student_user_id
+                    WHERE pcr.parent_user_id = ? AND pcr.child_user_id = ?
+                    AND sta.teacher_user_id = ? AND sta.end_date IS NULL
+                ");
+
+                // Determine who is parent and who is teacher
+                $parentId = $isSenderParent ? $senderId : $recipientId;
+                $teacherId = $isSenderTeacher ? $senderId : $recipientId;
+
+                $stmt->execute([$parentId, $studentId, $teacherId]);
+                $result = $stmt->fetch(PDO::FETCH_ASSOC);
+                $canMessage = $result['can_message'] > 0;
+                error_log("DEBUG: Specific student check result: $canMessage");
+                return $canMessage;
+            }
         }
 
-        // Check specific student relationship
-        $stmt = $db->prepare("
-            SELECT
-                CASE
-                    WHEN EXISTS (
-                        SELECT 1 FROM parent_child_relationships
-                        WHERE parent_user_id = ? AND child_user_id = ?
-                    ) AND EXISTS (
-                        SELECT 1 FROM student_teacher_assignments
-                        WHERE teacher_user_id = ? AND student_user_id = ?
-                        AND end_date IS NULL
-                    ) THEN 1
-                    WHEN EXISTS (
-                        SELECT 1 FROM parent_child_relationships
-                        WHERE parent_user_id = ? AND child_user_id = ?
-                    ) AND EXISTS (
-                        SELECT 1 FROM student_teacher_assignments
-                        WHERE teacher_user_id = ? AND student_user_id = ?
-                        AND end_date IS NULL
-                    ) THEN 1
-                    ELSE 0
-                END as can_message
-        ");
-        $stmt->execute([$senderId, $studentId, $recipientId, $studentId, $recipientId, $studentId, $senderId, $studentId]);
-        $result = $stmt->fetch(PDO::FETCH_ASSOC);
-        return $result['can_message'] == 1;
+        error_log("DEBUG: Invalid communication pair - not parent-teacher relationship");
+        return false;
     }
 
     /**
@@ -263,6 +286,10 @@ function handleMessagingRoutes($method, $pathParts, $data, $authToken) {
         $recipientId = (int)$data['recipient_user_id'];
         $studentId = isset($data['student_user_id']) ? (int)$data['student_user_id'] : null;
 
+        // Validate priority value
+        $validPriorities = ['low', 'normal', 'high', 'urgent'];
+        $priority = isset($data['priority']) && in_array($data['priority'], $validPriorities) ? $data['priority'] : 'normal';
+
         // Verify messaging permission
         if (!canMessageAboutStudent($user['id'], $recipientId, $studentId)) {
             return errorResponse('Access denied', 403);
@@ -293,6 +320,10 @@ function handleMessagingRoutes($method, $pathParts, $data, $authToken) {
             $orgId = null;
             $classId = null;
             if ($studentId) {
+                // Determine which user is the teacher for this context
+                $senderIsTeacher = !empty(array_filter($userRoles, fn($r) => in_array($r['role'], ['teacher', 'therapist'])));
+                $teacherId = $senderIsTeacher ? $user['id'] : $recipientId;
+
                 $contextStmt = $db->prepare("
                     SELECT sta.organization_id, sta.class_id
                     FROM student_teacher_assignments sta
@@ -300,7 +331,7 @@ function handleMessagingRoutes($method, $pathParts, $data, $authToken) {
                     AND sta.end_date IS NULL
                     LIMIT 1
                 ");
-                $contextStmt->execute([$studentId, $recipientId]);
+                $contextStmt->execute([$studentId, $teacherId]);
                 $context = $contextStmt->fetch(PDO::FETCH_ASSOC);
                 if ($context) {
                     $orgId = $context['organization_id'];
@@ -315,7 +346,7 @@ function handleMessagingRoutes($method, $pathParts, $data, $authToken) {
                 $data['subject'],
                 $data['message_body'],
                 $messageType,
-                $data['priority'] ?? 'normal',
+                $priority,
                 $data['parent_message_id'] ?? null,
                 $orgId,
                 $classId
@@ -327,7 +358,7 @@ function handleMessagingRoutes($method, $pathParts, $data, $authToken) {
             $notifStmt = $db->prepare("
                 INSERT INTO notifications
                 (sender_user_id, recipient_user_id, notification_type, title, message, related_student_id, priority)
-                VALUES (?, ?, 'parent_teacher_communication', ?, ?, ?, 'normal')
+                VALUES (?, ?, 'parent_teacher_communication', ?, ?, ?, 'medium')
             ");
 
             $studentName = '';
@@ -383,6 +414,48 @@ function handleMessagingRoutes($method, $pathParts, $data, $authToken) {
 
         } catch (Exception $e) {
             return errorResponse('Failed to mark message as read: ' . $e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * DELETE /messaging/messages/{message_id} - Delete a message
+     */
+    if ($method === 'DELETE' && $pathParts[1] === 'messages' && isset($pathParts[2])) {
+        $messageId = (int)$pathParts[2];
+
+        $db = getDB();
+        if (!$db) return errorResponse('Database connection failed', 500);
+
+        try {
+            // First, verify user can access this message (either sender or recipient)
+            $stmt = $db->prepare("
+                SELECT id, sender_user_id, recipient_user_id
+                FROM messages
+                WHERE id = ? AND (sender_user_id = ? OR recipient_user_id = ?)
+            ");
+
+            $stmt->execute([$messageId, $user['id'], $user['id']]);
+            $message = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$message) {
+                return errorResponse('Message not found or access denied', 404);
+            }
+
+            // Delete the message
+            $deleteStmt = $db->prepare("
+                DELETE FROM messages WHERE id = ?
+            ");
+
+            $deleteStmt->execute([$messageId]);
+
+            if ($deleteStmt->rowCount() === 0) {
+                return errorResponse('Failed to delete message', 500);
+            }
+
+    return successResponse(['success' => true, 'message' => 'Message deleted successfully']);
+
+        } catch (Exception $e) {
+            return errorResponse('Failed to delete message: ' . $e->getMessage(), 500);
         }
     }
 

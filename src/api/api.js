@@ -1415,6 +1415,35 @@ class API {
   }
 
   /**
+   * Get Jyutping exception rules for a student
+   * @param {number} userId - Student user ID
+   * @param {number|null} profileId - Optional profile ID
+   * @returns {Promise<Object>} Exception rules
+   */
+  async getJyutpingExceptionRules(userId, profileId = null) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    try {
+      const params = profileId ? { profile_id: profileId } : {};
+      const response = await this.axiosInstance.get(`/jyutping/rules/exceptions/${userId}`, {
+        headers,
+        params
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Get exception rules error:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Update Jyutping matching rules for a student
    * @param {number} userId - Student user ID
    * @param {Object} rules - Matching rules to update
@@ -1439,35 +1468,6 @@ class API {
       return response.data;
     } catch (error) {
       console.error('Update matching rules error:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get exception rules for a student
-   * @param {number} userId - Student user ID
-   * @param {number|null} profileId - Optional profile ID
-   * @returns {Promise<Object>} Exception rules
-   */
-  async getJyutpingExceptionRules(userId, profileId = null) {
-    const authToken = getAuthToken();
-    if (!(authToken && authToken.length)) {
-      throw new Error('Need to be authenticated to perform this request');
-    }
-
-    const headers = {
-      Authorization: `Bearer ${authToken}`
-    };
-
-    try {
-      const params = profileId ? { profile_id: profileId } : {};
-      const response = await this.axiosInstance.get(`/jyutping/rules/exceptions/${userId}`, {
-        headers,
-        params
-      });
-      return response.data;
-    } catch (error) {
-      console.error('Get exception rules error:', error);
       throw error;
     }
   }
@@ -1814,37 +1814,6 @@ class API {
     };
 
     const { data } = await this.axiosInstance.post('/cards', payload, {
-      headers
-    });
-
-    return data;
-  }
-
-  /**
-   * Link an existing card to a profile board position (profile_cards).
-   * For AI suggestions we usually just drop it at (0,0,0) on the selected profile.
-   */
-  async addCardToProfile(profileId, cardId, options = {}) {
-    const authToken = getAuthToken();
-    if (!(authToken && authToken.length)) {
-      throw new Error('Need to be authenticated to perform this request');
-    }
-
-    const headers = {
-      Authorization: `Bearer ${authToken}`,
-      'Content-Type': 'application/json'
-    };
-
-    const payload = {
-      profile_id: profileId,
-      card_id: cardId,
-      row_index: options.rowIndex != null ? options.rowIndex : 0,
-      col_index: options.colIndex != null ? options.colIndex : 0,
-      page_index: options.pageIndex != null ? options.pageIndex : 0,
-      is_visible: options.isVisible != null ? options.isVisible : 1
-    };
-
-    const { data } = await this.axiosInstance.post('/profile-cards', payload, {
       headers
     });
 
@@ -3303,6 +3272,33 @@ class API {
   }
 
   /**
+   * Unassign a student from the current teacher
+   * @param {number} studentId - Student ID to unassign
+   * @returns {Promise<Object>} Unassignment result
+   */
+  async unassignStudentFromTeacher(studentId) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    try {
+      const response = await this.axiosInstance.delete(
+        `/teacher/unassign-student/${studentId}`,
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Unassign student from teacher error:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Get all users (admin only)
    * @param {Object} filters - Filter options (page, limit, search, role, is_active)
    * @returns {Promise<Object>} Users data with pagination
@@ -3794,6 +3790,29 @@ class API {
   // ============================================================================
 
   /**
+   * Get teacher messages and available parents
+   * @returns {Promise<Object>} Messages and parents data
+   */
+  async getTeacherMessages() {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    try {
+      const response = await this.axiosInstance.get('/teacher/messages', { headers });
+      return response.data;
+    } catch (error) {
+      console.error('Get teacher messages error:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Get messaging contacts for the current user
    * @returns {Promise<Object>} Contacts list
    */
@@ -3923,6 +3942,30 @@ class API {
       return response.data;
     } catch (error) {
       console.error('Mark message as read error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete a message
+   * @param {number} messageId - Message ID to delete
+   * @returns {Promise<Object>} Delete result
+   */
+  async deleteMessage(messageId) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    try {
+      const response = await this.axiosInstance.delete(`/messaging/messages/${messageId}`, { headers });
+      return response.data;
+    } catch (error) {
+      console.error('Delete message error:', error);
       throw error;
     }
   }
@@ -4147,6 +4190,34 @@ class API {
       throw error;
     }
   }
+
+  /**
+   * Delete learning objective (for teachers)
+   * @param {number} objectiveId - Objective ID
+   * @returns {Promise<Object>} Delete result
+   */
+  async deleteLearningObjective(objectiveId) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`
+    };
+
+    try {
+      const response = await this.axiosInstance.delete(
+        `/admin/learning-objectives/${objectiveId}`,
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Delete learning objective error:', error);
+      throw error;
+    }
+  }
+
 
   // ============================================================================
   // DATA RETENTION POLICY

@@ -20,9 +20,9 @@ function handleJyutpingRulesRoutes($method, $pathParts, $data, $authToken) {
 
     // All routes require authentication
     $user = requireAuth($authToken);
-    
-    // Check if user has permission (admin, teacher, or therapist)
-    $allowedRoles = ['admin', 'teacher', 'therapist'];
+
+    // Check if user has permission (admin, teacher, therapist, or student)
+    $allowedRoles = ['admin', 'teacher', 'therapist', 'student'];
     if (!in_array($user['role'], $allowedRoles)) {
         return errorResponse('Insufficient permissions', 403);
     }
@@ -30,9 +30,19 @@ function handleJyutpingRulesRoutes($method, $pathParts, $data, $authToken) {
     // GET /jyutping-rules/matching/{userId} - Get matching rules for a student
     if ($method === 'GET' && count($pathParts) === 3 && $pathParts[1] === 'matching') {
         $userId = (int)$pathParts[2];
-        
+
         try {
             $profileId = isset($_GET['profile_id']) ? (int)$_GET['profile_id'] : null;
+
+            // For teachers, verify they are assigned to this student
+            if ($user['role'] === 'teacher') {
+                $stmt = $db->prepare("SELECT COUNT(*) as count FROM student_teacher_assignments WHERE teacher_user_id = ? AND student_user_id = ?");
+                $stmt->execute([$user['id'], $userId]);
+                $assignment = $stmt->fetch(PDO::FETCH_ASSOC);
+                if (!$assignment || $assignment['count'] == 0) {
+                    return errorResponse('Teacher not assigned to this student', 403);
+                }
+            }
             
             $sql = "SELECT * FROM jyutping_matching_rules 
                     WHERE user_id = ? 
@@ -96,15 +106,25 @@ function handleJyutpingRulesRoutes($method, $pathParts, $data, $authToken) {
         $userId = (int)$pathParts[2];
         error_log('Matching rules PUT payload: ' . json_encode($data));
         try {
+            // For teachers, verify they are assigned to this student
+            if ($user['role'] === 'teacher') {
+                $stmt = $db->prepare("SELECT COUNT(*) as count FROM student_teacher_assignments WHERE teacher_user_id = ? AND student_user_id = ?");
+                $stmt->execute([$user['id'], $userId]);
+                $assignment = $stmt->fetch(PDO::FETCH_ASSOC);
+                if (!$assignment || $assignment['count'] == 0) {
+                    return errorResponse('Teacher not assigned to this student', 403);
+                }
+            }
+
             // Verify student exists
             $stmt = $db->prepare("SELECT id, role FROM users WHERE id = ?");
             $stmt->execute([$userId]);
             $student = $stmt->fetch(PDO::FETCH_ASSOC);
-            
+
             if (!$student) {
                 return errorResponse('Student not found', 404);
             }
-            
+
             if ($student['role'] !== 'student') {
                 return errorResponse('User is not a student', 400);
             }
@@ -266,12 +286,25 @@ function handleJyutpingRulesRoutes($method, $pathParts, $data, $authToken) {
     // GET /jyutping-rules/exceptions/{userId} - Get enabled exception rules for a student
     if ($method === 'GET' && count($pathParts) === 3 && $pathParts[1] === 'exceptions') {
         $userId = (int)$pathParts[2];
-        
+
         try {
             $profileId = isset($_GET['profile_id']) ? (int)$_GET['profile_id'] : null;
-            
+
+            // For teachers, verify they are assigned to this student
+            if ($user['role'] === 'teacher') {
+                $stmt = $db->prepare("SELECT COUNT(*) as count FROM student_teacher_assignments WHERE teacher_user_id = ? AND student_user_id = ?");
+                $stmt->execute([$user['id'], $userId]);
+                $assignment = $stmt->fetch(PDO::FETCH_ASSOC);
+                if (!$assignment || $assignment['count'] == 0) {
+                    error_log("Teacher not assigned to student: teacher_id={$user['id']}, student_id={$userId}");
+                    return errorResponse('Teacher not assigned to this student', 403);
+                }
+            }
+
+            error_log("Fetching exception rules for user_id={$userId}, profile_id=" . ($profileId ?? 'NULL'));
+
             // Get all exception rules with their enabled status for this student
-            $sql = "SELECT 
+            $sql = "SELECT
                         er.id,
                         er.rule_key,
                         er.rule_name,
@@ -282,25 +315,29 @@ function handleJyutpingRulesRoutes($method, $pathParts, $data, $authToken) {
                         COALESCE(ser.enabled, er.default_enabled) as enabled,
                         ser.id as student_rule_id
                     FROM jyutping_exception_rules er
-                    LEFT JOIN jyutping_student_exception_rules ser 
-                        ON ser.rule_id = er.id 
+                    LEFT JOIN jyutping_student_exception_rules ser
+                        ON ser.rule_id = er.id
                         AND ser.user_id = ?
                         AND (ser.profile_id = ? OR (ser.profile_id IS NULL AND ? IS NULL))
                     ORDER BY er.rule_category, er.rule_name";
-            
+
             $stmt = $db->prepare($sql);
             $stmt->execute([$userId, $profileId, $profileId]);
             $rules = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            
+
+            error_log("Found " . count($rules) . " exception rules for user_id={$userId}");
+
             // Convert to boolean
             foreach ($rules as &$rule) {
                 $rule['default_enabled'] = (bool)$rule['default_enabled'];
                 $rule['is_system_rule'] = (bool)$rule['is_system_rule'];
                 $rule['enabled'] = (bool)$rule['enabled'];
             }
-            
-            return successResponse(['rules' => $rules]);
-            
+
+            $response = ['rules' => $rules];
+            error_log("Returning exception rules response: " . json_encode($response));
+            return successResponse($response);
+
         } catch (Exception $e) {
             error_log("Get student exception rules error: " . $e->getMessage());
             return errorResponse('Failed to get student exception rules', 500);
@@ -310,17 +347,27 @@ function handleJyutpingRulesRoutes($method, $pathParts, $data, $authToken) {
     // PUT /jyutping-rules/exceptions/{userId} - Update exception rules for a student
     if ($method === 'PUT' && count($pathParts) === 3 && $pathParts[1] === 'exceptions') {
         $userId = (int)$pathParts[2];
-        
+
         try {
+            // For teachers, verify they are assigned to this student
+            if ($user['role'] === 'teacher') {
+                $stmt = $db->prepare("SELECT COUNT(*) as count FROM student_teacher_assignments WHERE teacher_user_id = ? AND student_user_id = ?");
+                $stmt->execute([$user['id'], $userId]);
+                $assignment = $stmt->fetch(PDO::FETCH_ASSOC);
+                if (!$assignment || $assignment['count'] == 0) {
+                    return errorResponse('Teacher not assigned to this student', 403);
+                }
+            }
+
             // Verify student exists
             $stmt = $db->prepare("SELECT id, role FROM users WHERE id = ?");
             $stmt->execute([$userId]);
             $student = $stmt->fetch(PDO::FETCH_ASSOC);
-            
+
             if (!$student) {
                 return errorResponse('Student not found', 404);
             }
-            
+
             if ($student['role'] !== 'student') {
                 return errorResponse('User is not a student', 400);
             }
@@ -387,4 +434,3 @@ function handleJyutpingRulesRoutes($method, $pathParts, $data, $authToken) {
 
     return errorResponse('Route not found', 404);
 }
-

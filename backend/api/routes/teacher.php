@@ -14,10 +14,19 @@ function handleTeacherRoutes($method, $pathParts, $data, $authToken) {
  * GET /teacher/students - Get students accessible by current teacher
  */
 if ($method === 'GET' && $pathParts[1] === 'students') {
-    // Check if user has teacher role (legacy role check only)
-    $isLegacyTeacher = isset($user['role']) && in_array($user['role'], ['teacher', 'therapist']);
+    // Check if user has teacher role using new role-based system or legacy system
+    $userRoles = getUserRoles($user['id']);
+    $isTeacher = !empty(array_filter($userRoles, fn($r) => in_array($r['role'], ['teacher', 'therapist'])));
 
-    if (!$isLegacyTeacher && !isSystemAdmin($user['id'])) {
+    // Fallback to legacy role check if no roles found in new system
+    if (!$isTeacher && isset($user['role']) && in_array($user['role'], ['teacher', 'therapist'])) {
+        $isTeacher = true;
+        error_log('DEBUG: Using legacy teacher role check');
+    }
+
+    error_log('DEBUG: isTeacher=' . ($isTeacher ? 'true' : 'false') . ', user roles=' . json_encode($userRoles) . ', legacy role=' . ($user['role'] ?? 'null'));
+
+    if (!$isTeacher && !isSystemAdmin($user['id'])) {
         return errorResponse('Access denied - teacher role required', 403);
     }
 
@@ -30,10 +39,17 @@ if ($method === 'GET' && $pathParts[1] === 'students') {
  * GET /teacher/available-students - Get students available for assignment by current teacher
  */
 if ($method === 'GET' && $pathParts[1] === 'available-students') {
-    // Check if user has teacher role (legacy role check only)
-    $isLegacyTeacher = isset($user['role']) && in_array($user['role'], ['teacher', 'therapist']);
+    // Check if user has teacher role using new role-based system or legacy system
+    $userRoles = getUserRoles($user['id']);
+    $isTeacher = !empty(array_filter($userRoles, fn($r) => in_array($r['role'], ['teacher', 'therapist'])));
 
-    if (!$isLegacyTeacher && !isSystemAdmin($user['id'])) {
+    // Fallback to legacy role check if no roles found in new system
+    if (!$isTeacher && isset($user['role']) && in_array($user['role'], ['teacher', 'therapist'])) {
+        $isTeacher = true;
+        error_log('DEBUG: Using legacy teacher role check');
+    }
+
+    if (!$isTeacher && !isSystemAdmin($user['id'])) {
         return errorResponse('Access denied - teacher role required', 403);
     }
 
@@ -103,10 +119,17 @@ if ($method === 'GET' && $pathParts[1] === 'available-students') {
  * POST /teacher/assign-student - Assign a student to the current teacher
  */
 if ($method === 'POST' && $pathParts[1] === 'assign-student') {
-    // Check if user has teacher role (legacy role check only)
-    $isLegacyTeacher = isset($user['role']) && in_array($user['role'], ['teacher', 'therapist']);
+    // Check if user has teacher role using new role-based system or legacy system
+    $userRoles = getUserRoles($user['id']);
+    $isTeacher = !empty(array_filter($userRoles, fn($r) => in_array($r['role'], ['teacher', 'therapist'])));
 
-    if (!$isLegacyTeacher && !isSystemAdmin($user['id'])) {
+    // Fallback to legacy role check if no roles found in new system
+    if (!$isTeacher && isset($user['role']) && in_array($user['role'], ['teacher', 'therapist'])) {
+        $isTeacher = true;
+        error_log('DEBUG: Using legacy teacher role check');
+    }
+
+    if (!$isTeacher && !isSystemAdmin($user['id'])) {
         return errorResponse('Access denied - teacher role required', 403);
     }
 
@@ -164,13 +187,97 @@ if ($method === 'POST' && $pathParts[1] === 'assign-student') {
 }
 
 /**
+ * DELETE /teacher/unassign-student/{studentId} - Remove a student assignment from the current teacher
+ */
+if ($method === 'DELETE' && $pathParts[1] === 'unassign-student' && isset($pathParts[2])) {
+    error_log('DEBUG: Unassign student endpoint called - pathParts: ' . json_encode($pathParts) . ', method: ' . $method);
+    $studentId = (int)$pathParts[2];
+    error_log('DEBUG: Unassigning student ID: ' . $studentId . ' for user: ' . $user['id']);
+
+    // Check if user has teacher role using new role-based system or legacy system
+    $userRoles = getUserRoles($user['id']);
+    $isTeacher = !empty(array_filter($userRoles, fn($r) => in_array($r['role'], ['teacher', 'therapist'])));
+
+    // Fallback to legacy role check if no roles found in new system
+    if (!$isTeacher && isset($user['role']) && in_array($user['role'], ['teacher', 'therapist'])) {
+        $isTeacher = true;
+        error_log('DEBUG: Using legacy teacher role check');
+    }
+
+    error_log('DEBUG: User is teacher: ' . ($isTeacher ? 'yes' : 'no') . ', user roles: ' . json_encode($userRoles));
+
+    if (!$isTeacher && !isSystemAdmin($user['id'])) {
+        error_log('DEBUG: Access denied - not a teacher');
+        return errorResponse('Access denied - teacher role required', 403);
+    }
+
+    $db = getDB();
+    if (!$db) {
+        error_log('DEBUG: Database connection failed');
+        return errorResponse('Database connection failed', 500);
+    }
+
+    try {
+        // Check if assignment exists and belongs to this teacher
+        error_log('DEBUG: Checking for assignment with teacher_user_id=' . $user['id'] . ', student_user_id=' . $studentId);
+        $stmt = $db->prepare("
+            SELECT id, student_user_id FROM student_teacher_assignments
+            WHERE teacher_user_id = ? AND student_user_id = ?
+              AND (end_date IS NULL OR end_date >= CURDATE())
+        ");
+        $stmt->execute([$user['id'], $studentId]);
+        $assignment = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$assignment) {
+            error_log('DEBUG: No assignment found for student ' . $studentId);
+            return errorResponse('Student assignment not found', 404);
+        }
+
+        error_log('DEBUG: Found assignment ID: ' . $assignment['id'] . ', deleting record');
+
+        // Delete the assignment record from the database
+        $stmt = $db->prepare("
+            DELETE FROM student_teacher_assignments
+            WHERE id = ?
+        ");
+        $result = $stmt->execute([$assignment['id']]);
+
+        error_log('DEBUG: Delete result: ' . ($result ? 'success' : 'failed') . ', rows affected: ' . $stmt->rowCount());
+
+        if ($stmt->rowCount() === 0) {
+            error_log('DEBUG: No rows deleted');
+            return errorResponse('Failed to delete assignment', 500);
+        }
+
+        error_log('DEBUG: Successfully deleted student assignment for student ' . $studentId . ' from teacher ' . $user['id']);
+
+        return successResponse([
+            'success' => true,
+            'message' => 'Student unassigned successfully'
+        ]);
+
+    } catch (Exception $e) {
+        error_log('Teacher unassign student error: ' . $e->getMessage());
+        error_log('Stack trace: ' . $e->getTraceAsString());
+        return errorResponse('Failed to unassign student: ' . $e->getMessage(), 500);
+    }
+}
+
+/**
  * GET /teacher/messages - Get messages for the current teacher
  */
 if ($method === 'GET' && $pathParts[1] === 'messages') {
-    // Check if user has teacher role (legacy role check only)
-    $isLegacyTeacher = isset($user['role']) && in_array($user['role'], ['teacher', 'therapist']);
+    // Check if user has teacher role using new role-based system or legacy system
+    $userRoles = getUserRoles($user['id']);
+    $isTeacher = !empty(array_filter($userRoles, fn($r) => in_array($r['role'], ['teacher', 'therapist'])));
 
-    if (!$isLegacyTeacher && !isSystemAdmin($user['id'])) {
+    // Fallback to legacy role check if no roles found in new system
+    if (!$isTeacher && isset($user['role']) && in_array($user['role'], ['teacher', 'therapist'])) {
+        $isTeacher = true;
+        error_log('DEBUG: Using legacy teacher role check');
+    }
+
+    if (!$isTeacher && !isSystemAdmin($user['id'])) {
         return errorResponse('Access denied - teacher role required', 403);
     }
 
@@ -254,10 +361,17 @@ if ($method === 'GET' && $pathParts[1] === 'messages') {
 if ($method === 'GET' && $pathParts[1] === 'student-progress' && isset($pathParts[2])) {
     $studentId = (int)$pathParts[2];
 
-    // Check if user has teacher role
-    $isLegacyTeacher = isset($user['role']) && in_array($user['role'], ['teacher', 'therapist']);
+    // Check if user has teacher role using new role-based system or legacy system
+    $userRoles = getUserRoles($user['id']);
+    $isTeacher = !empty(array_filter($userRoles, fn($r) => in_array($r['role'], ['teacher', 'therapist'])));
 
-    if (!$isLegacyTeacher && !isSystemAdmin($user['id'])) {
+    // Fallback to legacy role check if no roles found in new system
+    if (!$isTeacher && isset($user['role']) && in_array($user['role'], ['teacher', 'therapist'])) {
+        $isTeacher = true;
+        error_log('DEBUG: Using legacy teacher role check');
+    }
+
+    if (!$isTeacher && !isSystemAdmin($user['id'])) {
         return errorResponse('Access denied - teacher role required', 403);
     }
 
@@ -337,10 +451,17 @@ if ($method === 'GET' && $pathParts[1] === 'student-progress' && isset($pathPart
  * POST /teacher/learning-objectives - Create learning objective for a student
  */
 if ($method === 'POST' && $pathParts[1] === 'learning-objectives') {
-    // Check if user has teacher role
-    $isLegacyTeacher = isset($user['role']) && in_array($user['role'], ['teacher', 'therapist']);
+    // Check if user has teacher role using new role-based system or legacy system
+    $userRoles = getUserRoles($user['id']);
+    $isTeacher = !empty(array_filter($userRoles, fn($r) => in_array($r['role'], ['teacher', 'therapist'])));
 
-    if (!$isLegacyTeacher && !isSystemAdmin($user['id'])) {
+    // Fallback to legacy role check if no roles found in new system
+    if (!$isTeacher && isset($user['role']) && in_array($user['role'], ['teacher', 'therapist'])) {
+        $isTeacher = true;
+        error_log('DEBUG: Using legacy teacher role check');
+    }
+
+    if (!$isTeacher && !isSystemAdmin($user['id'])) {
         return errorResponse('Access denied - teacher role required', 403);
     }
 

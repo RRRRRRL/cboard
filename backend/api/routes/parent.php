@@ -13,11 +13,19 @@ function handleParentRoutes($method, $pathParts, $data, $authToken) {
     $user = requireAuth($authToken);
     error_log('DEBUG: User authenticated: ' . json_encode(['id' => $user['id'], 'name' => $user['name'], 'role' => $user['role']]));
 
-    // Check if user has parent role (legacy role check)
-    $isLegacyParent = isset($user['role']) && $user['role'] === 'parent';
-    error_log('DEBUG: isLegacyParent=' . ($isLegacyParent ? 'true' : 'false') . ', user role=' . ($user['role'] ?? 'null'));
+    // Check if user has parent role using new role-based system or legacy system
+    $userRoles = getUserRoles($user['id']);
+    $isParent = !empty(array_filter($userRoles, fn($r) => $r['role'] === 'parent'));
 
-    if (!$isLegacyParent && !isSystemAdmin($user['id'])) {
+    // Fallback to legacy role check if no roles found in new system
+    if (!$isParent && isset($user['role']) && $user['role'] === 'parent') {
+        $isParent = true;
+        error_log('DEBUG: Using legacy parent role check');
+    }
+
+    error_log('DEBUG: isParent=' . ($isParent ? 'true' : 'false') . ', user roles=' . json_encode($userRoles) . ', legacy role=' . ($user['role'] ?? 'null'));
+
+    if (!$isParent && !isSystemAdmin($user['id'])) {
         error_log('DEBUG: Access denied - parent role required');
         return errorResponse('Access denied - parent role required', 403);
     }

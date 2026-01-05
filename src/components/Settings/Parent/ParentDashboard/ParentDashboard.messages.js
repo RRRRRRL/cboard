@@ -324,5 +324,21 @@ export default defineMessages({
   noMessagesYet: {
     id: 'cboard.components.ParentDashboard.noMessagesYet',
     defaultMessage: 'No messages yet. Start a conversation with your child\'s teachers.'
+  },
+  reply: {
+    id: 'cboard.components.ParentDashboard.reply',
+    defaultMessage: 'Reply'
+  },
+  delete: {
+    id: 'cboard.components.ParentDashboard.delete',
+    defaultMessage: 'Delete'
+  },
+  deleteMessage: {
+    id: 'cboard.components.ParentDashboard.deleteMessage',
+    defaultMessage: 'Delete Message'
+  },
+  deleteMessageConfirm: {
+    id: 'cboard.components.ParentDashboard.deleteMessageConfirm',
+    defaultMessage: 'Are you sure you want to delete this message? This action cannot be undone.'
   }
 });

@@ -462,6 +462,28 @@ if ($method === 'PUT' && $pathParts[1] === 'learning-objectives' && isset($pathP
         $updates = [];
         $params = [];
 
+        // Allow updating core objective fields
+        if (isset($data['title'])) {
+            $updates[] = 'title = ?';
+            $params[] = trim($data['title']);
+        }
+
+        if (isset($data['description'])) {
+            $updates[] = 'description = ?';
+            $params[] = $data['description'];
+        }
+
+        if (isset($data['objective_type'])) {
+            $updates[] = 'objective_type = ?';
+            $params[] = $data['objective_type'];
+        }
+
+        if (isset($data['target_date'])) {
+            $updates[] = 'target_date = ?';
+            $params[] = $data['target_date'];
+        }
+
+        // Allow updating progress fields
         if (isset($data['progress_percentage'])) {
             $updates[] = 'progress_percentage = ?';
             $params[] = (int)$data['progress_percentage'];
@@ -492,6 +514,49 @@ if ($method === 'PUT' && $pathParts[1] === 'learning-objectives' && isset($pathP
 
     } catch (Exception $e) {
         return errorResponse('Failed to update objective: ' . $e->getMessage(), 500);
+    }
+}
+
+/**
+ * DELETE /admin/learning-objectives/{id} - Delete learning objective
+ */
+if ($method === 'DELETE' && $pathParts[1] === 'learning-objectives' && isset($pathParts[2])) {
+    $objectiveId = (int)$pathParts[2];
+
+    $db = getDB();
+    if (!$db) return errorResponse('Database connection failed', 500);
+
+    // Check if user owns this objective or is a teacher of the student
+    $stmt = $db->prepare("
+        SELECT lo.* FROM learning_objectives lo
+        WHERE lo.id = ?
+    ");
+    $stmt->execute([$objectiveId]);
+    $objective = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$objective) {
+        return errorResponse('Objective not found', 404);
+    }
+
+    $canDelete = $objective['teacher_user_id'] == $user['id'] ||
+                 canAccessStudentData($user['id'], $objective['student_user_id']);
+
+    if (!$canDelete) {
+        return errorResponse('Access denied', 403);
+    }
+
+    try {
+        $stmt = $db->prepare("DELETE FROM learning_objectives WHERE id = ?");
+        $stmt->execute([$objectiveId]);
+
+        if ($stmt->rowCount() === 0) {
+            return errorResponse('Objective not found', 404);
+        }
+
+        return successResponse(['message' => 'Learning objective deleted successfully']);
+
+    } catch (Exception $e) {
+        return errorResponse('Failed to delete objective: ' . $e->getMessage(), 500);
     }
 }
 
