@@ -194,7 +194,7 @@ const People = ({
                     <InputLabel><FormattedMessage {...messages.role} /></InputLabel>
                     <Select
                       value={role || ''}
-                      disabled={role === 'student'} // Disable for students
+                      disabled={true} // Disabled - role cannot be changed by user
                       onChange={onChangePeople('role')}
                     >
                       <MenuItem value="student">Student</MenuItem>

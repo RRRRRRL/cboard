@@ -94,7 +94,6 @@ function OCRTranslator({
   const handleRecognize = async () => {
     if (!imageFile) return;
 
-    console.log('[OCR DEBUG] Starting OCR recognition for file:', imageFile.name, 'Size:', imageFile.size, 'bytes');
 
     // Reset states
     setRecognizedText('');
@@ -111,14 +110,12 @@ function OCRTranslator({
       reader.onload = async (e) => {
         try {
           const base64Image = e.target.result;
-          console.log('[OCR DEBUG] Image converted to base64, length:', base64Image.length, 'characters');
 
           // Try backend OCR first - according to API docs, this is a blocking request (up to 2 minutes)
           let result;
           try {
-            console.log('[OCR DEBUG] Starting backend OCR request (blocking, up to 2 minutes)...');
             result = await onRecognizeImage(base64Image);
-            console.log('[OCR DEBUG] Backend OCR response received:', result);
+            
 
             // Check if it's a timeout response with status URL
             if (result?.error && result?.check_status_url) {

@@ -56,46 +56,24 @@ function loadTranslations($path) {
  */
 function resolveLabelKeyToChinese($labelKey, $translationsZhTw, $translationsZhCn, $debug = false) {
     if (empty($labelKey)) {
-        if ($debug) error_log("    [resolveLabelKey] Empty labelKey");
         return null;
     }
-    
-    if ($debug) error_log("    [resolveLabelKey] Looking up: '$labelKey'");
-    
+
     // Try zh-TW first, then zh-CN
     if (isset($translationsZhTw[$labelKey])) {
         $translated = $translationsZhTw[$labelKey];
-        if ($debug) error_log("    [resolveLabelKey] Found in zh-TW: '$translated'");
         if (preg_match('/\p{Han}/u', $translated)) {
-            if ($debug) error_log("    [resolveLabelKey] ✓ Contains Chinese, returning");
             return $translated;
-        } else {
-            if ($debug) error_log("    [resolveLabelKey] ✗ No Chinese characters in translation");
-        }
-    } else {
-        if ($debug) {
-            $count = is_array($translationsZhTw) ? count($translationsZhTw) : 0;
-            error_log("    [resolveLabelKey] Not found in zh-TW (count: $count)");
         }
     }
-    
+
     if (isset($translationsZhCn[$labelKey])) {
         $translated = $translationsZhCn[$labelKey];
-        if ($debug) error_log("    [resolveLabelKey] Found in zh-CN: '$translated'");
         if (preg_match('/\p{Han}/u', $translated)) {
-            if ($debug) error_log("    [resolveLabelKey] ✓ Contains Chinese, returning");
             return $translated;
-        } else {
-            if ($debug) error_log("    [resolveLabelKey] ✗ No Chinese characters in translation");
-        }
-    } else {
-        if ($debug) {
-            $count = is_array($translationsZhCn) ? count($translationsZhCn) : 0;
-            error_log("    [resolveLabelKey] Not found in zh-CN (count: $count)");
         }
     }
-    
-    if ($debug) error_log("    [resolveLabelKey] ✗ No match found");
+
     return null;
 }
 

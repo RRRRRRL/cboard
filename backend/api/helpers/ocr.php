@@ -10,9 +10,22 @@ require_once __DIR__ . '/../auth.php';
  * Get OCR configuration from environment
  */
 function getOCRConfig() {
+    $envVal = getenv('PHOTOCEN_OCR_ENABLED');
+
+    // If the env var is not set, default to enabled (true).
+    if ($envVal === false || $envVal === null) {
+        $photocen_enabled = true;
+    } else {
+        // Parse boolean strings like "true"/"false" correctly.
+        $parsed = filter_var($envVal, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+        // If parsing fails (invalid value), treat as false to avoid accidental enablement.
+        $photocen_enabled = ($parsed === null) ? false : $parsed;
+    }
+
     return [
-        'photocen_enabled' => getenv('PHOTOCEN_OCR_ENABLED') ?: true,
+        'photocen_enabled' => $photocen_enabled,
         'photocen_api_url' => getenv('PHOTOCEN_API_URL') ?: 'https://ai.photocen.com/api',
+        'photocen_token' => getenv('PHOTOCEN_OCR_TOKEN') ?: null,
         'timeout' => getenv('OCR_TIMEOUT') ?: 120 // 2 minutes timeout
     ];
 }
@@ -27,11 +40,10 @@ function getOCRConfig() {
 function performPhotocenOCR($imageData) {
     $config = getOCRConfig();
 
-    error_log("[OCR DEBUG] Starting Photocen OCR processing");
-    error_log("[OCR DEBUG] Image data length: " . strlen($imageData) . " characters");
+    
 
     if (!$config['photocen_enabled']) {
-        error_log("[OCR DEBUG] Photocen OCR is disabled in config");
+        
         return [
             'success' => false,
             'error' => 'Photocen OCR is disabled'
@@ -42,82 +54,73 @@ function performPhotocenOCR($imageData) {
         // Create temp file from base64
         $tempFile = createTempImageFromBase64($imageData);
         if (!$tempFile) {
-            error_log("[OCR DEBUG] Failed to create temp image file from base64 data");
+            
             return [
                 'success' => false,
                 'error' => 'Failed to create image file'
             ];
         }
 
-        error_log("[OCR DEBUG] Created temp file: " . $tempFile);
-        error_log("[OCR DEBUG] Temp file size: " . filesize($tempFile) . " bytes");
+        
 
-        // Prepare multipart form data for OCR request
-        $boundary = '----FormBoundary' . md5(uniqid());
-        $postData = '';
+        try {
+            // Prepare multipart form data using CURLFile so libcurl handles boundaries
+            $cfile = curl_file_create($tempFile, mime_content_type($tempFile), basename($tempFile));
+            $postFields = ['image' => $cfile];
 
-        // Add image file
-        $fileContent = file_get_contents($tempFile);
-        $postData .= "--{$boundary}\r\n";
-        $postData .= "Content-Disposition: form-data; name=\"image\"; filename=\"ocr_image.png\"\r\n";
-        $postData .= "Content-Type: image/png\r\n\r\n";
-        $postData .= $fileContent . "\r\n";
+            
 
-        $postData .= "--{$boundary}--\r\n";
+            // Make HTTP request to OCR endpoint
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, $config['photocen_api_url'] . '/ocr');
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $postFields);
 
-        error_log("[OCR DEBUG] Sending request to: " . $config['photocen_api_url'] . '/ocr');
-        error_log("[OCR DEBUG] Request data size: " . strlen($postData) . " bytes");
-        error_log("[OCR DEBUG] Timeout set to: " . $config['timeout'] . " seconds");
+            // Set headers; include Authorization if token present
+            $headers = [];
+            if (!empty($config['photocen_token'])) {
+                $headers[] = 'Authorization: Bearer ' . $config['photocen_token'];
+            }
+            if (!empty($headers)) {
+                curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+            }
 
-        // Make HTTP request to OCR endpoint
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $config['photocen_api_url'] . '/ocr');
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            "Content-Type: multipart/form-data; boundary={$boundary}",
-            "Content-Length: " . strlen($postData)
-        ]);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, $config['timeout']);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_TIMEOUT, $config['timeout']);
 
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $curlError = curl_error($ch);
-        curl_close($ch);
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $curlError = curl_error($ch);
+            curl_close($ch);
 
-        // Clean up temp file
-        unlink($tempFile);
+            
 
-        error_log("[OCR DEBUG] HTTP Response Code: " . $httpCode);
-        error_log("[OCR DEBUG] Response length: " . strlen($response) . " characters");
+            if ($curlError) {
+                
+                return [
+                    'success' => false,
+                    'error' => 'OCR request failed: ' . $curlError
+                ];
+            }
 
-        if ($curlError) {
-            error_log("[OCR DEBUG] CURL Error: " . $curlError);
-            return [
-                'success' => false,
-                'error' => 'OCR request failed: ' . $curlError
-            ];
-        }
+            if ($httpCode !== 200) {
+                
+                return [
+                    'success' => false,
+                    'error' => 'OCR request failed with HTTP ' . $httpCode
+                ];
+            }
 
-        if ($httpCode !== 200) {
-            error_log("[OCR DEBUG] HTTP Error: " . $httpCode . ", Response: " . substr($response, 0, 500));
-            return [
-                'success' => false,
-                'error' => 'OCR request failed with HTTP ' . $httpCode
-            ];
-        }
+            $responseData = json_decode($response, true);
+            if (!$responseData) {
+                
+                return [
+                    'success' => false,
+                    'error' => 'Invalid OCR response'
+                ];
+            }
 
-        $responseData = json_decode($response, true);
-        if (!$responseData) {
-            error_log("[OCR DEBUG] Failed to decode JSON response: " . substr($response, 0, 200));
-            return [
-                'success' => false,
-                'error' => 'Invalid OCR response'
-            ];
-        }
-
-        error_log("[OCR DEBUG] Decoded response keys: " . implode(', ', array_keys($responseData)));
+                
 
         // Check if it's a timeout response with status URL
         if (isset($responseData['error']) && isset($responseData['check_status_url'])) {
@@ -145,6 +148,12 @@ function performPhotocenOCR($imageData) {
             'language' => detectLanguage($responseData['original_text'] ?? ''),
             'provider' => 'photocen'
         ];
+
+        } finally {
+            if (isset($tempFile) && file_exists($tempFile)) {
+                @unlink($tempFile);
+            }
+        }
 
     } catch (Exception $e) {
         return [

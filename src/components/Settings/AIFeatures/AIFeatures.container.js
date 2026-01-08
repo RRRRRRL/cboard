@@ -22,7 +22,8 @@ export class AIFeaturesContainer extends PureComponent {
     predictions: [],
     learningStats: null,
     loading: false,
-    savingSuggestionId: null
+    savingSuggestionId: null,
+    pendingSuggestionImages: [] // Track Photocen images to clean up if not accepted
   };
 
   async componentDidMount() {
@@ -37,12 +38,37 @@ export class AIFeaturesContainer extends PureComponent {
     }
   }
 
+  async componentWillUnmount() {
+    // Clean up any remaining unaccepted suggestions when dialog closes
+    await this.cleanupPendingSuggestions();
+  }
+
+  cleanupPendingSuggestions = async () => {
+    const { pendingSuggestionImages } = this.state;
+    if (pendingSuggestionImages.length === 0) {
+      return;
+    }
+
+    console.log('[AI FEATURES] Cleaning up', pendingSuggestionImages.length, 'unaccepted suggestion images');
+    try {
+      await API.cleanupAISuggestionImages(pendingSuggestionImages);
+      this.setState({ pendingSuggestionImages: [] });
+      console.log('[AI FEATURES] ✓ Cleanup completed');
+    } catch (error) {
+      console.error('[AI FEATURES] Cleanup error:', error);
+      // Non-fatal, don't block user workflow
+    }
+  };
+
   // context + boardId (板 = 沟通 profile)
   handleGetSuggestions = async (context, boardId, limit) => {
     console.log('[AI FEATURES] ===== Starting AI suggestion request =====');
     console.log('[AI FEATURES] Context:', context);
     console.log('[AI FEATURES] Profile/Board ID:', boardId);
     console.log('[AI FEATURES] Limit:', limit);
+    
+    // Clean up previous pending suggestions before generating new ones
+    await this.cleanupPendingSuggestions();
     
     const startTime = Date.now();
     this.setState({ loading: true });
@@ -67,8 +93,15 @@ export class AIFeaturesContainer extends PureComponent {
         });
       }
       
-      this.setState({ suggestions: result.suggestions || [], loading: false });
+      // Extract Photocen image paths for cleanup tracking
+      const photocenImages = (result.suggestions || []).filter(s => s.source === 'photocen' && s.image_path).map(s => s.image_path);
+      this.setState({ 
+        suggestions: result.suggestions || [], 
+        pendingSuggestionImages: photocenImages,
+        loading: false 
+      });
       console.log('[AI FEATURES] ===== AI suggestion request completed =====');
+      console.log('[AI FEATURES] Tracking', photocenImages.length, 'Photocen images for cleanup');
     } catch (error) {
       const duration = Date.now() - startTime;
       console.error('[AI FEATURES] ✗✗✗ Request failed after', duration, 'ms');
@@ -177,6 +210,15 @@ export class AIFeaturesContainer extends PureComponent {
             // Don't fail the whole operation if refresh fails
           }
         }
+      }
+
+      // Remove this image from pending cleanup since it was accepted
+      const acceptedImagePath = card.image_path;
+      if (acceptedImagePath) {
+        this.setState(prev => ({
+          pendingSuggestionImages: prev.pendingSuggestionImages.filter(path => path !== acceptedImagePath)
+        }));
+        console.log('[AI FEATURES] Removed accepted image from cleanup list:', acceptedImagePath);
       }
 
       this.props.showNotification(

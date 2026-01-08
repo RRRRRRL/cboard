@@ -550,10 +550,10 @@ class CommunicatorDialogContainer extends React.Component {
             if (!/^\d+$/.test(bIdStr)) return false;
             // Exclude the newly added profile
             if (bIdStr === String(newProfileId)) return false;
-            // Only user's own boards
-            if (userData && userData.id && b.user_id && String(b.user_id) === String(userData.id)) {
-              return true;
-            }
+          // Only user's own boards
+          if (this.props.userData && this.props.userData.id && b.user_id && String(b.user_id) === String(this.props.userData.id)) {
+            return true;
+          }
             return false;
           });
           

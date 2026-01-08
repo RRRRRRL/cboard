@@ -148,16 +148,24 @@ function canManageProfile($userId, $profileId) {
     // Profile owner can manage their own profiles
     if ($userId == $profileOwnerId) return true;
 
-    // Check parent permissions
-    $stmt = $db->prepare("
-        SELECT can_manage_profile FROM parent_child_relationships
-        WHERE parent_user_id = ? AND child_user_id = ?
-    ");
-    $stmt->execute([$userId, $profileOwnerId]);
-    $parentAccess = $stmt->fetch(PDO::FETCH_ASSOC);
+    // Check parent permissions (guard against missing table)
+    try {
+        $checkTableStmt = $db->prepare("SHOW TABLES LIKE 'parent_child_relationships'");
+        $checkTableStmt->execute();
+        if ($checkTableStmt->fetch()) {
+            $stmt = $db->prepare(
+                "SELECT can_manage_profile FROM parent_child_relationships
+                 WHERE parent_user_id = ? AND child_user_id = ?"
+            );
+            $stmt->execute([$userId, $profileOwnerId]);
+            $parentAccess = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    if ($parentAccess && $parentAccess['can_manage_profile']) return true;
-
+            if ($parentAccess && $parentAccess['can_manage_profile']) return true;
+        }
+    } catch (Exception $e) {
+        error_log('Parent-child access check failed in canManageProfile: ' . $e->getMessage());
+        // Continue gracefully
+    }
     // Check teacher permissions (teachers can manage student profiles in their classes)
     return canAccessStudentData($userId, $profileOwnerId);
 }
@@ -197,8 +205,19 @@ function getAccessibleStudents($userId, $organizationId = null, $classId = null)
     $params = [$userId];
 
     if ($organizationId) {
-        $sql .= " AND sta.organization_id = ?";
-        $params[] = $organizationId;
+        // Only add organization filter if organization_id column exists
+        try {
+            $checkColumnStmt = $db->prepare("SHOW COLUMNS FROM student_teacher_assignments LIKE 'organization_id'");
+            $checkColumnStmt->execute();
+            if ($checkColumnStmt->fetch()) {
+                $sql .= " AND sta.organization_id = ?";
+                $params[] = $organizationId;
+            } else {
+                error_log('getAccessibleStudents: organization_id column missing on student_teacher_assignments; skipping org filter');
+            }
+        } catch (Exception $e) {
+            error_log('getAccessibleStudents: failed to check student_teacher_assignments columns: ' . $e->getMessage());
+        }
     }
 
     if ($classId) {
@@ -218,16 +237,31 @@ function getAccessibleChildren($userId) {
     $db = getDB();
     if (!$db) return [];
 
-    $stmt = $db->prepare("
-        SELECT DISTINCT u.id, u.name, u.email, pcr.relationship_type,
-               pcr.can_manage_profile, pcr.can_view_progress
-        FROM users u
-        JOIN parent_child_relationships pcr ON u.id = pcr.child_user_id
-        WHERE pcr.parent_user_id = ?
-    ");
+    try {
+        // Verify the parent_child_relationships table exists first
+        $checkTableStmt = $db->prepare("SHOW TABLES LIKE 'parent_child_relationships'");
+        $checkTableStmt->execute();
+        if (!$checkTableStmt->fetch()) {
+            return [];
+        }
 
-    $stmt->execute([$userId]);
-    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $stmt = $db->prepare("
+            SELECT DISTINCT u.id, u.name, u.email, pcr.relationship_type,
+                   pcr.can_manage_profile, pcr.can_view_progress
+            FROM users u
+            JOIN parent_child_relationships pcr ON u.id = pcr.child_user_id
+            WHERE pcr.parent_user_id = ?
+        ");
+
+        $stmt->execute([$userId]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        error_log('getAccessibleChildren failed: ' . $e->getMessage());
+        return [];
+    } catch (Exception $e) {
+        error_log('getAccessibleChildren error: ' . $e->getMessage());
+        return [];
+    }
 }
 
 /**
@@ -252,7 +286,9 @@ function filterDataByPermissions($userId, $data, $dataType = 'profiles') {
                 $canAccess = canAccessStudentData($userId, $item['user_id']);
                 break;
             default:
-                $canAccess = true; // Default allow for unknown types
+                // Deny access for unknown data types to avoid accidental exposure
+                error_log('filterDataByPermissions: unknown dataType "' . $dataType . '" for user ' . $userId);
+                $canAccess = false;
         }
 
         if ($canAccess) {
@@ -279,7 +315,12 @@ function canAccessResource($userId, $resourceType, $resourceId, $action = 'view'
         case 'class':
             // Check if user is assigned to this class
             $roles = getUserRoles($userId);
-            return array_filter($roles, fn($r) => $r['class_id'] == $resourceId);
+            foreach ($roles as $r) {
+                if (isset($r['class_id']) && $r['class_id'] == $resourceId) {
+                    return true;
+                }
+            }
+            return false;
         default:
             return false;
     }

@@ -66,7 +66,7 @@ import API from '../../../../api/api.js';
 import messages from './TeacherDashboard.messages';
 
 const TeacherDashboard = ({ intl, user, history, showNotification }) => {
-  console.log('[DEBUG TeacherDashboard] Component initialized with user:', user);
+  
 
   const [students, setStudents] = useState([]);
   const [learningObjectives, setLearningObjectives] = useState([]);
@@ -154,22 +154,20 @@ const TeacherDashboard = ({ intl, user, history, showNotification }) => {
   });
 
   useEffect(() => {
-    console.log('[DEBUG TeacherDashboard] Component mounting, user:', user);
-    console.log('[DEBUG TeacherDashboard] User role:', user?.role);
-    console.log('[DEBUG TeacherDashboard] Is logged in:', !!user);
+    
 
     // Check if user has teacher permissions
     if (!user || !user.role) {
-      console.error('[DEBUG TeacherDashboard] No user or role found - cannot load teacher data');
+    
       return;
     }
 
     if (!['teacher', 'therapist', 'admin'].includes(user.role)) {
-      console.error('[DEBUG TeacherDashboard] User does not have teacher permissions. Role:', user.role);
+      
       return;
     }
 
-    console.log('[DEBUG TeacherDashboard] User has teacher permissions, loading data...');
+    
     loadDashboardData();
     handleRouteBasedTabSwitching();
   }, []);
@@ -204,11 +202,11 @@ const TeacherDashboard = ({ intl, user, history, showNotification }) => {
 
   // Load messages and parents
   const loadMessages = async () => {
-    console.log('[DEBUG TeacherDashboard] Loading messages');
+    
     setLoadingMessages(true);
     try {
       const response = await API.getTeacherMessages();
-      console.log('[DEBUG TeacherDashboard] Messages response:', response);
+      
 
       if (response && response.success && response.data) {
         setMessageList(response.data.messages || []);
@@ -375,7 +373,7 @@ const TeacherDashboard = ({ intl, user, history, showNotification }) => {
   };
 
   const loadDashboardData = async () => {
-    console.log('[DEBUG TeacherDashboard] loadDashboardData called');
+    
 
     try {
       setLoading(true);
@@ -383,14 +381,12 @@ const TeacherDashboard = ({ intl, user, history, showNotification }) => {
       // Load assigned students
       let loadedStudents = [];
       try {
-        console.log('[DEBUG TeacherDashboard] Calling API.getTeacherStudents()');
         const studentsData = await API.getTeacherStudents();
-        console.log('[DEBUG TeacherDashboard] API.getTeacherStudents() response:', studentsData);
 
         // Backend returns array directly or wrapped in response object
         loadedStudents = Array.isArray(studentsData) ? studentsData :
           (studentsData.students || []);
-        console.log('[DEBUG TeacherDashboard] Setting students data:', loadedStudents);
+        
 
         setStudents(loadedStudents);
         setStats(prev => ({
@@ -403,7 +399,7 @@ const TeacherDashboard = ({ intl, user, history, showNotification }) => {
           await loadStudentDifficultyLevels(loadedStudents);
         }
       } catch (apiError) {
-        console.warn('[DEBUG TeacherDashboard] Failed to load students:', apiError);
+        
         // Keep empty array on error
         setStudents([]);
         setStats(prev => ({
@@ -414,7 +410,7 @@ const TeacherDashboard = ({ intl, user, history, showNotification }) => {
 
       // Load real learning objectives from API
       try {
-        console.log('[DEBUG TeacherDashboard] Loading learning objectives for all students');
+        
         const allObjectives = [];
 
       // Get objectives for each assigned student
@@ -430,15 +426,15 @@ const TeacherDashboard = ({ intl, user, history, showNotification }) => {
               allObjectives.push(...studentObjectives);
             }
           } catch (objError) {
-            console.warn(`[DEBUG TeacherDashboard] Failed to load objectives for student ${student.id}:`, objError);
+            
             // Continue with other students even if one fails
           }
         }
 
-        console.log('[DEBUG TeacherDashboard] Loaded objectives:', allObjectives);
+        
         setLearningObjectives(allObjectives);
       } catch (apiError) {
-        console.warn('[DEBUG TeacherDashboard] Failed to load learning objectives:', apiError);
+        
         // Use empty array instead of sample data
         setLearningObjectives([]);
       }
@@ -590,60 +586,46 @@ const TeacherDashboard = ({ intl, user, history, showNotification }) => {
 
   // Student Management Functions
   const handleManageStudent = async () => {
-    console.log('[DEBUG TeacherDashboard] handleManageStudent called');
+    
     setLoadingStudents(true);
     setStudentSearch('');
     setManageStudentDialog(true);
 
     try {
       // Try to load real available students from API
-      console.log('[DEBUG TeacherDashboard] Calling API.getTeacherAvailableStudents()');
       const response = await API.getTeacherAvailableStudents();
-      console.log('[DEBUG TeacherDashboard] API.getTeacherAvailableStudents() response:', response);
-      console.log('[DEBUG TeacherDashboard] Response type:', typeof response);
-      console.log('[DEBUG TeacherDashboard] Response keys:', response ? Object.keys(response) : 'null/undefined');
 
       if (response && response.students) {
-        console.log('[DEBUG TeacherDashboard] Setting available students:', response.students);
-        console.log('[DEBUG TeacherDashboard] Students array length:', response.students.length);
+        
         setAvailableStudents(response.students);
       } else {
         // API call succeeded but returned no data
-        console.log('[DEBUG TeacherDashboard] API returned success but no students data');
-        console.log('[DEBUG TeacherDashboard] Response details:', JSON.stringify(response, null, 2));
+        
         setAvailableStudents([]);
       }
-    } catch (apiError) {
-      console.warn('[DEBUG TeacherDashboard] API call failed:', apiError);
-      console.warn('[DEBUG TeacherDashboard] Error details:', JSON.stringify(apiError, null, 2));
+      } catch (apiError) {
+        
       // Show empty list on API failure
       setAvailableStudents([]);
     } finally {
       setLoadingStudents(false);
-      console.log('[DEBUG TeacherDashboard] handleManageStudent finished, loadingStudents set to false');
+      
     }
   };
 
   const handleAssignStudent = async (student) => {
-    console.log('[DEBUG TeacherDashboard] handleAssignStudent called with:', student);
-
     try {
       // Call the API to assign the student to this teacher
       const result = await API.assignStudentToTeacher(student.id);
-      console.log('[DEBUG TeacherDashboard] Student assignment result:', result);
-
       if (result && result.success) {
-        console.log('[DEBUG TeacherDashboard] Student assigned successfully');
         // Refresh the dashboard data to show the new student in the assigned list
         await loadDashboardData();
         handleCloseManageStudent();
       } else {
-        console.error('[DEBUG TeacherDashboard] Assignment failed:', result);
         // Show error message to user
         // For now, just log it - you could add a snackbar notification here
       }
     } catch (error) {
-      console.error('[DEBUG TeacherDashboard] Failed to assign student:', error);
       // Show error message to user
       // For now, just log it - you could add a snackbar notification here
       // Still close the dialog even on error to avoid getting stuck
@@ -686,6 +668,7 @@ const TeacherDashboard = ({ intl, user, history, showNotification }) => {
   };
 
   const loadJyutpingRules = async (studentId) => {
+    
     try {
       // Load both matching rules and exception rules
       const [matchingResponse, exceptionResponse] = await Promise.all([
@@ -693,22 +676,59 @@ const TeacherDashboard = ({ intl, user, history, showNotification }) => {
         API.getJyutpingExceptionRules(studentId)
       ]);
 
-      console.log('Matching response:', matchingResponse);
-      console.log('Exception response:', exceptionResponse);
+      
 
-      if (matchingResponse.success && matchingResponse.data && matchingResponse.data.rules) {
-        setJyutpingRules(matchingResponse.data.rules);
+      if (matchingResponse && matchingResponse.rules) {
+        const rules = matchingResponse.rules;
+        setJyutpingRules(rules);
+      } else {
+        
       }
 
       if (exceptionResponse && exceptionResponse.rules) {
-        console.log('Setting exception rules:', exceptionResponse.rules);
+        
         setJyutpingExceptionRules(exceptionResponse.rules);
+
+        // Also update the jyutpingRules state with exception rule values for the switches
+        // This creates a combined state that includes both matching rules and exception rules
+        setJyutpingRules(prevRules => {
+          const exceptionRuleMap = {};
+          exceptionResponse.rules.forEach(rule => {
+            exceptionRuleMap[rule.rule_key] = rule.enabled;
+          });
+
+          const combinedRules = {
+            ...prevRules,
+            // Map exception rules to the expected property names
+            allow_character_variants: exceptionRuleMap.allow_character_variants || false,
+            allow_low_frequency: exceptionRuleMap.allow_low_frequency || false,
+            allow_tone_variants: exceptionRuleMap.allow_tone_variants || false,
+            require_full_word_match: exceptionRuleMap.require_full_word_match || false,
+            strict_hanzi_match: exceptionRuleMap.strict_hanzi_match || false,
+            enable_ai_correction: exceptionRuleMap.enable_ai_correction || false
+          };
+
+          
+          console.log('  require_ai_correction:', combinedRules.require_ai_correction, '(from matching rules)');
+          console.log('  allow_character_variants:', combinedRules.allow_character_variants, '(from exception rules)');
+          console.log('  allow_low_frequency:', combinedRules.allow_low_frequency, '(from exception rules)');
+          console.log('  allow_tone_variants:', combinedRules.allow_tone_variants, '(from exception rules)');
+          console.log('  require_full_word_match:', combinedRules.require_full_word_match, '(from exception rules)');
+          console.log('  strict_hanzi_match:', combinedRules.strict_hanzi_match, '(from exception rules)');
+          console.log('  merge_n_ng_finals:', combinedRules.merge_n_ng_finals, '(from matching rules)');
+          console.log('  allow_coda_simplification:', combinedRules.allow_coda_simplification, '(from matching rules)');
+          console.log('  ignore_tones:', combinedRules.ignore_tones, '(from matching rules)');
+          console.log('  allow_fuzzy_tones:', combinedRules.allow_fuzzy_tones, '(from matching rules)');
+          console.log('  allow_ng_zero_confusion:', combinedRules.allow_ng_zero_confusion, '(from matching rules)');
+          console.log('  allow_n_l_confusion:', combinedRules.allow_n_l_confusion, '(from matching rules)');
+          return combinedRules;
+        });
       } else {
-        console.log('No exception rules found, setting empty array');
+        
         setJyutpingExceptionRules([]);
       }
     } catch (error) {
-      console.error('Failed to load Jyutping rules:', error);
+      
       setJyutpingExceptionRules([]);
     }
   };
@@ -716,25 +736,44 @@ const TeacherDashboard = ({ intl, user, history, showNotification }) => {
   const handleSaveJyutpingRules = async () => {
     if (!selectedStudent) return;
 
-    try {
-      // Save both matching rules and exception rules
-      await Promise.all([
-        API.updateJyutpingMatchingRules(selectedStudent.id, jyutpingRules),
-        API.updateJyutpingExceptionRules(selectedStudent.id, {
-          rules: jyutpingExceptionRules.map(rule => ({
-            rule_id: rule.id,
-            enabled: rule.enabled
-          }))
-        })
-      ]);
+    
 
+    try {
+      // Separate matching rules from exception rules
+      // Only send matching rule fields to the matching rules API
+      // Convert boolean values to integers as expected by backend
+      const matchingRulesOnly = {
+        frequency_threshold: jyutpingRules.frequency_threshold,
+        allow_exact_match: jyutpingRules.allow_exact_match ? 1 : 0,
+        allow_substring_match: jyutpingRules.allow_substring_match ? 1 : 0,
+        allow_single_char_match: jyutpingRules.allow_single_char_match ? 1 : 0,
+        require_ai_correction: jyutpingRules.require_ai_correction ? 1 : 0,
+        ai_confidence_threshold: jyutpingRules.ai_confidence_threshold,
+        enabled: jyutpingRules.enabled ? 1 : 0,
+        merge_n_ng_finals: jyutpingRules.merge_n_ng_finals ? 1 : 0,
+        allow_coda_simplification: jyutpingRules.allow_coda_simplification ? 1 : 0,
+        ignore_tones: jyutpingRules.ignore_tones ? 1 : 0,
+        allow_fuzzy_tones: jyutpingRules.allow_fuzzy_tones ? 1 : 0,
+        fuzzy_tone_pairs: jyutpingRules.fuzzy_tone_pairs,
+        allow_ng_zero_confusion: jyutpingRules.allow_ng_zero_confusion ? 1 : 0,
+        allow_n_l_confusion: jyutpingRules.allow_n_l_confusion ? 1 : 0
+      };
+
+      const matchingResult = await API.updateJyutpingMatchingRules(selectedStudent.id, matchingRulesOnly);
+
+      const exceptionData = {
+        rules: jyutpingExceptionRules.map(rule => ({
+          rule_id: rule.id,
+          enabled: rule.enabled
+        }))
+      };
+      const exceptionResult = await API.updateJyutpingExceptionRules(selectedStudent.id, exceptionData);
       showNotification('Jyutping rules updated successfully!');
       setJyutpingRulesDialog(false);
       setSelectedStudent(null);
-      // Refresh dashboard data to show updated rules
+      // Refresh dashboard data to show updated rules - but this doesn't reload Jyutping rules
       await loadDashboardData();
     } catch (error) {
-      console.error('Failed to save Jyutping rules:', error);
       showNotification('Failed to save Jyutping rules', 'error');
     }
   };
@@ -1621,7 +1660,7 @@ const TeacherDashboard = ({ intl, user, history, showNotification }) => {
           onClose={handleCloseManageStudent}
           maxWidth="md"
           fullWidth
-          onEntered={() => console.log('[DEBUG TeacherDashboard] Manage Student Dialog opened')}
+          onEntered={() => {}}
         >
           <DialogTitle>
             {intl.formatMessage(messages.selectStudents)}
@@ -1650,21 +1689,14 @@ const TeacherDashboard = ({ intl, user, history, showNotification }) => {
 
             {/* Students List */}
             {!loadingStudents && (() => {
-              console.log('[DEBUG TeacherDashboard] Rendering available students list');
-              console.log('[DEBUG TeacherDashboard] availableStudents state:', availableStudents);
-              console.log('[DEBUG TeacherDashboard] studentSearch:', studentSearch);
-
               const filteredStudents = availableStudents.filter(student =>
                 student.name?.toLowerCase().includes(studentSearch.toLowerCase()) ||
                 student.email?.toLowerCase().includes(studentSearch.toLowerCase())
               );
 
-              console.log('[DEBUG TeacherDashboard] filteredStudents count:', filteredStudents.length);
-
               return (
                 <Box style={{ maxHeight: '400px', overflow: 'auto' }}>
                   {filteredStudents.map((student) => {
-                    console.log('[DEBUG TeacherDashboard] Rendering student card:', student.id, student.name);
                     return (
                       <Card key={student.id} style={{ marginBottom: '0.5rem' }}>
                         <CardContent style={{ padding: '1rem' }}>
@@ -1685,7 +1717,6 @@ const TeacherDashboard = ({ intl, user, history, showNotification }) => {
                               color="primary"
                               size="small"
                               onClick={() => {
-                                console.log('[DEBUG TeacherDashboard] Assign button clicked for student:', student.id, student.name);
                                 handleAssignStudent(student);
                               }}
                             >
@@ -1826,6 +1857,7 @@ const TeacherDashboard = ({ intl, user, history, showNotification }) => {
           fullWidth
           className="JyutpingKeyboard__dialog"
         >
+          
           <DialogTitle className="JyutpingKeyboard__header">
             <div className="JyutpingKeyboard__header-content">
               <IconButton
@@ -1948,21 +1980,21 @@ const TeacherDashboard = ({ intl, user, history, showNotification }) => {
               </Typography>
 
               {/* Layout Tabs - Same as JyutpingKeyboard */}
-              <Tabs
-                value={jyutpingRules.keyboard_layout || 'jyutping1'}
-                onChange={(event, newValue) => setJyutpingRules({ ...jyutpingRules, keyboard_layout: newValue })}
-                variant="scrollable"
-                scrollButtons="auto"
-                style={{ marginBottom: '1rem' }}
-              >
-                <Tab label={intl.formatMessage(messages.jyutping1)} value="jyutping1" />
-                <Tab label={intl.formatMessage(messages.jyutping2)} value="jyutping2" />
-                <Tab label={intl.formatMessage(messages.cantonese1)} value="cantonese1" />
-                <Tab label={intl.formatMessage(messages.cantonese2)} value="cantonese2" />
-                <Tab label={intl.formatMessage(messages.cantonese3)} value="cantonese3" />
-                <Tab label={intl.formatMessage(messages.qwerty)} value="qwerty" />
-                <Tab label={intl.formatMessage(messages.numeric)} value="numeric" />
-              </Tabs>
+          <Tabs
+            value={jyutpingRules.keyboard_layout || 'jyutping1'}
+            onChange={(event, newValue) => setJyutpingRules({ ...jyutpingRules, keyboard_layout: newValue })}
+            variant="scrollable"
+            scrollButtons="auto"
+            style={{ marginBottom: '1rem' }}
+          >
+            <Tab label="Jyutping 1" value="jyutping1" />
+            <Tab label="Jyutping 2" value="jyutping2" />
+            <Tab label="Cantonese 1" value="cantonese1" />
+            <Tab label="Cantonese 2" value="cantonese2" />
+            <Tab label="Cantonese 3" value="cantonese3" />
+            <Tab label="QWERTY" value="qwerty" />
+            <Tab label="Numeric" value="numeric" />
+          </Tabs>
 
               {/* Keyboard Preview */}
               <Box
@@ -1982,13 +2014,13 @@ const TeacherDashboard = ({ intl, user, history, showNotification }) => {
               </Box>
             </Box>
 
-            {/* Jyutping Matching Rules */}
-            <Box mb={3}>
-              <Typography variant="h6" gutterBottom>
-                {intl.formatMessage(messages.jyutpingMatchingRules)}
+            {/* Part 1: Matching Game Rules */}
+            <Box mb={4} p={2} border={1} borderColor="primary.main" borderRadius={2}>
+              <Typography variant="h5" gutterBottom style={{ color: 'primary.main', fontWeight: 'bold' }}>
+                🎯 Part 1: Matching Game Rules
               </Typography>
-              <Typography variant="body2" color="textSecondary" style={{ marginBottom: '1rem' }}>
-                {intl.formatMessage(messages.jyutpingMatchingRulesDescription)}
+              <Typography variant="body2" color="textSecondary" style={{ marginBottom: '1.5rem' }}>
+                Configure rules for spelling and matching games. These rules affect how the system evaluates student input during gameplay.
               </Typography>
 
               <Grid container spacing={2}>
@@ -2001,114 +2033,68 @@ const TeacherDashboard = ({ intl, user, history, showNotification }) => {
                         color="primary"
                       />
                     }
-                    label={intl.formatMessage(messages.enableAiCorrection)}
+                    label="Enable AI Correction"
                   />
                   <Typography variant="body2" color="textSecondary" style={{ marginLeft: '42px', marginBottom: '1rem' }}>
-                    {intl.formatMessage(messages.enableAiCorrectionDesc)}
+                    Use AI to suggest corrections when confidence is low
                   </Typography>
                 </Grid>
 
-                <Grid item xs={12} sm={6}>
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={jyutpingRules.allow_character_variants || false}
-                        onChange={(e) => setJyutpingRules({ ...jyutpingRules, allow_character_variants: e.target.checked })}
-                        color="primary"
-                      />
-                    }
-                    label={intl.formatMessage(messages.allowCharacterVariants)}
-                  />
-                  <Typography variant="body2" color="textSecondary" style={{ marginLeft: '42px', marginBottom: '1rem' }}>
-                    {intl.formatMessage(messages.allowCharacterVariantsDesc)}
-                  </Typography>
-                </Grid>
-
-                <Grid item xs={12} sm={6}>
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={jyutpingRules.allow_low_frequency || false}
-                        onChange={(e) => setJyutpingRules({ ...jyutpingRules, allow_low_frequency: e.target.checked })}
-                        color="primary"
-                      />
-                    }
-                    label={intl.formatMessage(messages.allowLowFrequencyWords)}
-                  />
-                  <Typography variant="body2" color="textSecondary" style={{ marginLeft: '42px', marginBottom: '1rem' }}>
-                    {intl.formatMessage(messages.allowLowFrequencyWordsDesc)}
-                  </Typography>
-                </Grid>
-
-                <Grid item xs={12} sm={6}>
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={jyutpingRules.allow_tone_variants || false}
-                        onChange={(e) => setJyutpingRules({ ...jyutpingRules, allow_tone_variants: e.target.checked })}
-                        color="primary"
-                      />
-                    }
-                    label={intl.formatMessage(messages.allowToneVariants)}
-                  />
-                  <Typography variant="body2" color="textSecondary" style={{ marginLeft: '42px', marginBottom: '1rem' }}>
-                    {intl.formatMessage(messages.allowToneVariantsDesc)}
-                  </Typography>
-                </Grid>
-
-                <Grid item xs={12} sm={6}>
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={jyutpingRules.require_full_word_match || false}
-                        onChange={(e) => setJyutpingRules({ ...jyutpingRules, require_full_word_match: e.target.checked })}
-                        color="primary"
-                      />
-                    }
-                    label={intl.formatMessage(messages.requireFullWordMatch)}
-                  />
-                  <Typography variant="body2" color="textSecondary" style={{ marginLeft: '42px', marginBottom: '1rem' }}>
-                    {intl.formatMessage(messages.requireFullWordMatchDesc)}
-                  </Typography>
-                </Grid>
-
-                <Grid item xs={12} sm={6}>
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={jyutpingRules.strict_hanzi_match || false}
-                        onChange={(e) => setJyutpingRules({ ...jyutpingRules, strict_hanzi_match: e.target.checked })}
-                        color="primary"
-                      />
-                    }
-                    label={intl.formatMessage(messages.strictHanziMatching)}
-                  />
-                  <Typography variant="body2" color="textSecondary" style={{ marginLeft: '42px', marginBottom: '1rem' }}>
-                    {intl.formatMessage(messages.strictHanziMatchingDesc)}
-                  </Typography>
-                </Grid>
-
-                <Grid item xs={12} sm={6}>
-                  <FormControlLabel
-                    control={(
-                      <Switch
-                        checked={jyutpingRules.merge_n_ng_finals || false}
-                        onChange={(e) => setJyutpingRules({ ...jyutpingRules, merge_n_ng_finals: e.target.checked })}
-                        color="primary"
-                      />
-                    )}
-                    label={intl.formatMessage(messages.mergeNFinals)}
-                  />
-                  <Typography variant="body2" color="textSecondary" style={{ marginLeft: '42px', marginBottom: '1rem' }}>
-                    {intl.formatMessage(messages.strictJyutpingFormatDesc)}
-                  </Typography>
-                </Grid>
-
-                {/* Frequency Threshold */}
                 <Grid item xs={12} sm={6}>
                   <TextField
                     fullWidth
-                    label={intl.formatMessage(messages.frequencyThreshold)}
+                    label="AI Confidence Threshold"
+                    type="number"
+                    value={jyutpingRules.ai_confidence_threshold || 0.5}
+                    onChange={(e) => setJyutpingRules({ ...jyutpingRules, ai_confidence_threshold: parseFloat(e.target.value) || 0.5 })}
+                    helperText="Minimum confidence level for AI corrections (0.0-1.0)"
+                    inputProps={{ min: 0, max: 1, step: 0.1 }}
+                  />
+                </Grid>
+
+                <Grid item xs={12} sm={4}>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={jyutpingRules.allow_exact_match ?? true}
+                        onChange={(e) => setJyutpingRules({ ...jyutpingRules, allow_exact_match: e.target.checked })}
+                        color="primary"
+                      />
+                    }
+                    label="Allow Exact Match"
+                  />
+                </Grid>
+
+                <Grid item xs={12} sm={4}>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={jyutpingRules.allow_substring_match ?? true}
+                        onChange={(e) => setJyutpingRules({ ...jyutpingRules, allow_substring_match: e.target.checked })}
+                        color="primary"
+                      />
+                    }
+                    label="Allow Substring Match"
+                  />
+                </Grid>
+
+                <Grid item xs={12} sm={4}>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={jyutpingRules.allow_single_char_match ?? true}
+                        onChange={(e) => setJyutpingRules({ ...jyutpingRules, allow_single_char_match: e.target.checked })}
+                        color="primary"
+                      />
+                    }
+                    label="Allow Single Character Match"
+                  />
+                </Grid>
+
+                <Grid item xs={12} sm={6}>
+                  <TextField
+                    fullWidth
+                    label="Frequency Threshold"
                     type="number"
                     value={jyutpingRules.frequency_threshold || 50}
                     onChange={(e) => setJyutpingRules({ ...jyutpingRules, frequency_threshold: parseInt(e.target.value) || 50 })}
@@ -2119,125 +2105,157 @@ const TeacherDashboard = ({ intl, user, history, showNotification }) => {
               </Grid>
             </Box>
 
-            {/* Phonological Adaptation Rules */}
-            <Box mb={3}>
-              <Typography variant="h6" gutterBottom>
-                {intl.formatMessage(messages.phonologicalAdaptationRules)}
+            {/* Part 2: Jyutping Keyboard Settings */}
+            <Box mb={3} p={2} border={1} borderColor="secondary.main" borderRadius={2}>
+              <Typography variant="h5" gutterBottom style={{ color: 'secondary.main', fontWeight: 'bold' }}>
+                ⌨️ Part 2: Jyutping Keyboard Settings
               </Typography>
-              <Typography variant="body2" color="textSecondary" style={{ marginBottom: '1rem' }}>
-                {intl.formatMessage(messages.phonologicalAdaptationRulesDescription)}
+              <Typography variant="body2" color="textSecondary" style={{ marginBottom: '1.5rem' }}>
+                Configure the Jyutping input keyboard behavior and phonological adaptation rules for typing assistance.
               </Typography>
 
-              <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}>
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={jyutpingRules.merge_n_ng_finals || false}
-                        onChange={(e) => setJyutpingRules({ ...jyutpingRules, merge_n_ng_finals: e.target.checked })}
-                        color="primary"
-                      />
-                    }
-                    label={intl.formatMessage(messages.mergeNFinals)}
-                  />
-                  <Typography variant="body2" color="textSecondary" style={{ marginLeft: '42px', marginBottom: '1rem' }}>
-                    {intl.formatMessage(messages.mergeNFinalsDesc)}
-                  </Typography>
-                </Grid>
+              {/* Keyboard Layout Selection */}
+              <Box mb={3}>
+                <Typography variant="h6" gutterBottom>
+                  Keyboard Layout
+                </Typography>
+                <Tabs
+                  value={jyutpingRules.keyboard_layout || 'jyutping1'}
+                  onChange={(event, newValue) => setJyutpingRules({ ...jyutpingRules, keyboard_layout: newValue })}
+                  variant="scrollable"
+                  scrollButtons="auto"
+                  style={{ marginBottom: '1rem' }}
+                >
+                  <Tab label="Jyutping 1" value="jyutping1" />
+                  <Tab label="Jyutping 2" value="jyutping2" />
+                  <Tab label="Cantonese 1" value="cantonese1" />
+                  <Tab label="Cantonese 2" value="cantonese2" />
+                  <Tab label="Cantonese 3" value="cantonese3" />
+                  <Tab label="QWERTY" value="qwerty" />
+                  <Tab label="Numeric" value="numeric" />
+                </Tabs>
+              </Box>
 
-                <Grid item xs={12} sm={6}>
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={jyutpingRules.allow_coda_simplification || false}
-                        onChange={(e) => setJyutpingRules({ ...jyutpingRules, allow_coda_simplification: e.target.checked })}
-                        color="primary"
-                      />
-                    }
-                    label={intl.formatMessage(messages.allowCodaSimplification)}
-                  />
-                  <Typography variant="body2" color="textSecondary" style={{ marginLeft: '42px', marginBottom: '1rem' }}>
-                    {intl.formatMessage(messages.allowCodaSimplificationDesc)}
-                  </Typography>
-                </Grid>
+              {/* Phonological Adaptation Rules */}
+              <Box>
+                <Typography variant="h6" gutterBottom>
+                  Phonological Adaptation Rules
+                </Typography>
+                <Typography variant="body2" color="textSecondary" style={{ marginBottom: '1rem' }}>
+                  Adjust how the keyboard handles common phonological variations and speech patterns.
+                </Typography>
 
-                <Grid item xs={12} sm={6}>
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={jyutpingRules.ignore_tones || false}
-                        onChange={(e) => setJyutpingRules({ ...jyutpingRules, ignore_tones: e.target.checked })}
-                        color="primary"
-                      />
-                    }
-                    label={intl.formatMessage(messages.ignoreTones)}
-                  />
-                  <Typography variant="body2" color="textSecondary" style={{ marginLeft: '42px', marginBottom: '1rem' }}>
-                    {intl.formatMessage(messages.ignoreTonesDesc)}
-                  </Typography>
-                </Grid>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} sm={6}>
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={jyutpingRules.merge_n_ng_finals || false}
+                          onChange={(e) => setJyutpingRules({ ...jyutpingRules, merge_n_ng_finals: e.target.checked })}
+                          color="primary"
+                        />
+                      }
+                      label={intl.formatMessage(messages.mergeNFinals)}
+                    />
+                    <Typography variant="body2" color="textSecondary" style={{ marginLeft: '42px', marginBottom: '1rem' }}>
+                      {intl.formatMessage(messages.mergeNFinalsDesc)}
+                    </Typography>
+                  </Grid>
 
-                <Grid item xs={12} sm={6}>
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={jyutpingRules.allow_fuzzy_tones || false}
-                        onChange={(e) => setJyutpingRules({ ...jyutpingRules, allow_fuzzy_tones: e.target.checked })}
-                        color="primary"
-                      />
-                    }
-                    label={intl.formatMessage(messages.allowFuzzyTones)}
-                  />
-                  <Typography variant="body2" color="textSecondary" style={{ marginLeft: '42px', marginBottom: '1rem' }}>
-                    {intl.formatMessage(messages.allowFuzzyTonesDesc)}
-                  </Typography>
-                </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={jyutpingRules.allow_coda_simplification || false}
+                          onChange={(e) => setJyutpingRules({ ...jyutpingRules, allow_coda_simplification: e.target.checked })}
+                          color="primary"
+                        />
+                      }
+                      label={intl.formatMessage(messages.allowCodaSimplification)}
+                    />
+                    <Typography variant="body2" color="textSecondary" style={{ marginLeft: '42px', marginBottom: '1rem' }}>
+                      {intl.formatMessage(messages.allowCodaSimplificationDesc)}
+                    </Typography>
+                  </Grid>
 
-                <Grid item xs={12} sm={6}>
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={jyutpingRules.allow_ng_zero_confusion || false}
-                        onChange={(e) => setJyutpingRules({ ...jyutpingRules, allow_ng_zero_confusion: e.target.checked })}
-                        color="primary"
-                      />
-                    }
-                    label={intl.formatMessage(messages.allowNgZeroConfusion)}
-                  />
-                  <Typography variant="body2" color="textSecondary" style={{ marginLeft: '42px', marginBottom: '1rem' }}>
-                    {intl.formatMessage(messages.allowNgZeroConfusionDesc)}
-                  </Typography>
-                </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={jyutpingRules.ignore_tones || false}
+                          onChange={(e) => setJyutpingRules({ ...jyutpingRules, ignore_tones: e.target.checked })}
+                          color="primary"
+                        />
+                      }
+                      label={intl.formatMessage(messages.ignoreTones)}
+                    />
+                    <Typography variant="body2" color="textSecondary" style={{ marginLeft: '42px', marginBottom: '1rem' }}>
+                      {intl.formatMessage(messages.ignoreTonesDesc)}
+                    </Typography>
+                  </Grid>
 
-                <Grid item xs={12} sm={6}>
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={jyutpingRules.allow_n_l_confusion || false}
-                        onChange={(e) => setJyutpingRules({ ...jyutpingRules, allow_n_l_confusion: e.target.checked })}
-                        color="primary"
-                      />
-                    }
-                    label={intl.formatMessage(messages.allowNlConfusion)}
-                  />
-                  <Typography variant="body2" color="textSecondary" style={{ marginLeft: '42px', marginBottom: '1rem' }}>
-                    {intl.formatMessage(messages.allowNlConfusionDesc)}
-                  </Typography>
-                </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={jyutpingRules.allow_fuzzy_tones || false}
+                          onChange={(e) => setJyutpingRules({ ...jyutpingRules, allow_fuzzy_tones: e.target.checked })}
+                          color="primary"
+                        />
+                      }
+                      label={intl.formatMessage(messages.allowFuzzyTones)}
+                    />
+                    <Typography variant="body2" color="textSecondary" style={{ marginLeft: '42px', marginBottom: '1rem' }}>
+                      {intl.formatMessage(messages.allowFuzzyTonesDesc)}
+                    </Typography>
+                  </Grid>
 
-                {/* Fuzzy Tone Pairs */}
-                <Grid item xs={12}>
-                  <TextField
-                    fullWidth
-                    label={intl.formatMessage(messages.fuzzyTonePairs)}
-                    value={jyutpingRules.fuzzy_tone_pairs || ''}
-                    onChange={(e) => setJyutpingRules({ ...jyutpingRules, fuzzy_tone_pairs: e.target.value })}
-                    helperText="JSON array of tone pairs, e.g., [[1,3],[2,5]] for tone 1 matching 3, tone 2 matching 5"
-                    multiline
-                    rows={2}
-                  />
+                  <Grid item xs={12} sm={6}>
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={jyutpingRules.allow_ng_zero_confusion || false}
+                          onChange={(e) => setJyutpingRules({ ...jyutpingRules, allow_ng_zero_confusion: e.target.checked })}
+                          color="primary"
+                        />
+                      }
+                      label={intl.formatMessage(messages.allowNgZeroConfusion)}
+                    />
+                    <Typography variant="body2" color="textSecondary" style={{ marginLeft: '42px', marginBottom: '1rem' }}>
+                      {intl.formatMessage(messages.allowNgZeroConfusionDesc)}
+                    </Typography>
+                  </Grid>
+
+                  <Grid item xs={12} sm={6}>
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={jyutpingRules.allow_n_l_confusion || false}
+                          onChange={(e) => setJyutpingRules({ ...jyutpingRules, allow_n_l_confusion: e.target.checked })}
+                          color="primary"
+                        />
+                      }
+                      label={intl.formatMessage(messages.allowNlConfusion)}
+                    />
+                    <Typography variant="body2" color="textSecondary" style={{ marginLeft: '42px', marginBottom: '1rem' }}>
+                      {intl.formatMessage(messages.allowNlConfusionDesc)}
+                    </Typography>
+                  </Grid>
+
+                  {/* Fuzzy Tone Pairs */}
+                  <Grid item xs={12}>
+                    <TextField
+                      fullWidth
+                      label={intl.formatMessage(messages.fuzzyTonePairs)}
+                      value={jyutpingRules.fuzzy_tone_pairs || ''}
+                      onChange={(e) => setJyutpingRules({ ...jyutpingRules, fuzzy_tone_pairs: e.target.value })}
+                      helperText="JSON array of tone pairs, e.g., [[1,3],[2,5]] for tone 1 matching 3, tone 2 matching 5"
+                      multiline
+                      rows={2}
+                    />
+                  </Grid>
                 </Grid>
-              </Grid>
+              </Box>
             </Box>
           </DialogContent>
           <DialogActions>

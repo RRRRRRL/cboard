@@ -37,6 +37,7 @@ import {
   DOWNLOAD_IMAGES_STARTED,
   DOWNLOAD_IMAGE_SUCCESS,
   DOWNLOAD_IMAGE_FAILURE,
+  SET_PROFILES,
   UNMARK_SHOULD_CREATE_API_BOARD,
   SHORT_ID_MAX_LENGTH
 } from './Board.constants';
@@ -56,7 +57,8 @@ const initialState = {
   images: [],
   isFixed: false,
   isLiveMode: false,
-  improvedPhrase: ''
+  improvedPhrase: '',
+  profiles: []
 };
 
 function hasRealTiles(board) {
@@ -607,6 +609,11 @@ function boardReducer(state = initialState, action) {
       return {
         ...state,
         improvedPhrase: action.improvedPhrase
+      };
+    case SET_PROFILES:
+      return {
+        ...state,
+        profiles: action.profiles || []
       };
     default:
       return state;

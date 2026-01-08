@@ -67,12 +67,14 @@ class API {
         ) {
           if (isAndroid()) {
             window.FirebasePlugin.unregister();
-            window.facebookConnectPlugin.logout(
+              window.facebookConnectPlugin.logout(
               function (msg) {
-                console.log('disconnect facebook msg' + msg);
+                // debug: disconnect facebook msg
+                // console.log('disconnect facebook msg' + msg);
               },
               function (msg) {
-                console.log('error facebook disconnect msg' + msg);
+                // debug: error facebook disconnect msg
+                // console.log('error facebook disconnect msg' + msg);
               }
             );
           }
@@ -86,7 +88,8 @@ class API {
     // Initialize offline storage
     if (typeof window !== 'undefined' && 'indexedDB' in window) {
       initOfflineStorage().catch(err => {
-        console.warn('Failed to initialize offline storage:', err);
+        // debug: failed to init offline storage
+        // console.warn('Failed to initialize offline storage:', err);
       });
     }
   }
@@ -367,15 +370,17 @@ class API {
 
     const query = getQueryParameters({ page, limit, offset, sort, search });
     const url = `/board/public?${query}`;
-    console.log('[API getPublicBoards] Requesting:', { url, page, limit, search });
+    // debug: requesting public boards
+    // console.log('[API getPublicBoards] Requesting:', { url, page, limit, search });
     const { data } = await this.axiosInstance.get(url);
-    console.log('[API getPublicBoards] Response received:', {
-      hasData: !!data,
-      isArray: Array.isArray(data),
-      hasProfiles: !!(data && data.profiles),
-      profilesCount: data?.profiles?.length || data?.length || 0,
-      total: data?.total || 0
-    });
+    // debug: public boards response received
+    // console.log('[API getPublicBoards] Response received:', {
+    //   hasData: !!data,
+    //   isArray: Array.isArray(data),
+    //   hasProfiles: !!(data && data.profiles),
+    //   profilesCount: data?.profiles?.length || data?.length || 0,
+    //   total: data?.total || 0
+    // });
 
     // 後端（PHP）目前返回格式：{ profiles: [...], total, page, limit }
     // 舊 Cboard 雲端可能返回：{ boards: [...], total, page, limit } 或 { data: [...] }
@@ -578,12 +583,6 @@ class API {
       Authorization: `Bearer ${authToken}`
     } : {};
 
-    console.log('[API GET BOARD] Requesting board data:', {
-      profileId: id,
-      hasAuthToken: !!authToken,
-      endpoint: `/profiles/${id}/board`
-    });
-
     try {
       const response = await this.requestWithOfflineSupport(
         'GET',
@@ -593,15 +592,6 @@ class API {
       );
 
       if (response.data) {
-        console.log('[API GET BOARD] Raw response received:', {
-          profileId: id,
-          boardId: response.data.id,
-          boardName: response.data.name,
-          tilesCount: response.data.tiles?.length || 0,
-          gridRows: response.data.grid?.rows,
-          gridColumns: response.data.grid?.columns
-        });
-
         const { transformBoardImageUrls } = require('../utils/imageUrlTransformer');
         const boardData = transformBoardImageUrls(response.data);
 
@@ -612,26 +602,7 @@ class API {
             tile !== null && tile !== undefined && typeof tile === 'object'
           );
           boardData.tiles = validTiles;
-
-          console.log('[API GET BOARD] Tiles filtered:', {
-            profileId: id,
-            originalTilesCount: response.data.tiles?.length || 0,
-            validTilesCount: validTiles.length,
-            first3Tiles: validTiles.slice(0, 3).map(t => ({
-              id: t.id,
-              label: t.label,
-              labelKey: t.labelKey,
-              position: `row=${t.row}, col=${t.col}`
-            }))
-          });
         }
-
-        console.log('[API GET BOARD] Returning board data:', {
-          profileId: id,
-          boardId: boardData.id,
-          boardName: boardData.name,
-          finalTilesCount: boardData.tiles?.length || 0
-        });
 
         return boardData;
       }
@@ -640,7 +611,8 @@ class API {
     } catch (error) {
       // If offline and no cache, return null or empty board structure
       if (!isOnline()) {
-        console.warn('Offline: Could not load profile board', id);
+        // debug: offline could not load profile board
+        // console.warn('Offline: Could not load profile board', id);
         return null;
       }
       throw error;
@@ -716,7 +688,8 @@ class API {
 
     // If no auth token, return default settings (guest mode)
     if (!(authToken && authToken.length)) {
-      console.log('[API] getSettings - No auth token, returning default settings (guest mode)');
+      // debug: getSettings - no auth token
+      // console.log('[API] getSettings - No auth token, returning default settings (guest mode)');
       return defaultSettings.settings;
     }
 
@@ -750,13 +723,15 @@ class API {
       };
 
       // Log for debugging
-      console.log('[API] getSettings - Normalized eye tracking settings:', normalized.eyeTracking);
+      // debug: getSettings - normalized eye tracking settings
+      // console.log('[API] getSettings - Normalized eye tracking settings:', normalized.eyeTracking);
 
       return normalized;
     } catch (error) {
       // Return default settings if offline
       if (!isOnline() || error.code === 'ERR_NETWORK') {
-        console.log('[API] getSettings - Offline, returning default settings');
+        // debug: getSettings offline fallback
+        // console.log('[API] getSettings - Offline, returning default settings');
         return defaultSettings.settings;
       }
 
@@ -802,13 +777,15 @@ class API {
           }
         };
 
-        console.log('[API] updateSettings - Saving eye tracking settings:', {
-          eyeTracking: settingsToSave.eyeTracking,
-          accessibility_eye_tracking: settingsToSave.accessibility?.eye_tracking
-        });
+        // debug: updateSettings - saving eye tracking settings
+        // console.log('[API] updateSettings - Saving eye tracking settings:', {
+        //  eyeTracking: settingsToSave.eyeTracking,
+        // accessibility_eye_tracking: settingsToSave.accessibility?.eye_tracking
+        //});
       } catch (e) {
         // If getSettings fails, create new structure
-        console.warn('[API] Failed to get existing settings for merge:', e);
+        // debug: failed to get existing settings for merge
+        // console.warn('[API] Failed to get existing settings for merge:', e);
         settingsToSave = {
           ...newSettings,
           accessibility: {
@@ -969,7 +946,7 @@ class API {
    * Get current user's profiles (communication profiles).
    * Backend: GET /profiles
    */
-  async getProfiles() {
+  async getProfiles({ limit = 10, offset = 0, search = '', page = 1 } = {}) {
     const authToken = getAuthToken();
     if (!(authToken && authToken.length)) {
       throw new Error('Need to be authenticated to perform this request');
@@ -979,7 +956,9 @@ class API {
       Authorization: `Bearer ${authToken}`
     };
 
-    const { data } = await this.axiosInstance.get('/profiles', { headers });
+    const query = getQueryParameters({ page, limit, offset, search });
+    const url = `/profiles?${query}`;
+    const { data } = await this.axiosInstance.get(url, { headers });
     // Backend returns { profiles, total, page, limit }
     if (data && Array.isArray(data.profiles)) {
       return data.profiles;
@@ -1247,7 +1226,8 @@ class API {
         return null;
       }
       // For other errors, still don't throw but log
-      console.warn('Eye tracking selection log failed:', error.message || error);
+      // debug: eye tracking selection log failed
+      // console.warn('Eye tracking selection log failed:', error.message || error);
       return null;
     }
   }
@@ -1343,7 +1323,8 @@ class API {
       return data;
     } catch (err) {
       // Silently fail for audio - it's optional logging
-      console.log('Jyutping audio logging failed (non-critical):', err.message);
+      // debug: jyutping audio logging failed (non-critical)
+      // console.log('Jyutping audio logging failed (non-critical):', err.message);
       return null;
     }
   }
@@ -1538,12 +1519,13 @@ class API {
       is_public: false
     };
 
-    console.log('[API CREATE BOARD] Step 1: Creating profile:', {
-      profilePayload,
-      boardId: board.id,
-      boardName: board.name,
-      tilesCount: board.tiles?.filter(t => t && typeof t === 'object').length || 0
-    });
+    // debug: create board step 1
+    // console.log('[API CREATE BOARD] Step 1: Creating profile:', {
+    // profilePayload,
+    //   boardId: board.id,
+    //   boardName: board.name,
+    //   tilesCount: board.tiles?.filter(t => t && typeof t === 'object').length || 0
+    // });
 
     // 1) 先建立 profile
     const profileRes = await this.axiosInstance.post(
@@ -1563,13 +1545,14 @@ class API {
     // Ensure profileId is a string for URL construction
     const profileIdStr = String(profileId);
 
-    console.log('[API CREATE BOARD] Step 2: Profile created:', {
-      profileId,
-      profileIdStr,
-      profileIdType: typeof profileId,
-      createdProfile,
-      userBound: true // Profile is bound to user via auth token
-    });
+    // debug: create board step 2
+    // console.log('[API CREATE BOARD] Step 2: Profile created:', {
+    //   profileId,
+    //   profileIdStr,
+    //   profileIdType: typeof profileId,
+    //   createdProfile,
+    //   userBound: true // Profile is bound to user via auth token
+    // });
 
     // 2) 再把這次傳進來的 board 結構存成這個 profile 的主板
     const boardPayload = {
@@ -1577,13 +1560,14 @@ class API {
       profileId: profileIdStr
     };
 
-    console.log('[API CREATE BOARD] Step 3: Saving board data to profile:', {
-      profileId: profileIdStr,
-      boardPayload: {
-        ...boardPayload,
-        tiles: boardPayload.tiles?.slice(0, 3) // Log first 3 tiles only
-      }
-    });
+    // debug: create board step 3
+    // console.log('[API CREATE BOARD] Step 3: Saving board data to profile:', {
+    //   profileId: profileIdStr,
+    //   boardPayload: {
+    //     ...boardPayload,
+    //     tiles: boardPayload.tiles?.slice(0, 3) // Log first 3 tiles only
+    //   }
+    // });
 
     const { data } = await this.axiosInstance.put(
       `/profiles/${profileIdStr}/board`,
@@ -1591,14 +1575,15 @@ class API {
       { headers }
     );
 
-    console.log('[API CREATE BOARD] Step 4: Board saved successfully:', {
-      profileId,
-      returnedData: {
-        id: data.id,
-        name: data.name,
-        tilesCount: data.tiles?.length || 0
-      }
-    });
+    // debug: create board step 4
+    // console.log('[API CREATE BOARD] Step 4: Board saved successfully:', {
+    //   profileId,
+    //   returnedData: {
+    //     id: data.id,
+    //     name: data.name,
+    //     tilesCount: data.tiles?.length || 0
+    //   }
+    // });
 
     return data;
   }
@@ -1644,17 +1629,18 @@ class API {
       delete payload.tilesCount;
     }
 
-    console.log('[API updateBoard] Sending update request:', {
-      profileId,
-      boardId: payload.id,
-      isPublic: payload.isPublic,
-      hasIsPublic: 'isPublic' in payload,
-      hasTiles: 'tiles' in payload,
-      tilesCount: payload.tiles?.length || 0,
-      boardKeys: Object.keys(payload),
-      isMetadataOnly: isMetadataOnlyUpdate,
-      originalHasTiles: 'tiles' in board
-    });
+    // debug: updateBoard - sending update request
+    // console.log('[API updateBoard] Sending update request:', {
+    //   profileId,
+    //   boardId: payload.id,
+    //   isPublic: payload.isPublic,
+    //   hasIsPublic: 'isPublic' in payload,
+    //   hasTiles: 'tiles' in payload,
+    //   tilesCount: payload.tiles?.length || 0,
+    //   boardKeys: Object.keys(payload),
+    //   isMetadataOnly: isMetadataOnlyUpdate,
+    //   originalHasTiles: 'tiles' in board
+    // });
 
     const { data } = await this.axiosInstance.put(
       `/profiles/${profileId}/board`,
@@ -1662,10 +1648,11 @@ class API {
       { headers }
     );
 
-    console.log('[API updateBoard] Update response received:', {
-      profileId: data.id,
-      isPublic: data.isPublic
-    });
+    // debug: updateBoard response received
+    // console.log('[API updateBoard] Update response received:', {
+    //   profileId: data.id,
+    //   isPublic: data.isPublic
+    // });
 
     return data;
   }
@@ -1681,14 +1668,16 @@ class API {
     };
 
     // 在 profile 模型下，刪板 = 刪 profile
-    console.log('[API] deleteBoard called with boardId:', boardId, 'Type:', typeof boardId);
-    console.log('[API] DELETE request to:', `/profiles/${boardId}`);
+    // debug: deleteBoard called
+    // console.log('[API] deleteBoard called with boardId:', boardId, 'Type:', typeof boardId);
+    // console.log('[API] DELETE request to:', `/profiles/${boardId}`);
 
     try {
       const { data } = await this.axiosInstance.delete(`/profiles/${boardId}`, {
         headers
       });
-      console.log('[API] deleteBoard success, response:', data);
+      // debug: deleteBoard success
+      // console.log('[API] deleteBoard success, response:', data);
       return data;
     } catch (error) {
       console.error('[API] deleteBoard error:', {
@@ -2437,11 +2426,12 @@ class API {
 
     try {
       // IMPORTANT: AI 请求可能很慢，这里单独把超时时间调高（不影响其他 API）
-      console.log('[API] getAISuggestions - sending request with extended timeout (120000 ms)', {
-        contextPreview: typeof context === 'string' ? context.substring(0, 100) : null,
-        profileIdOrBoardId,
-        limit
-      });
+      // debug: getAISuggestions sending request (extended timeout)
+      // console.log('[API] getAISuggestions - sending request with extended timeout (120000 ms)', {
+      //   contextPreview: typeof context === 'string' ? context.substring(0, 100) : null,
+      //   profileIdOrBoardId,
+      //   limit
+      // });
 
       const response = await this.axiosInstance.post(
         'ai/suggest-cards',
@@ -2452,11 +2442,12 @@ class API {
           timeout: 120000 // 120s，确保前端不会在后端完成前先超时
         }
       );
-      console.log('[API] getAISuggestions - response received', {
-        status: response.status,
-        hasData: !!response.data,
-        suggestionsCount: response.data?.suggestions?.length
-      });
+      // debug: getAISuggestions response received
+      // console.log('[API] getAISuggestions - response received', {
+      //   status: response.status,
+      //   hasData: !!response.data,
+      //   suggestionsCount: response.data?.suggestions?.length
+      // });
       return response.data;
     } catch (error) {
       console.error('Get AI suggestions error:', error);
@@ -2614,6 +2605,35 @@ class API {
       return response.data;
     } catch (error) {
       console.error('Get learning model error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Clean up unaccepted AI suggestion images
+   * @param {Array<string>} imagePaths - Array of image paths to delete
+   * @returns {Promise<Object>} Cleanup result
+   */
+  async cleanupAISuggestionImages(imagePaths) {
+    const authToken = getAuthToken();
+    if (!(authToken && authToken.length)) {
+      throw new Error('Need to be authenticated to perform this request');
+    }
+
+    const headers = {
+      Authorization: `Bearer ${authToken}`,
+      'Content-Type': 'application/json'
+    };
+
+    try {
+      const response = await this.axiosInstance.post(
+        'ai/cleanup-suggestions',
+        { image_paths: imagePaths },
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Cleanup AI suggestions error:', error);
       throw error;
     }
   }

@@ -210,7 +210,7 @@ function EyeTracking({
     } catch (e) {
       // Fail silently if instance is not available in this context
       // (e.g., board not mounted). This should not block the UI.
-      // console.debug('EyeTracking instance update failed:', e);
+      
     }
   };
 

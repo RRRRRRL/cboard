@@ -172,9 +172,12 @@ function handleProfileRoutes($method, $pathParts, $data, $authToken) {
     if ($method === 'GET' && isset($pathParts[0]) && $pathParts[0] === 'board' && count($pathParts) === 2 && $pathParts[1] === 'my') {
         $user = requireAuth($authToken);
         try {
+            // Add reasonable delay to prevent rapid successive requests (300ms)
+            usleep(300000);
+
             $limit = $pagination['limit'] ?? 50;
             $offset = (($pagination['page'] ?? 1) - 1) * $limit;
-            
+
             // Get profiles with tiles count and cover image
             $stmt = $db->prepare("
                 SELECT 
@@ -1354,30 +1357,33 @@ function handleProfileRoutes($method, $pathParts, $data, $authToken) {
     // GET /profiles (list user's profiles with search)
     if ($method === 'GET' && count($pathParts) === 1) {
         try {
+            // Add reasonable delay to prevent rapid successive requests (300ms)
+            usleep(300000);
+
             $search = $pagination['search'];
             $offset = $pagination['offset'];
             $limit = $pagination['limit'];
-            
-            $sql = "SELECT id, display_name, description, layout_type, language, is_public, created_at, updated_at 
-                    FROM profiles 
+
+            $sql = "SELECT id, display_name, description, layout_type, language, is_public, created_at, updated_at
+                    FROM profiles
                     WHERE user_id = ?";
             $params = [$user['id']];
-            
+
             if (!empty($search)) {
                 $sql .= " AND (display_name LIKE ? OR description LIKE ?)";
                 $searchTerm = "%$search%";
                 $params[] = $searchTerm;
                 $params[] = $searchTerm;
             }
-            
+
             $sql .= " ORDER BY created_at DESC LIMIT ? OFFSET ?";
             $params[] = $limit;
             $params[] = $offset;
-            
+
             $stmt = $db->prepare($sql);
             $stmt->execute($params);
             $profiles = $stmt->fetchAll();
-            
+
             // Get total count
             $countSql = "SELECT COUNT(*) as total FROM profiles WHERE user_id = ?";
             $countParams = [$user['id']];
@@ -1390,14 +1396,14 @@ function handleProfileRoutes($method, $pathParts, $data, $authToken) {
             $stmt = $db->prepare($countSql);
             $stmt->execute($countParams);
             $total = $stmt->fetch()['total'];
-            
+
             return successResponse([
                 'profiles' => $profiles,
                 'total' => (int)$total,
                 'page' => $pagination['page'],
                 'limit' => $limit
             ]);
-            
+
         } catch (Exception $e) {
             error_log("List profiles error: " . $e->getMessage());
             return errorResponse('Failed to fetch profiles', 500);
@@ -1875,4 +1881,3 @@ function handleProfileRoutes($method, $pathParts, $data, $authToken) {
     
     return errorResponse('Profile route not found', 404);
 }
-

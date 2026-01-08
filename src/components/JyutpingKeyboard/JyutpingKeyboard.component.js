@@ -140,7 +140,6 @@ class JyutpingKeyboard extends Component {
       }
 
       // If database doesn't have full coverage, try AI fallback
-      console.log('Database translation incomplete, trying AI fallback...');
 
       // For AI fallback, we'll use the AI helper to get Jyutping predictions
       // This is a simplified approach - in production you'd want more sophisticated AI integration
@@ -342,7 +341,6 @@ class JyutpingKeyboard extends Component {
     try {
       // First, try exact / strict match search
       const response = await API.searchJyutping(code);
-      console.log('Jyutping search response:', response);
       const rules = response.rules || {}; // new
 
       // API returns {code, matches, match_type} format
@@ -359,7 +357,7 @@ class JyutpingKeyboard extends Component {
         let validMatches = matches.filter(
           m => (m.hanzi && m.hanzi.trim()) || (m.word && m.word.trim())
         );
-        console.log('Valid matches found:', validMatches.length, 'match_type:', matchType);
+        // Valid matches found
 
         // Determine if we should apply strict matching
         // Strict matching: only show exact syllable matches (e.g., "baa" only shows "baa", not "baai")
@@ -491,12 +489,12 @@ class JyutpingKeyboard extends Component {
 
             return allowedBases.has(base);
           });
-          console.log('Strict matching applied with phonological normalization:', filteredMatches.length);
+          // Strict matching applied with phonological normalization
         } else {
           // No exact matches or partial input: show all matches (including partial matches)
           // e.g., "ba" can show "baa", "baai", "baat", etc.
           filteredMatches = validMatches;
-          console.log('Partial matching applied, showing all:', filteredMatches.length);
+          // Partial matching applied, showing all matches
         }
 
         // Remove duplicates based on hanzi/word
@@ -532,9 +530,7 @@ class JyutpingKeyboard extends Component {
       } else {
         // If no matches from search, try suggestions API
         // This handles cases like typing "nei" to show all "nei*" matches
-        console.log('No matches from search, trying suggestions API...');
         const suggestionsResponse = await API.getJyutpingSuggestions(code, 15);
-        console.log('Suggestions response:', suggestionsResponse);
 
         // API returns {input, suggestions, count} format
         const suggestions = suggestionsResponse.suggestions || [];
@@ -544,7 +540,7 @@ class JyutpingKeyboard extends Component {
           let validSuggestions = suggestions.filter(
             m => (m.hanzi && m.hanzi.trim()) || (m.word && m.word.trim())
           );
-          console.log('Valid suggestions found:', validSuggestions.length);
+          // Valid suggestions found
 
           // For suggestions API, we show all matches (partial matching)
           // since the input didn't have exact matches
@@ -580,7 +576,6 @@ class JyutpingKeyboard extends Component {
             isSearching: false
           });
         } else {
-          console.log('No suggestions found');
           this.setState({ suggestions: [], isSearching: false });
         }
       }
@@ -679,7 +674,6 @@ class JyutpingKeyboard extends Component {
       });
     } catch (error) {
       // Silently fail if not authenticated
-      console.log('Learning log not saved (not authenticated)');
     }
   };
 
@@ -1139,15 +1133,10 @@ class JyutpingKeyboard extends Component {
       const textOutput = currentTextOutput !== null ? currentTextOutput : this.state.textOutput;
       const fullContext = textOutput.trim();
 
-      // Debug logging
-      console.log('Fetching related words:', { hanzi, jyutping, fullContext });
-
       // Call API with full context for ollama prediction
       // The backend will use the full context to predict logical next words
       // For example: "你想去" -> "邊", "去" -> "學校", "醫院", "屋企"
       const response = await API.getRelatedWords(hanzi, jyutping, fullContext);
-
-      console.log('Related words API response:', response);
 
       if (response && response.related_words && response.related_words.length > 0) {
         // Remove duplicates
@@ -1160,10 +1149,8 @@ class JyutpingKeyboard extends Component {
             uniqueWords.push(word);
           }
         }
-        console.log('Setting related words:', uniqueWords);
         this.setState({ relatedWords: uniqueWords });
       } else {
-        console.log('No related words found, clearing suggestions');
         this.setState({ relatedWords: [] });
       }
     } catch (error) {

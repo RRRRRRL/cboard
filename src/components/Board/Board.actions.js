@@ -39,6 +39,7 @@ import {
   DOWNLOAD_IMAGES_STARTED,
   DOWNLOAD_IMAGE_SUCCESS,
   DOWNLOAD_IMAGE_FAILURE,
+  SET_PROFILES,
   UNMARK_SHOULD_CREATE_API_BOARD,
   SHORT_ID_MAX_LENGTH
 } from './Board.constants';
@@ -525,6 +526,13 @@ export function downloadImageFailure(message) {
   };
 }
 
+export function setProfiles(profiles) {
+  return {
+    type: SET_PROFILES,
+    profiles
+  };
+}
+
 export function getApiMyBoards() {
   return dispatch => {
     dispatch(getApiMyBoardsStarted());
@@ -662,17 +670,27 @@ export function deleteApiBoard(boardId) {
  */
 export function getApiObjects() {
   return dispatch => {
-    //get boards
-    return dispatch(getApiMyBoards())
-      .then(res => {
-        return dispatch(getApiMyCommunicators())
-          .then(res => {})
-          .catch(err => {
-            console.error(err.message);
-          });
+    // Get boards and communicators in parallel to improve performance
+    const boardsPromise = dispatch(getApiMyBoards());
+    const communicatorsPromise = dispatch(getApiMyCommunicators());
+
+    return Promise.allSettled([boardsPromise, communicatorsPromise])
+      .then(results => {
+        // Log any errors but don't fail the entire operation
+        results.forEach((result, index) => {
+          if (result.status === 'rejected') {
+            const operation = index === 0 ? 'getApiMyBoards' : 'getApiMyCommunicators';
+            const error = result.reason;
+            // Suppress error logging for expected network errors
+            const isNetworkError = error?.code === 'ERR_NETWORK' || error?.message === 'Network Error';
+            if (!isNetworkError || navigator.onLine) {
+              console.error(`${operation} error:`, error?.message || error?.toString() || 'Unknown error');
+            }
+          }
+        });
       })
       .catch(err => {
-        // Suppress error logging for expected network errors
+        // Fallback error handling
         const isNetworkError = err?.code === 'ERR_NETWORK' || err?.message === 'Network Error';
         if (!isNetworkError || navigator.onLine) {
           const errorMessage = err?.message || err?.toString() || 'Unknown error';

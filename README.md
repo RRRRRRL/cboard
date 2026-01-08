@@ -4,13 +4,13 @@
 [![Sponsors on Open Collective](https://opencollective.com/cboard/sponsors/badge.svg)](#sponsors)
 [![cboard-org](https://circleci.com/gh/cboard-org/cboard.svg?style=shield)](https://app.circleci.com/pipelines/github/cboard-org/cboard)
 
-# Cboard - AAC Communication Board for browsers
+# Uplifor AAC (based on Cboard)
 
-[Cboard](https://app.cboard.io) is an augmentative and alternative communication (AAC) web application, allowing users with speech and language impairments (autism, cerebral palsy) to communicate with symbols and text-to-speech.
+Uplifor AAC is an augmentative and alternative communication (AAC) web application, allowing users with speech and language impairments (autism, cerebral palsy) to communicate with symbols and text-to-speech. It is built from the open-source [Cboard](https://app.cboard.io) project and keeps upstream compatibility while adding Uplifor-specific configuration.
 
 ![Cboard GIF demo](public/videos/demo.gif)
 
-The app uses the browser's Speech Synthesis API to generate speech when a symbol is clicked. There are thousands of symbols from the most popular AAC symbol libraries to choose from when creating a board. Cboard is available in 40 languages (support varies by platform - Android, iOS, Windows).
+The app uses the browser's Speech Synthesis API to generate speech when a symbol is clicked. There are thousands of symbols from the most popular AAC symbol libraries to choose from when creating a board. Uplifor AAC (based on Cboard) is available in 40 languages (support varies by platform - Android, iOS, Windows).
 
 **We're using Discord to collaborate, join us at: https://discord.gg/TEH8uxh**
 

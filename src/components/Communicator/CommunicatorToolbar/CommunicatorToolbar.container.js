@@ -113,24 +113,10 @@ const mapStateToProps = (
     }
     
     boards = board.boards.filter(b => {
-      if (!b || !b.id) return false;
-      
-      // Filter out system templates
-      if (b.email === 'support@cboard.io') return false;
-      
-      // Filter out public profiles
-      if (b.is_public === true || b.isPublic === true) return false;
-      
-      // Show if user_id matches
-      if (b.user_id && String(b.user_id) === String(userData.id)) return true;
-      
-      // Show if email matches
-      if (b.email && userData.email && b.email === userData.email) return true;
-      
-      // If no user_id or email, but also not public, assume it's user's (for backward compatibility)
-      if (!b.user_id && !b.email && !b.is_public && !b.isPublic) return true;
-      
-      return false;
+    if (!b || !b.id) return false;
+    // Exclude system templates
+    if (b.email === 'support@cboard.io') return false;
+    return true;
     });
     
     // Debug: Log filtered boards

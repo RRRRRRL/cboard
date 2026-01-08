@@ -168,7 +168,7 @@ class EyeTrackingIntegration {
       }
       return false;
     } catch (error) {
-      console.debug('[EyeTracking] Error verifying saved device:', error);
+      
       return false;
     }
   }
@@ -217,7 +217,7 @@ class EyeTrackingIntegration {
       
       return null;
     } catch (error) {
-      console.debug('[EyeTracking] Error in auto-detection:', error);
+      
       return null;
     }
   }
@@ -726,7 +726,7 @@ class EyeTrackingIntegration {
                 // Only log once to avoid spam
                 if (!suppressedErrors.has('texture-size-error')) {
                   suppressedErrors.add('texture-size-error');
-                  console.debug('[EyeTracking] WebGazer texture error suppressed (video not ready yet):', errorString.substring(0, 100));
+                  
                 }
                 return; // Suppress this error
               }
@@ -743,7 +743,7 @@ class EyeTrackingIntegration {
                 // Suppress this error
                 if (!suppressedErrors.has('window-texture-error')) {
                   suppressedErrors.add('window-texture-error');
-                  console.debug('[EyeTracking] Suppressed window error for texture size:', message.substring(0, 100));
+                  
                 }
                 return true; // Suppress the error
               }
@@ -774,7 +774,7 @@ class EyeTrackingIntegration {
                   }
                   this._nullDataCount++;
                   if (this._nullDataCount === 1 || this._nullDataCount % 100 === 0) {
-                    console.debug(`[EyeTracking] Gaze listener received null data (count: ${this._nullDataCount})`);
+                    
                   }
                   return;
                 }
@@ -806,7 +806,7 @@ class EyeTrackingIntegration {
                   }
                   this._invalidCoordCount++;
                   if (this._invalidCoordCount === 1 || this._invalidCoordCount % 50 === 0) {
-                    console.debug(`[EyeTracking] Invalid coordinates from WebGazer: x=${x} (${typeof x}), y=${y} (${typeof y}), viewport=${window.innerWidth}x${window.innerHeight} (count: ${this._invalidCoordCount})`);
+                    
                   }
                 }
               });
@@ -1111,7 +1111,7 @@ class EyeTrackingIntegration {
       }
       this._invalidCoordCount++;
       if (this._invalidCoordCount === 1 || this._invalidCoordCount % 50 === 0) {
-        console.debug(`[EyeTracking] Invalid coordinate types: x=${x} (${typeof x}), y=${y} (${typeof y})`);
+        
       }
       return;
     }
@@ -1245,7 +1245,7 @@ class EyeTrackingIntegration {
                   try {
                     outputButton.click();
                   } catch (e) {
-                    console.debug('[EyeTracking] Could not click output button:', e);
+                    
                   }
                 }
                 this.resetDwell();
@@ -2118,7 +2118,7 @@ class EyeTrackingIntegration {
       }
     } catch (e) {
       // Ignore errors in this cleanup step
-      console.debug('[EyeTracking] Error enumerating devices during cleanup:', e);
+      
     }
     
     this.tracker = null;

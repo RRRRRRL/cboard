@@ -128,122 +128,99 @@ function handleJyutpingRulesRoutes($method, $pathParts, $data, $authToken) {
             if ($student['role'] !== 'student') {
                 return errorResponse('User is not a student', 400);
             }
-            
+
             $profileId = isset($data['profile_id']) ? (int)$data['profile_id'] : null;
-            
+
             // Check if rule exists
-            $stmt = $db->prepare("SELECT id FROM jyutping_matching_rules 
+            $stmt = $db->prepare("SELECT id FROM jyutping_matching_rules
                                  WHERE user_id = ? AND (profile_id = ? OR (profile_id IS NULL AND ? IS NULL))");
             $stmt->execute([$userId, $profileId, $profileId]);
             $existing = $stmt->fetch(PDO::FETCH_ASSOC);
-            
+
+            // Prepare data for insert/update - ensure all fields are properly cast
+            $ruleData = [
+                'user_id' => $userId,
+                'profile_id' => $profileId,
+                'frequency_threshold' => isset($data['frequency_threshold']) ? (int)$data['frequency_threshold'] : 50,
+                'allow_exact_match' => isset($data['allow_exact_match']) ? (bool)$data['allow_exact_match'] : true,
+                'allow_substring_match' => isset($data['allow_substring_match']) ? (bool)$data['allow_substring_match'] : true,
+                'allow_single_char_match' => isset($data['allow_single_char_match']) ? (bool)$data['allow_single_char_match'] : true,
+                'require_ai_correction' => isset($data['require_ai_correction']) ? (bool)$data['require_ai_correction'] : false,
+                'ai_confidence_threshold' => isset($data['ai_confidence_threshold']) ? (float)$data['ai_confidence_threshold'] : 0.50,
+                'enabled' => isset($data['enabled']) ? (bool)$data['enabled'] : true,
+                'merge_n_ng_finals' => isset($data['merge_n_ng_finals']) ? (bool)$data['merge_n_ng_finals'] : false,
+                'allow_coda_simplification' => isset($data['allow_coda_simplification']) ? (bool)$data['allow_coda_simplification'] : false,
+                'ignore_tones' => isset($data['ignore_tones']) ? (bool)$data['ignore_tones'] : false,
+                'allow_fuzzy_tones' => isset($data['allow_fuzzy_tones']) ? (bool)$data['allow_fuzzy_tones'] : false,
+                'fuzzy_tone_pairs' => isset($data['fuzzy_tone_pairs']) ? $data['fuzzy_tone_pairs'] : null,
+                'allow_ng_zero_confusion' => isset($data['allow_ng_zero_confusion']) ? (bool)$data['allow_ng_zero_confusion'] : false,
+                'allow_n_l_confusion' => isset($data['allow_n_l_confusion']) ? (bool)$data['allow_n_l_confusion'] : false,
+            ];
+
             if ($existing) {
-                // Update existing rule
+                // Update existing rule - only update fields that were provided
                 $updates = [];
                 $params = [];
-                
-                if (isset($data['frequency_threshold'])) {
-                    $updates[] = "frequency_threshold = ?";
-                    $params[] = (int)$data['frequency_threshold'];
+
+                foreach ($ruleData as $field => $value) {
+                    if ($field !== 'user_id' && $field !== 'profile_id' && array_key_exists($field, $data)) {
+                        $updates[] = "`{$field}` = ?";
+                        $params[] = $value;
+                    }
                 }
-                if (isset($data['allow_exact_match'])) {
-                    $updates[] = "allow_exact_match = ?";
-                    $params[] = (int)$data['allow_exact_match'];
-                }
-                if (isset($data['allow_substring_match'])) {
-                    $updates[] = "allow_substring_match = ?";
-                    $params[] = (int)$data['allow_substring_match'];
-                }
-                if (isset($data['allow_single_char_match'])) {
-                    $updates[] = "allow_single_char_match = ?";
-                    $params[] = (int)$data['allow_single_char_match'];
-                }
-                if (isset($data['require_ai_correction'])) {
-                    $updates[] = "require_ai_correction = ?";
-                    $params[] = (int)$data['require_ai_correction'];
-                }
-                if (isset($data['ai_confidence_threshold'])) {
-                    $updates[] = "ai_confidence_threshold = ?";
-                    $params[] = (float)$data['ai_confidence_threshold'];
-                }
-                if (isset($data['enabled'])) {
-                    $updates[] = "enabled = ?";
-                    $params[] = (int)$data['enabled'];
-                }
-                // Phonological adaptation rules
-                if (isset($data['merge_n_ng_finals'])) {
-                    $updates[] = "merge_n_ng_finals = ?";
-                    $params[] = (int)$data['merge_n_ng_finals'];
-                }
-                if (isset($data['allow_coda_simplification'])) {
-                    $updates[] = "allow_coda_simplification = ?";
-                    $params[] = (int)$data['allow_coda_simplification'];
-                }
-                if (isset($data['ignore_tones'])) {
-                    $updates[] = "ignore_tones = ?";
-                    $params[] = (int)$data['ignore_tones'];
-                }
-                if (isset($data['allow_fuzzy_tones'])) {
-                    $updates[] = "allow_fuzzy_tones = ?";
-                    $params[] = (int)$data['allow_fuzzy_tones'];
-                }
-                if (isset($data['fuzzy_tone_pairs'])) {
-                    $updates[] = "fuzzy_tone_pairs = ?";
-                    $params[] = $data['fuzzy_tone_pairs'];
-                }
-                if (isset($data['allow_ng_zero_confusion'])) {
-                    $updates[] = "allow_ng_zero_confusion = ?";
-                    $params[] = (int)$data['allow_ng_zero_confusion'];
-                }
-                if (isset($data['allow_n_l_confusion'])) {
-                    $updates[] = "allow_n_l_confusion = ?";
-                    $params[] = (int)$data['allow_n_l_confusion'];
-                }
-                
+
                 if (empty($updates)) {
                     return errorResponse('No fields to update', 400);
                 }
-                
+
                 $updates[] = "updated_at = NOW()";
                 $params[] = $existing['id'];
-                
+
                 $sql = "UPDATE jyutping_matching_rules SET " . implode(', ', $updates) . " WHERE id = ?";
                 $stmt = $db->prepare($sql);
                 $stmt->execute($params);
-                
+
             } else {
                 // Create new rule
-                $sql = "INSERT INTO jyutping_matching_rules 
-                        (user_id, profile_id, frequency_threshold, allow_exact_match, allow_substring_match, 
-                        allow_single_char_match, require_ai_correction, ai_confidence_threshold, enabled, created_by,
-                        merge_n_ng_finals, allow_coda_simplification, ignore_tones, allow_fuzzy_tones,
-                        fuzzy_tone_pairs, allow_ng_zero_confusion, allow_n_l_confusion)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                $ruleData['created_by'] = $user['id'];
+
+                $fields = array_keys($ruleData);
+                $placeholders = array_fill(0, count($fields), '?');
+                $values = array_values($ruleData);
+
+                $sql = "INSERT INTO jyutping_matching_rules (`" . implode('`, `', $fields) . "`) VALUES (" . implode(', ', $placeholders) . ")";
                 $stmt = $db->prepare($sql);
-                $stmt->execute([
-                    $userId,
-                    $profileId,
-                    isset($data['frequency_threshold']) ? (int)$data['frequency_threshold'] : 50,
-                    isset($data['allow_exact_match']) ? (int)!empty($data['allow_exact_match']) : 1,
-                    isset($data['allow_substring_match']) ? (int)!empty($data['allow_substring_match']) : 1,
-                    isset($data['allow_single_char_match']) ? (int)!empty($data['allow_single_char_match']) : 1,
-                    isset($data['require_ai_correction']) ? (int)!empty($data['require_ai_correction']) : 0,
-                    isset($data['ai_confidence_threshold']) ? (float)$data['ai_confidence_threshold'] : 0.50,
-                    isset($data['enabled']) ? (int)!empty($data['enabled']) : 1,
-                    $user['id'],
-                    isset($data['merge_n_ng_finals']) ? (int)!empty($data['merge_n_ng_finals']) : 0,
-                    isset($data['allow_coda_simplification']) ? (int)!empty($data['allow_coda_simplification']) : 0,
-                    isset($data['ignore_tones']) ? (int)!empty($data['ignore_tones']) : 0,
-                    isset($data['allow_fuzzy_tones']) ? (int)!empty($data['allow_fuzzy_tones']) : 0,
-                    array_key_exists('fuzzy_tone_pairs', $data) ? $data['fuzzy_tone_pairs'] : null,
-                    isset($data['allow_ng_zero_confusion']) ? (int)!empty($data['allow_ng_zero_confusion']) : 0,
-                    isset($data['allow_n_l_confusion']) ? (int)!empty($data['allow_n_l_confusion']) : 0,
-                ]);
+                $stmt->execute($values);
             }
 
-            
-            return successResponse(['message' => 'Matching rules updated successfully']);
-            
+            // Return the updated/created rule data
+            $stmt = $db->prepare("SELECT * FROM jyutping_matching_rules
+                                 WHERE user_id = ? AND (profile_id = ? OR (profile_id IS NULL AND ? IS NULL))
+                                 ORDER BY profile_id DESC LIMIT 1");
+            $stmt->execute([$userId, $profileId, $profileId]);
+            $updatedRule = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if ($updatedRule) {
+                // Convert database integers back to booleans for frontend
+                $updatedRule['allow_exact_match'] = (bool)$updatedRule['allow_exact_match'];
+                $updatedRule['allow_substring_match'] = (bool)$updatedRule['allow_substring_match'];
+                $updatedRule['allow_single_char_match'] = (bool)$updatedRule['allow_single_char_match'];
+                $updatedRule['require_ai_correction'] = (bool)$updatedRule['require_ai_correction'];
+                $updatedRule['enabled'] = (bool)$updatedRule['enabled'];
+                $updatedRule['is_default'] = false;
+                // Phonological adaptation rules
+                $updatedRule['merge_n_ng_finals'] = (bool)$updatedRule['merge_n_ng_finals'];
+                $updatedRule['allow_coda_simplification'] = (bool)$updatedRule['allow_coda_simplification'];
+                $updatedRule['ignore_tones'] = (bool)$updatedRule['ignore_tones'];
+                $updatedRule['allow_fuzzy_tones'] = (bool)$updatedRule['allow_fuzzy_tones'];
+                $updatedRule['allow_ng_zero_confusion'] = (bool)$updatedRule['allow_ng_zero_confusion'];
+                $updatedRule['allow_n_l_confusion'] = (bool)$updatedRule['allow_n_l_confusion'];
+
+                return successResponse($updatedRule);
+            }
+
+            return errorResponse('Failed to retrieve updated rules', 500);
+
         } catch (Exception $e) {
             error_log("Update matching rules error: " . $e->getMessage());
             return errorResponse('Failed to update matching rules', 500);

@@ -48,7 +48,8 @@ import {
   createApiBoard,
   upsertApiBoard,
   changeDefaultBoard,
-  updateApiBoard
+  updateApiBoard,
+  setProfiles
 } from './Board.actions';
 import {
   addBoardCommunicator,
@@ -214,9 +215,9 @@ export class BoardContainer extends Component {
     isScroll: false,
     totalRows: null,
     isCbuilderBoard: false,
-    profiles: [],
     // Audio guide mode for scanning highlight feedback: 'off' | 'beep' | 'card_audio'
-    audioGuideMode: 'off'
+    audioGuideMode: 'off',
+    showMaxCardsWarning: false
   };
 
   constructor(props) {
@@ -244,13 +245,22 @@ export class BoardContainer extends Component {
     this._isMounted = true;
 
     // Load user profiles for transfer functionality
+    console.log('[BoardContainer] Checking userData for profile loading:', {
+      hasUserData: !!this.props.userData,
+      userId: this.props.userData?.id,
+      userEmail: this.props.userData?.email
+    });
+
     if (this.props.userData && this.props.userData.id) {
-      this.loadProfiles();
+      console.log('[BoardContainer] User authenticated, loading profiles...');
+      await this.loadProfiles();
+    } else {
+      console.log('[BoardContainer] User not authenticated, skipping profile loading');
     }
 
     // Load accessibility settings (including audio guide mode) for scanning feedback
     this.loadAccessibilityAudioGuide().catch(error => {
-      console.debug('[BoardContainer] Failed to load accessibility audio guide settings:', error.message || error);
+
     });
 
     // Add window focus listener to re-check eye tracking and refresh board when user returns from settings
@@ -292,7 +302,7 @@ export class BoardContainer extends Component {
           console.log('[BoardContainer] Eye tracking enabled on focus, setting up...');
           this.setupEyeTracking().catch(error => {
             if (error && !error.message?.includes('disabled')) {
-              console.debug('[BoardContainer] Eye tracking check on focus:', error.message);
+
             }
           });
         } else {
@@ -534,6 +544,20 @@ export class BoardContainer extends Component {
   };
 
   UNSAFE_componentWillReceiveProps(nextProps) {
+    // Check if user authentication status changed (user logged in/out)
+    const prevUserData = this.props.userData;
+    const nextUserData = nextProps.userData;
+
+    const prevAuthenticated = prevUserData && prevUserData.id;
+    const nextAuthenticated = nextUserData && nextUserData.id;
+
+    // If user just logged in, load profiles
+    if (!prevAuthenticated && nextAuthenticated && !this.state.profilesLoaded) {
+      console.log('[BoardContainer] User authentication detected, loading profiles...');
+      this.loadProfiles();
+      this.setState({ profilesLoaded: true });
+    }
+
     const currentId = this.props.match?.params?.id;
     const nextId = nextProps.match?.params?.id;
 
@@ -640,7 +664,7 @@ export class BoardContainer extends Component {
       if (this.eyeTrackingInstance) {
         if (currentScanningEnabled) {
           this.setupEyeTrackingScanning().catch(error => {
-            console.debug('[BoardContainer] Error updating eye tracking scanning:', error);
+            
           });
         } else {
           // Scanning disabled - immediately stop scanning
@@ -713,7 +737,7 @@ export class BoardContainer extends Component {
           this.setupEyeTracking().catch(error => {
             // Silently handle - this is just a periodic check
             if (error && !error.message?.includes('disabled')) {
-              console.debug('[BoardContainer] Periodic eye tracking check:', error.message);
+              
             }
           });
         } else {
@@ -1512,6 +1536,13 @@ export class BoardContainer extends Component {
       if (!navigationSettings.quietBuilderMode) {
         say();
       }
+      // Check if output already has 30 or more symbols (excluding live tiles)
+      const currentOutputCount = this.props.output.filter(item => item.type !== 'live').length;
+      if (currentOutputCount >= 30) {
+        this.setState({ showMaxCardsWarning: true });
+        return;
+      }
+
       if (isLiveMode) {
         const liveTile = {
           backgroundColor: 'rgb(255, 241, 118)',
@@ -1614,7 +1645,7 @@ export class BoardContainer extends Component {
 
     // Refresh audio guide settings when scanner becomes active
     this.loadAccessibilityAudioGuide().catch(error => {
-      console.debug('[BoardContainer] Failed to refresh audio guide settings on scanner activation:', error.message || error);
+      
     });
   };
 
@@ -2491,11 +2522,34 @@ export class BoardContainer extends Component {
 
   loadProfiles = async () => {
     try {
-      const profiles = await API.getProfiles();
-      this.setState({ profiles: profiles || [] });
+      // Get all profiles by setting a high limit (1000 should be sufficient for most users)
+      const profiles = await API.getProfiles({ limit: 1000 });
+
+      // Filter profiles to ensure they belong to the current user (additional frontend safety check)
+      const currentUserId = this.props.userData?.id;
+      const filteredProfiles = Array.isArray(profiles) ? profiles.filter(profile => {
+        // Check if profile belongs to current user by user_id
+        if (profile.user_id && currentUserId) {
+          return String(profile.user_id) === String(currentUserId);
+        }
+        // Fallback check by email if user_id not available
+        if (profile.email && this.props.userData?.email) {
+          return profile.email === this.props.userData.email;
+        }
+        return false; // Don't include profiles that can't be verified as belonging to user
+      }) : [];
+
+      console.log('[BoardContainer] Loaded profiles for transfer:', {
+        totalProfiles: profiles?.length || 0,
+        filteredProfiles: filteredProfiles.length,
+        currentUserId: currentUserId,
+        currentUserEmail: this.props.userData?.email
+      });
+
+      this.props.setProfiles(filteredProfiles);
     } catch (error) {
       console.error('Load profiles error:', error);
-      this.setState({ profiles: [] });
+      this.props.setProfiles([]);
     }
   };
 
@@ -2871,7 +2925,7 @@ export class BoardContainer extends Component {
           publishBoard={this.publishBoard}
           showNotification={this.props.showNotification}
           emptyVoiceAlert={this.props.emptyVoiceAlert}
-          profiles={this.state.profiles}
+          profiles={this.props.profiles}
           onGenerateQR={this.handleGenerateQR}
           onGenerateCloudCode={this.handleGenerateCloudCode}
           onGenerateEmail={this.handleGenerateEmail}
@@ -3008,20 +3062,48 @@ export class BoardContainer extends Component {
           userId={this.getCurrentProfileUserId()}
           profileId={this.getCurrentProfileId()}
         />
+        <Dialog
+          open={this.state.showMaxCardsWarning}
+          onClose={() => this.setState({ showMaxCardsWarning: false })}
+          aria-labelledby="max-cards-warning-title"
+          aria-describedby="max-cards-warning-description"
+        >
+          <DialogTitle id="max-cards-warning-title">
+            {this.props.intl.formatMessage({
+              id: 'cboard.components.Board.maxCardsWarningTitle',
+              defaultMessage: 'Maximum Cards Reached'
+            })}
+          </DialogTitle>
+          <DialogContent>
+            <DialogContentText id="max-cards-warning-description">
+              {this.props.intl.formatMessage({
+                id: 'cboard.components.Board.maxCardsWarningMessage',
+                defaultMessage: 'The sentence bar can only display a maximum of 30 cards. Please remove some cards before adding more.'
+              })}
+            </DialogContentText>
+          </DialogContent>
+          <DialogActions>
+            <Button
+              onClick={() => this.setState({ showMaxCardsWarning: false })}
+              color="primary"
+              variant="contained"
+            >
+              {this.props.intl.formatMessage({
+                id: 'cboard.components.Board.maxCardsWarningClose',
+                defaultMessage: 'OK'
+              })}
+            </Button>
+          </DialogActions>
+        </Dialog>
       </Fragment>
     );
   }
 
   getCurrentProfileUserId = () => {
-    console.log('[DEBUG] getCurrentProfileUserId called');
-    console.log('[DEBUG] userData:', this.props.userData);
-    console.log('[DEBUG] board:', this.props.board);
-    console.log('[DEBUG] profiles:', this.state.profiles);
 
     // Always return current user's id from Redux state first
     const currentUserId = this.props.userData?.id;
     if (currentUserId) {
-      console.log('[DEBUG] Returning current user ID from Redux:', currentUserId);
       return parseInt(currentUserId, 10);
     }
 
@@ -3031,12 +3113,10 @@ export class BoardContainer extends Component {
       const profile = this.state.profiles?.find(p => String(p.id) === String(board.profileId));
       const userId = profile?.user_id;
       if (userId) {
-        console.log('[DEBUG] Returning user ID from profile:', userId);
         return parseInt(userId, 10);
       }
     }
 
-    console.log('[DEBUG] No user ID found, returning null');
     return null;
   };
 
@@ -3283,7 +3363,7 @@ export class BoardContainer extends Component {
             );
             navigationData = navData?.navigation || null;
           } catch (error) {
-            console.debug('[BoardContainer] Could not get scanning navigation:', error);
+            
           }
         }
 
@@ -3312,7 +3392,7 @@ export class BoardContainer extends Component {
         this.eyeTrackingInstance.updateScanningSettings({ enabled: false });
       }
     } catch (error) {
-      console.debug('[BoardContainer] Error setting up eye-tracking scanning:', error);
+      
     }
   };
 
@@ -3637,15 +3717,18 @@ export class BoardContainer extends Component {
   };
 }
 
-const mapStateToProps = ({
-  board,
-  communicator,
-  speech,
-  scanner,
-  app: { displaySettings, navigationSettings, userData, isConnected, liveHelp },
-  language: { lang },
-  subscription: { premiumRequiredModalState }
-}) => {
+const mapStateToProps = (
+  state
+) => {
+  const {
+    board,
+    communicator,
+    speech,
+    scanner,
+    app: { displaySettings, navigationSettings, userData, isConnected, liveHelp },
+    language: { lang },
+    subscription: { premiumRequiredModalState }
+  } = state;
   const activeCommunicatorId = communicator.activeCommunicatorId;
   const currentCommunicator = communicator.communicators.find(
     communicator => communicator.id === activeCommunicatorId
@@ -3680,6 +3763,7 @@ const mapStateToProps = ({
       id: String(b.id),
       tiles: b.tiles || []
     })),
+    profiles: state.board.profiles || [],
     output: board.output,
     isLiveMode: board.isLiveMode,
     scannerSettings: scanner,
@@ -3729,7 +3813,8 @@ const mapDispatchToProps = {
   upsertApiBoard,
   changeDefaultBoard,
   updateApiBoard,
-  verifyAndUpsertCommunicator
+  verifyAndUpsertCommunicator,
+  setProfiles
 };
 
 export default connect(

@@ -64,10 +64,10 @@ export class Settings extends PureComponent {
         window.FirebasePlugin.unregister();
         window.facebookConnectPlugin.logout(
           function(msg) {
-            console.log('disconnect facebook msg' + msg);
+            // Facebook disconnect success
           },
           function(msg) {
-            console.log('error facebook disconnect msg' + msg);
+            // Facebook disconnect error
           }
         );
       }

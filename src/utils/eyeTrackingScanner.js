@@ -130,7 +130,7 @@ class EyeTrackingScanner {
 
       return tileElement;
     } catch (error) {
-      console.debug('[EyeTrackingScanner] Error finding tile at position:', error);
+      
       return null;
     }
   }
@@ -236,7 +236,7 @@ class EyeTrackingScanner {
              document.getElementById(tileId) ||
              document.querySelector(`.Tile[data-tile-id="${tileId}"]`);
     } catch (error) {
-      console.debug('[EyeTrackingScanner] Error getting tile element:', error);
+      
       return null;
     }
   }

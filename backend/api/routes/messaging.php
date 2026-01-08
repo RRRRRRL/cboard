@@ -79,16 +79,10 @@ function handleMessagingRoutes($method, $pathParts, $data, $authToken) {
         $isRecipientTeacher = !empty(array_filter($recipientRoles, fn($r) => in_array($r['role'], ['teacher', 'therapist']))) ||
                             ($recipientLegacy && in_array($recipientLegacy['role'], ['teacher', 'therapist']));
 
-        // Debug logging
-        error_log("DEBUG: Messaging permission check - Sender: $senderId (parent: " . ($isSenderParent ? 'yes' : 'no') . ", teacher: " . ($isSenderTeacher ? 'yes' : 'no') . ")");
-        error_log("DEBUG: Messaging permission check - Recipient: $recipientId (parent: " . ($isRecipientParent ? 'yes' : 'no') . ", teacher: " . ($isRecipientTeacher ? 'yes' : 'no') . ")");
-        error_log("DEBUG: Messaging permission check - Student: " . ($studentId ?: 'null'));
-
         // Check if this is a valid parent-teacher communication
         if (($isSenderParent && $isRecipientTeacher) || ($isSenderTeacher && $isRecipientParent)) {
             if (!$studentId) {
                 // If no specific student, check if they have any shared students
-                error_log("DEBUG: Checking for shared students");
                 $stmt = $db->prepare("
                     SELECT COUNT(*) as shared_students
                     FROM parent_child_relationships pcr
@@ -99,11 +93,9 @@ function handleMessagingRoutes($method, $pathParts, $data, $authToken) {
                 $stmt->execute([$senderId, $recipientId, $recipientId, $senderId]);
                 $result = $stmt->fetch(PDO::FETCH_ASSOC);
                 $canMessage = $result['shared_students'] > 0;
-                error_log("DEBUG: Shared students check result: $canMessage");
                 return $canMessage;
             } else {
                 // Check specific student relationship
-                error_log("DEBUG: Checking specific student relationship");
                 $stmt = $db->prepare("
                     SELECT COUNT(*) as can_message FROM parent_child_relationships pcr
                     JOIN student_teacher_assignments sta ON pcr.child_user_id = sta.student_user_id
@@ -118,12 +110,10 @@ function handleMessagingRoutes($method, $pathParts, $data, $authToken) {
                 $stmt->execute([$parentId, $studentId, $teacherId]);
                 $result = $stmt->fetch(PDO::FETCH_ASSOC);
                 $canMessage = $result['can_message'] > 0;
-                error_log("DEBUG: Specific student check result: $canMessage");
                 return $canMessage;
             }
         }
 
-        error_log("DEBUG: Invalid communication pair - not parent-teacher relationship");
         return false;
     }
 
@@ -278,7 +268,7 @@ function handleMessagingRoutes($method, $pathParts, $data, $authToken) {
      * POST /messaging/send - Send a message
      */
     if ($method === 'POST' && $pathParts[1] === 'send') {
-        $data = json_decode(file_get_contents('php://input'), true);
+        // Request body is provided via the $data parameter
         if (!$data || !isset($data['recipient_user_id']) || !isset($data['subject']) || !isset($data['message_body'])) {
             return errorResponse('Recipient, subject, and message body are required', 400);
         }
@@ -516,7 +506,7 @@ function handleMessagingRoutes($method, $pathParts, $data, $authToken) {
      * POST /messaging/child-settings - Save child settings
      */
     if ($method === 'POST' && $pathParts[1] === 'child-settings') {
-        $data = json_decode(file_get_contents('php://input'), true);
+        // Request body is provided via the $data parameter
         if (!$data || !isset($data['child_user_id']) || !isset($data['settings_data'])) {
             return errorResponse('Child user ID and settings data are required', 400);
         }
@@ -607,7 +597,7 @@ function handleMessagingRoutes($method, $pathParts, $data, $authToken) {
      * POST /messaging/progress-reports - Generate progress report
      */
     if ($method === 'POST' && $pathParts[1] === 'progress-reports') {
-        $data = json_decode(file_get_contents('php://input'), true);
+        // Request body is provided via the $data parameter
         if (!$data || !isset($data['student_user_id'])) {
             return errorResponse('Student user ID is required', 400);
         }

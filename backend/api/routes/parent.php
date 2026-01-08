@@ -8,10 +8,7 @@ require_once __DIR__ . '/../auth.php';
 require_once __DIR__ . '/../middleware/role-access.php';
 
 function handleParentRoutes($method, $pathParts, $data, $authToken) {
-    error_log('DEBUG: handleParentRoutes called with method=' . $method . ', pathParts=' . json_encode($pathParts));
-
     $user = requireAuth($authToken);
-    error_log('DEBUG: User authenticated: ' . json_encode(['id' => $user['id'], 'name' => $user['name'], 'role' => $user['role']]));
 
     // Check if user has parent role using new role-based system or legacy system
     $userRoles = getUserRoles($user['id']);
@@ -20,17 +17,11 @@ function handleParentRoutes($method, $pathParts, $data, $authToken) {
     // Fallback to legacy role check if no roles found in new system
     if (!$isParent && isset($user['role']) && $user['role'] === 'parent') {
         $isParent = true;
-        error_log('DEBUG: Using legacy parent role check');
     }
-
-    error_log('DEBUG: isParent=' . ($isParent ? 'true' : 'false') . ', user roles=' . json_encode($userRoles) . ', legacy role=' . ($user['role'] ?? 'null'));
 
     if (!$isParent && !isSystemAdmin($user['id'])) {
-        error_log('DEBUG: Access denied - parent role required');
         return errorResponse('Access denied - parent role required', 403);
     }
-
-    error_log('DEBUG: Parent role check passed, proceeding with route handling');
 
     /**
      * GET /parent/children - Get children for the current parent
@@ -39,7 +30,7 @@ function handleParentRoutes($method, $pathParts, $data, $authToken) {
      * GET /parent/messages - Get messages for the current parent
      */
     if ($method === 'GET' && $pathParts[1] === 'messages') {
-        error_log('DEBUG: Parent messages endpoint called for user ID: ' . $user['id']);
+        
 
         $db = getDB();
         if (!$db) return errorResponse('Database connection failed', 500);
@@ -115,7 +106,7 @@ function handleParentRoutes($method, $pathParts, $data, $authToken) {
                 $teacherStmt->execute([$user['id']]);
                 $teachers = $teacherStmt->fetchAll(PDO::FETCH_ASSOC);
             } catch (Exception $e) {
-                error_log('DEBUG: Could not fetch teachers: ' . $e->getMessage());
+                
                 // Try fallback - get all teachers
                 try {
                     $fallbackStmt = $db->prepare("
@@ -128,7 +119,7 @@ function handleParentRoutes($method, $pathParts, $data, $authToken) {
                     $fallbackStmt->execute();
                     $teachers = $fallbackStmt->fetchAll(PDO::FETCH_ASSOC);
                 } catch (Exception $e2) {
-                    error_log('DEBUG: Could not fetch teachers fallback: ' . $e2->getMessage());
+                    
                 }
             }
 
@@ -142,7 +133,7 @@ function handleParentRoutes($method, $pathParts, $data, $authToken) {
             ]);
 
         } catch (Exception $e) {
-            error_log('DEBUG: Exception in parent messages endpoint: ' . $e->getMessage());
+            
             return errorResponse('Failed to load messages: ' . $e->getMessage(), 500);
         }
     }
@@ -151,7 +142,7 @@ function handleParentRoutes($method, $pathParts, $data, $authToken) {
      * GET /parent/progress-reports - Get progress reports for parent's children
      */
     if ($method === 'GET' && $pathParts[1] === 'progress-reports') {
-        error_log('DEBUG: Parent progress reports endpoint called for user ID: ' . $user['id']);
+        
 
         $db = getDB();
         if (!$db) return errorResponse('Database connection failed', 500);
@@ -209,7 +200,7 @@ function handleParentRoutes($method, $pathParts, $data, $authToken) {
             ]);
 
         } catch (Exception $e) {
-            error_log('DEBUG: Exception in parent progress reports endpoint: ' . $e->getMessage());
+            
             return errorResponse('Failed to load progress reports: ' . $e->getMessage(), 500);
         }
     }
@@ -219,7 +210,7 @@ function handleParentRoutes($method, $pathParts, $data, $authToken) {
      */
     if ($method === 'GET' && $pathParts[1] === 'child-progress' && isset($pathParts[2])) {
         $childId = (int)$pathParts[2];
-        error_log('DEBUG: Parent child progress endpoint called for child ID: ' . $childId . ', pathParts: ' . json_encode($pathParts));
+        
 
         // Verify the child belongs to this parent
         $db = getDB();
@@ -293,7 +284,7 @@ function handleParentRoutes($method, $pathParts, $data, $authToken) {
             ]);
 
         } catch (Exception $e) {
-            error_log('DEBUG: Exception in parent child progress endpoint: ' . $e->getMessage());
+            
             return errorResponse('Failed to load child progress: ' . $e->getMessage(), 500);
         }
     }
@@ -302,7 +293,7 @@ function handleParentRoutes($method, $pathParts, $data, $authToken) {
      * POST /parent/send-message - Send a message to a teacher
      */
     if ($method === 'POST' && $pathParts[1] === 'send-message') {
-        error_log('DEBUG: Parent send message endpoint called');
+        
 
         $recipientId = $data['recipient_id'] ?? null;
         $studentId = $data['student_id'] ?? null;
@@ -353,7 +344,7 @@ function handleParentRoutes($method, $pathParts, $data, $authToken) {
             ]);
 
         } catch (Exception $e) {
-            error_log('DEBUG: Exception in parent send message endpoint: ' . $e->getMessage());
+            
             return errorResponse('Failed to send message: ' . $e->getMessage(), 500);
         }
     }
@@ -362,23 +353,23 @@ function handleParentRoutes($method, $pathParts, $data, $authToken) {
      * GET /parent/children - Get children for the current parent
      */
     if ($method === 'GET' && $pathParts[1] === 'children') {
-        error_log('DEBUG: Parent children endpoint called for user ID: ' . $user['id']);
+        
 
         $db = getDB();
         if (!$db) {
-            error_log('DEBUG: Database connection failed');
+            
             return errorResponse('Database connection failed', 500);
         }
 
         try {
             // First, check if parent_child_relationships table exists
-            error_log('DEBUG: Checking if parent_child_relationships table exists');
+            
             $checkTableStmt = $db->prepare("SHOW TABLES LIKE 'parent_child_relationships'");
             $checkTableStmt->execute();
             $tableExists = $checkTableStmt->fetch();
 
             if (!$tableExists) {
-                error_log('DEBUG: parent_child_relationships table does not exist');
+                
                 // Table doesn't exist, return empty result with message
                 return successResponse([
                     'success' => true,
@@ -390,7 +381,7 @@ function handleParentRoutes($method, $pathParts, $data, $authToken) {
                 ]);
             }
 
-            error_log('DEBUG: parent_child_relationships table exists, executing query');
+            
 
             // Get all children linked to this parent
             $stmt = $db->prepare("
@@ -417,7 +408,7 @@ function handleParentRoutes($method, $pathParts, $data, $authToken) {
             $stmt->execute([$user['id']]);
             $children = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-            error_log('DEBUG: Query executed successfully, found ' . count($children) . ' children');
+            
 
             // Add basic statistics for each child
             foreach ($children as &$child) {
@@ -440,8 +431,8 @@ function handleParentRoutes($method, $pathParts, $data, $authToken) {
             ]);
 
         } catch (Exception $e) {
-            error_log('DEBUG: Exception in parent children endpoint: ' . $e->getMessage());
-            error_log('DEBUG: Exception trace: ' . $e->getTraceAsString());
+            
+            
             return errorResponse('Failed to load children: ' . $e->getMessage(), 500);
         }
     }

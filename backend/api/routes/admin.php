@@ -97,9 +97,9 @@ if ($method === 'GET' && $pathParts[1] === 'organizations') {
  * POST /admin/organizations - Create new organization
  */
 if ($method === 'POST' && $pathParts[1] === 'organizations') {
-    requireRole('system_admin');
+    requireRole($user, 'system_admin');
 
-    $data = json_decode(file_get_contents('php://input'), true);
+    // Request body is provided via the $data parameter
     if (!$data || !isset($data['name'])) {
         return errorResponse('Organization name is required', 400);
     }
@@ -138,7 +138,7 @@ if ($method === 'POST' && $pathParts[1] === 'organizations') {
 /**
  * GET /admin/organizations/{id}/classes - Get classes for an organization
  */
-if ($method === 'GET' && $pathParts[1] === 'organizations' && isset($pathParts[2]) && $pathParts[3] === 'classes') {
+if ($method === 'GET' && $pathParts[1] === 'organizations' && isset($pathParts[2]) && isset($pathParts[3]) && $pathParts[3] === 'classes') {
     $orgId = (int)$pathParts[2];
 
     // Check if user can access this organization
@@ -174,14 +174,14 @@ if ($method === 'GET' && $pathParts[1] === 'organizations' && isset($pathParts[2
 /**
  * POST /admin/organizations/{id}/classes - Create class in organization
  */
-if ($method === 'POST' && $pathParts[1] === 'organizations' && isset($pathParts[2]) && $pathParts[3] === 'classes') {
+if ($method === 'POST' && $pathParts[1] === 'organizations' && isset($pathParts[2]) && isset($pathParts[3]) && $pathParts[3] === 'classes') {
     $orgId = (int)$pathParts[2];
 
     if (!isSystemAdmin($user['id']) && !isOrgAdmin($user['id'], $orgId)) {
         return errorResponse('Access denied', 403);
     }
 
-    $data = json_decode(file_get_contents('php://input'), true);
+    // Request body is provided via the $data parameter
     if (!$data || !isset($data['name'])) {
         return errorResponse('Class name is required', 400);
     }
@@ -219,7 +219,7 @@ if ($method === 'POST' && $pathParts[1] === 'organizations' && isset($pathParts[
 /**
  * GET /admin/organizations/{id}/users - Get users in an organization
  */
-if ($method === 'GET' && $pathParts[1] === 'organizations' && isset($pathParts[2]) && $pathParts[3] === 'users') {
+if ($method === 'GET' && $pathParts[1] === 'organizations' && isset($pathParts[2]) && isset($pathParts[3]) && $pathParts[3] === 'users') {
     $orgId = (int)$pathParts[2];
 
     if (!isSystemAdmin($user['id']) && !isOrgAdmin($user['id'], $orgId)) {
@@ -253,14 +253,14 @@ if ($method === 'GET' && $pathParts[1] === 'organizations' && isset($pathParts[2
 /**
  * POST /admin/organizations/{id}/users - Assign user to organization
  */
-if ($method === 'POST' && $pathParts[1] === 'organizations' && isset($pathParts[2]) && $pathParts[3] === 'users') {
+if ($method === 'POST' && $pathParts[1] === 'organizations' && isset($pathParts[2]) && isset($pathParts[3]) && $pathParts[3] === 'users') {
     $orgId = (int)$pathParts[2];
 
     if (!isSystemAdmin($user['id']) && !isOrgAdmin($user['id'], $orgId)) {
         return errorResponse('Access denied', 403);
     }
 
-    $data = json_decode(file_get_contents('php://input'), true);
+    // Request body is provided via the $data parameter
     if (!$data || !isset($data['user_id']) || !isset($data['role'])) {
         return errorResponse('User ID and role are required', 400);
     }
@@ -383,7 +383,7 @@ if ($method === 'POST' && $pathParts[1] === 'learning-objectives') {
         return errorResponse('Access denied - teacher role required', 403);
     }
 
-    $data = json_decode(file_get_contents('php://input'), true);
+    // Request body is provided via the $data parameter
     if (!$data || !isset($data['student_user_id']) || !isset($data['title'])) {
         return errorResponse('Student ID and objective title are required', 400);
     }
@@ -453,7 +453,7 @@ if ($method === 'PUT' && $pathParts[1] === 'learning-objectives' && isset($pathP
         return errorResponse('Access denied', 403);
     }
 
-    $data = json_decode(file_get_contents('php://input'), true);
+    // Request body is provided via the $data parameter
     if (!$data) {
         return errorResponse('Invalid data', 400);
     }
@@ -563,7 +563,7 @@ if ($method === 'DELETE' && $pathParts[1] === 'learning-objectives' && isset($pa
 /**
  * GET /admin/users - Get all users (admin only)
  */
-if ($method === 'GET' && $pathParts[1] === 'users') {
+if ($method === 'GET' && $pathParts[1] === 'users' && (count($pathParts) === 2 || empty($pathParts[2]))) {
     if (!isSystemAdmin($user['id']) && $user['role'] !== 'admin') {
         return errorResponse('Access denied', 403);
     }
@@ -572,9 +572,14 @@ if ($method === 'GET' && $pathParts[1] === 'users') {
     if (!$db) return errorResponse('Database connection failed', 500);
 
     try {
-        // Get query parameters
+        // Get query parameters and enforce sane bounds
         $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+        if ($page < 1) $page = 1;
+
+        $MAX_LIMIT = 100;
         $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 20;
+        if ($limit < 1) $limit = 1;
+        if ($limit > $MAX_LIMIT) $limit = $MAX_LIMIT;
         $search = isset($_GET['search']) ? trim($_GET['search']) : '';
         $role = isset($_GET['role']) ? trim($_GET['role']) : '';
         $is_active = isset($_GET['is_active']) ? $_GET['is_active'] : null;
@@ -662,13 +667,13 @@ if ($method === 'GET' && $pathParts[1] === 'users' && isset($pathParts[2])) {
             GROUP BY u.id
         ");
         $stmt->execute([$userId]);
-        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+        $targetUser = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        if (!$user) {
+        if (!$targetUser) {
             return errorResponse('User not found', 404);
         }
 
-        return successResponse(['user' => $user]);
+        return successResponse(['user' => $targetUser]);
 
     } catch (Exception $e) {
         return errorResponse('Failed to load user: ' . $e->getMessage(), 500);
@@ -684,7 +689,7 @@ if ($method === 'PUT' && $pathParts[1] === 'users' && isset($pathParts[2])) {
     }
 
     $userId = (int)$pathParts[2];
-    $data = json_decode(file_get_contents('php://input'), true);
+    // Request body is provided via the $data parameter
 
     if (!$data) {
         return errorResponse('Invalid data', 400);
@@ -806,7 +811,7 @@ if ($method === 'POST' && $pathParts[1] === 'parent-child') {
         return errorResponse('Access denied', 403);
     }
 
-    $data = json_decode(file_get_contents('php://input'), true);
+    // Request body is provided via the $data parameter
     if (!$data || !isset($data['parent_user_id']) || !isset($data['child_user_id'])) {
         return errorResponse('Parent and child user IDs are required', 400);
     }
@@ -868,7 +873,7 @@ if ($method === 'PUT' && $pathParts[1] === 'parent-child' && isset($pathParts[2]
     }
 
     $relationshipId = (int)$pathParts[2];
-    $data = json_decode(file_get_contents('php://input'), true);
+    // Request body is provided via the $data parameter
 
     if (!$data) {
         return errorResponse('Invalid data', 400);

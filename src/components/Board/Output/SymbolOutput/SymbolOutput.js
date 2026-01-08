@@ -2,9 +2,11 @@ import React, { PureComponent } from 'react';
 import PropTypes from 'prop-types';
 
 import ClearIcon from '@material-ui/icons/Clear';
+import PaletteIcon from '@material-ui/icons/Palette';
 import IconButton from '@material-ui/core/IconButton';
 import FormControlLabel from '@material-ui/core/FormControlLabel';
 import Switch from '@material-ui/core/Switch';
+import Popover from '@material-ui/core/Popover';
 
 import Symbol from '../../Symbol';
 import BackspaceButton from './BackspaceButton';
@@ -19,8 +21,11 @@ class SymbolOutput extends PureComponent {
   constructor(props) {
     super(props);
     this.scrollContainerRef = React.createRef();
+    this.colorPickerAnchorRef = React.createRef();
     this.state = {
-      openPhraseShareDialog: false
+      openPhraseShareDialog: false,
+      colorPickerOpen: false,
+      selectedBarColor: this.loadBarColor()
     };
   }
 
@@ -30,6 +35,37 @@ class SymbolOutput extends PureComponent {
 
   onShareClose = () => {
     this.setState({ openPhraseShareDialog: false });
+  };
+
+  loadBarColor = () => {
+    try {
+      const savedColor = localStorage.getItem('symbolOutputBarColor');
+      return savedColor || '#fff';
+    } catch (e) {
+      return '#fff';
+    }
+  };
+
+  saveBarColor = (color) => {
+    try {
+      localStorage.setItem('symbolOutputBarColor', color);
+    } catch (e) {
+      // Ignore localStorage errors
+    }
+  };
+
+  handleColorPickerOpen = () => {
+    this.setState({ colorPickerOpen: true });
+  };
+
+  handleColorPickerClose = () => {
+    this.setState({ colorPickerOpen: false });
+  };
+
+  handleColorSelect = (color) => {
+    this.setState({ selectedBarColor: color });
+    this.saveBarColor(color);
+    this.handleColorPickerClose();
   };
 
   static propTypes = {
@@ -112,10 +148,21 @@ class SymbolOutput extends PureComponent {
       visibility: navigationSettings.removeOutputActive ? 'hidden' : 'visible'
     };
 
+    const colorOptions = [
+      '#ffffff', '#f8f9fa', '#e9ecef', '#dee2e6',
+      '#fff3cd', '#d1ecf1', '#d4edda', '#f8d7da',
+      '#cce5ff', '#d1c4e9', '#bbdefb', '#c8e6c9',
+      '#fff176', '#81c784', '#4caf50', '#2196f3',
+      '#ff9800', '#ff5722', '#f44336', '#9c27b0'
+    ];
+
     return (
-      <div className="SymbolOutput">
+      <div
+        className="SymbolOutput"
+        style={{ backgroundColor: this.state.selectedBarColor }}
+      >
         <Scroll scrollContainerReference={this.scrollContainerRef} {...other}>
-          {symbols.map(({ image, label, type, keyPath }, index) => (
+          {symbols.slice(0, 30).map(({ image, label, type, keyPath }, index) => (
             <div
               className={
                 type === 'live'
@@ -215,8 +262,60 @@ class SymbolOutput extends PureComponent {
               increaseOutputButtons={increaseOutputButtons}
               data-output-action="clear"
             />
+            <IconButton
+              ref={this.colorPickerAnchorRef}
+              color="inherit"
+              onClick={this.handleColorPickerOpen}
+              size={increaseOutputButtons ? 'large' : 'small'}
+              style={{
+                marginLeft: '8px',
+                backgroundColor: this.state.selectedBarColor,
+                border: '1px solid rgba(0, 0, 0, 0.12)'
+              }}
+              data-output-action="color-picker"
+            >
+              <PaletteIcon />
+            </IconButton>
           </div>
         </div>
+        <Popover
+          open={this.state.colorPickerOpen}
+          anchorEl={this.colorPickerAnchorRef.current}
+          onClose={this.handleColorPickerClose}
+          anchorOrigin={{
+            vertical: 'top',
+            horizontal: 'center',
+          }}
+          transformOrigin={{
+            vertical: 'bottom',
+            horizontal: 'center',
+          }}
+        >
+          <div style={{
+            padding: '16px 24px 16px 16px',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(4, 1fr)',
+            gap: '8px',
+            maxWidth: '200px'
+          }}>
+            {colorOptions.map((color) => (
+              <button
+                key={color}
+                onClick={() => this.handleColorSelect(color)}
+                style={{
+                  width: '40px',
+                  height: '40px',
+                  border: this.state.selectedBarColor === color ? '2px solid #2196f3' : '1px solid #ccc',
+                  borderRadius: '4px',
+                  backgroundColor: color,
+                  cursor: 'pointer',
+                  outline: 'none'
+                }}
+                title={`Select color ${color}`}
+              />
+            ))}
+          </div>
+        </Popover>
       </div>
     );
   }

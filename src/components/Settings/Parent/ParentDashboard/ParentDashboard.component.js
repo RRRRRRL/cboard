@@ -135,8 +135,7 @@ const ParentDashboard = ({ intl, user, history, match }) => {
   // Debug logging for communication tab
   useEffect(() => {
     if (activeTab === 3) {
-      console.log('[PARENT_DASHBOARD_DEBUG] Communication tab viewed - messages state:', parentMessages);
-      console.log('[PARENT_DASHBOARD_DEBUG] Communication tab viewed - teachers state:', availableTeachers);
+      
     }
   }, [activeTab, parentMessages, availableTeachers]);
 
@@ -189,8 +188,6 @@ const ParentDashboard = ({ intl, user, history, match }) => {
         const messages = messagesResponse.data.messages || [];
         setAvailableTeachers(teachers);
         setParentMessages(messages);
-        console.log('[PARENT_DASHBOARD_DEBUG] API response - messages array:', messages);
-        console.log('[PARENT_DASHBOARD_DEBUG] API response - teachers array:', teachers);
       }
 
     } catch (error) {
@@ -339,9 +336,7 @@ const ParentDashboard = ({ intl, user, history, match }) => {
         student_id: selectedChild?.id
       };
 
-      console.log('[PARENT_DASHBOARD_DEBUG] Sending message:', messageData);
       const response = await API.sendParentMessage(messageData);
-      console.log('[PARENT_DASHBOARD_DEBUG] Send message API response:', response);
       if (response.success) {
         alert(intl.formatMessage(messages.messageSent));
         handleCloseMessageDialog();

@@ -581,6 +581,10 @@ export default defineMessages({
     id: 'cboard.components.TeacherDashboard.enableAiCorrection',
     defaultMessage: 'Enable AI Correction'
   },
+  allowExactMatch: {
+    id: 'cboard.components.TeacherDashboard.allowExactMatch',
+    defaultMessage: 'Allow Exact Match'
+  },
   enableAiCorrectionDesc: {
     id: 'cboard.components.TeacherDashboard.enableAiCorrectionDesc',
     defaultMessage: 'Use AI to correct Jyutping when confidence is low'

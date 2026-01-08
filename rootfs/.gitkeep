@@ -1,0 +1,6 @@
+# nginx configuration directory for rootfs
+# This directory is copied into the Docker container to provide
+# any custom nginx configurations or entrypoint scripts
+
+# If you need custom nginx configs, add them here
+# Otherwise, this directory can be empty

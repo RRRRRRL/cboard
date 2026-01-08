@@ -408,7 +408,7 @@ if (typeof window !== 'undefined') {
       // Suppress completely – do not forward to previous handler
       // This prevents React error overlay from showing
       if (process.env.NODE_ENV === 'development') {
-        console.debug('[WebGazer] window.onerror suppressed error:', msg.substring(0, 100));
+        
       }
       return true; // mark as handled - prevents default error handling
     }
@@ -491,7 +491,7 @@ if (typeof window !== 'undefined') {
       event.preventDefault();
       event.stopPropagation();
       if (process.env.NODE_ENV === 'development') {
-        console.debug('[WebGazer] window.onunhandledrejection suppressed error:', msg.substring(0, 100));
+        
       }
       return true;
     }
@@ -569,7 +569,7 @@ if (typeof window !== 'undefined') {
         event.preventDefault(); // Suppress the error
         // Optionally log in development mode only
         if (process.env.NODE_ENV === 'development') {
-          console.debug('[WebGazer] Suppressed non-critical error:', errorMessage.substring(0, 100));
+          
         }
         return false;
       }
@@ -663,7 +663,7 @@ if (typeof window !== 'undefined') {
         event.stopImmediatePropagation(); // Stop all other handlers
         // Optionally log in development mode only
         if (process.env.NODE_ENV === 'development') {
-          console.debug('[WebGazer] Suppressed non-critical error:', errorMessage.substring(0, 100));
+          
         }
         return false;
       }

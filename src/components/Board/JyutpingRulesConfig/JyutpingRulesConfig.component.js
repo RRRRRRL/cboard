@@ -102,50 +102,35 @@ function JyutpingRulesConfig({
   const handleSave = async () => {
     setSaving(true);
     try {
-      console.log('[DEBUG] JyutpingRulesConfig - Starting save operation');
-      console.log('[DEBUG] userId:', userId, 'profileId:', profileId);
+      
 
       // Ensure userId and profileId are numbers
       const userIdNum = userId ? parseInt(userId, 10) : null;
       const profileIdNum = profileId ? parseInt(profileId, 10) : null;
 
-      console.log('[DEBUG] Parsed userIdNum:', userIdNum, 'profileIdNum:', profileIdNum);
+      
 
       if (!userIdNum) {
-        console.error('[DEBUG] Invalid userId, cannot save');
         alert(intl.formatMessage(messages.saveError));
         setSaving(false);
         return;
       }
 
-      console.log('[DEBUG] Matching rules to save:', matchingRules);
+      
 
       // Save matching rules
-      console.log('[DEBUG] Calling API.updateJyutpingMatchingRules...');
       const matchingResult = await API.updateJyutpingMatchingRules(userIdNum, matchingRules, profileIdNum);
-      console.log('[DEBUG] Matching rules save result:', matchingResult);
 
       // Save exception rules
       const rulesToSave = exceptionRules.map(rule => ({
         rule_id: rule.id,
         enabled: rule.enabled
       }));
-      console.log('[DEBUG] Exception rules to save:', rulesToSave);
-
-      console.log('[DEBUG] Calling API.updateJyutpingExceptionRules...');
       const exceptionResult = await API.updateJyutpingExceptionRules(userIdNum, rulesToSave, profileIdNum);
-      console.log('[DEBUG] Exception rules save result:', exceptionResult);
 
-      console.log('[DEBUG] Save operation completed successfully');
+      
       onClose();
     } catch (error) {
-      console.error('[DEBUG] Error saving rules:', error);
-      console.error('[DEBUG] Error details:', {
-        message: error.message,
-        response: error.response,
-        status: error.response?.status,
-        data: error.response?.data
-      });
       alert(intl.formatMessage(messages.saveError));
     } finally {
       setSaving(false);

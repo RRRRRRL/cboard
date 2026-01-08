@@ -43,7 +43,8 @@ function getKeyboardMatchingRules($db, $userId = null, $profileId = null) {
     ];
 
     if (!$userId) {
-        error_log("getKeyboardMatchingRules: no userId, using defaults");
+        // debug: getKeyboardMatchingRules: no userId, using defaults
+        // error_log("getKeyboardMatchingRules: no userId, using defaults");
         return $defaultRules;
     }
 
@@ -59,7 +60,8 @@ function getKeyboardMatchingRules($db, $userId = null, $profileId = null) {
         $rule = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if ($rule) {
-                        error_log("getKeyboardMatchingRules: loaded row for user_id={$userId}, profile_id=" . var_export($profileId, true) . " => " . json_encode($rule));
+                // debug: loaded matching rules row for inspection
+                // error_log("getKeyboardMatchingRules: loaded row for user_id={$userId}, profile_id=" . var_export($profileId, true) . " => " . json_encode($rule));
             return [
                 'frequency_threshold' => isset($rule['frequency_threshold']) ? (int)$rule['frequency_threshold'] : 50,
                 'allow_exact_match' => isset($rule['allow_exact_match']) ? (bool)$rule['allow_exact_match'] : true,
@@ -77,7 +79,9 @@ function getKeyboardMatchingRules($db, $userId = null, $profileId = null) {
                 'allow_ng_zero_confusion' => isset($rule['allow_ng_zero_confusion']) ? (bool)$rule['allow_ng_zero_confusion'] : false,
                 'allow_n_l_confusion' => isset($rule['allow_n_l_confusion']) ? (bool)$rule['allow_n_l_confusion'] : false
             ];
-        }error_log("getKeyboardMatchingRules: no row for user_id={$userId}, profile_id=" . var_export($profileId, true) . ", using defaults");
+        }
+        // debug: no matching rules row found, using defaults
+        // error_log("getKeyboardMatchingRules: no row for user_id={$userId}, profile_id=" . var_export($profileId, true) . ", using defaults");
     } catch (Exception $e) {
         error_log("Error fetching keyboard matching rules: " . $e->getMessage());
     }
@@ -258,8 +262,9 @@ function handleJyutpingRoutes($method, $pathParts, $data, $authToken) {
     $profileId = isset($_GET['profile_id'])
     ? (($_GET['profile_id'] === '' || $_GET['profile_id'] === 'null') ? null : (int)$_GET['profile_id'])
     : null;
-    error_log("Jyutping search auth: userId=" . var_export($userId, true) .
-          ", profileId=" . var_export($profileId, true));
+    // debug: Jyutping search auth info
+    // error_log("Jyutping search auth: userId=" . var_export($userId, true) .
+    //       ", profileId=" . var_export($profileId, true));
 
     // GET /jyutping/search?code={code}
     if ($method === 'GET' && isset($pathParts[1]) && $pathParts[1] === 'search') {
@@ -277,8 +282,9 @@ function handleJyutpingRoutes($method, $pathParts, $data, $authToken) {
         // SPECIAL HANDLING FOR CHINESE CHARACTERS: If input contains Chinese characters,
         // segment them and search for each character individually
         $isChinesePhrase = preg_match('/\p{Han}+/u', $code);
-        if ($isChinesePhrase && mb_strlen($code) > 1) {
-            error_log("Jyutping search: Detected multi-character Chinese phrase: '$code' (length: " . mb_strlen($code) . ")");
+            if ($isChinesePhrase && mb_strlen($code) > 1) {
+            // debug: detected multi-character Chinese phrase
+            // error_log("Jyutping search: Detected multi-character Chinese phrase: '$code' (length: " . mb_strlen($code) . ")");
 
             // Segment the Chinese phrase into individual characters
             $characters = preg_split('//u', $code, -1, PREG_SPLIT_NO_EMPTY);
@@ -295,7 +301,8 @@ function handleJyutpingRoutes($method, $pathParts, $data, $authToken) {
                 ]);
             }
 
-            error_log("Jyutping search: Segmented into " . count($characters) . " characters: " . implode(', ', $characters));
+            // debug: segmented characters
+            // error_log("Jyutping search: Segmented into " . count($characters) . " characters: " . implode(', ', $characters));
 
             // Search for Jyutping for each character
             $jyutpingParts = [];
@@ -320,17 +327,19 @@ function handleJyutpingRoutes($method, $pathParts, $data, $authToken) {
                     $jyutpingParts[] = $bestMatch['jyutping_code'];
                     $allMatches[] = $bestMatch;
                 } else {
-                    error_log("Jyutping search: No match found for character '$char'");
+                    // debug: no match for character
+                    // error_log("Jyutping search: No match found for character '$char'");
                     $hasAllMatches = false;
                     break;
                 }
             }
 
-            if ($hasAllMatches && !empty($jyutpingParts)) {
+                if ($hasAllMatches && !empty($jyutpingParts)) {
                 // Combine all Jyutping parts
                 $combinedJyutping = implode(' ', $jyutpingParts);
 
-                error_log("Jyutping search: Successfully combined Jyutping for '$code': $combinedJyutping");
+                // debug: combined jyutping for phrase
+                // error_log("Jyutping search: Successfully combined Jyutping for '$code': $combinedJyutping");
 
                 return successResponse([
                     'code' => $code,
@@ -345,8 +354,9 @@ function handleJyutpingRoutes($method, $pathParts, $data, $authToken) {
                     'segmented_characters' => count($characters),
                     'rules' => $rules
                 ]);
-            } else {
-                error_log("Jyutping search: Could not find Jyutping for all characters in '$code'");
+                } else {
+                // debug: could not find jyutping for all characters, fall back
+                // error_log("Jyutping search: Could not find Jyutping for all characters in '$code'");
                 // Fall back to regular search logic below
             }
         }
@@ -374,7 +384,8 @@ function handleJyutpingRoutes($method, $pathParts, $data, $authToken) {
         if ($rules['allow_n_l_confusion']) $enabledRules[] = 'allow_n_l_confusion';
 
         $rulesDescription = empty($enabledRules) ? 'no phonological rules enabled' : 'phonological rules: ' . implode(', ', $enabledRules);
-        error_log("Jyutping search for '$code' - $rulesDescription, variants: " . implode(', ', $variants));
+        // debug: rules description and variants
+        // error_log("Jyutping search for '$code' - $rulesDescription, variants: " . implode(', ', $variants));
         
         // Search for exact match first (try all variants)
         // After $variants = generateJyutpingVariants($code, $rules);
@@ -465,11 +476,13 @@ function handleJyutpingRoutes($method, $pathParts, $data, $authToken) {
                     frequency DESC, id ASC 
                 LIMIT 15";
         $params = array_merge($likePatterns, [$frequencyThreshold, $code]);
-        error_log("Jyutping search: code='$code', variants=" . implode(', ', $variants) . ", threshold=$frequencyThreshold");
+        // debug: search execution details
+        // error_log("Jyutping search: code='$code', variants=" . implode(', ', $variants) . ", threshold=$frequencyThreshold");
         $stmt = $db->prepare($sql);
         $stmt->execute($params);
         $partialMatches = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        error_log("Jyutping partial matches found: " . count($partialMatches));
+        // debug: partial matches count
+        // error_log("Jyutping partial matches found: " . count($partialMatches));
         
         if (!empty($partialMatches)) {
             return successResponse([
@@ -536,13 +549,14 @@ function handleJyutpingRoutes($method, $pathParts, $data, $authToken) {
                     // Chinese character - find Jyutping
                     // For translation, we search without restrictive frequency filtering
                     // to ensure we can translate all known characters
-                    error_log("Jyutping translate: Looking up character '$char' (mb_ord: " . mb_ord($char, 'UTF-8') . ", hex: " . bin2hex($char) . ", length: " . strlen($char) . ")");
+                    // debug: translate lookup for character
+                    // error_log("Jyutping translate: Looking up character '$char' (mb_ord: " . mb_ord($char, 'UTF-8') . ", hex: " . bin2hex($char) . ", length: " . strlen($char) . ")");
 
                     // Ensure database connection uses UTF-8
                     $db->exec("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
 
                     // Debug: Check what we're actually querying
-                    error_log("Jyutping translate: Executing query for char '$char' with threshold $translationFrequencyThreshold");
+                    // error_log("Jyutping translate: Executing query for char '$char' with threshold $translationFrequencyThreshold");
 
                     $stmt = $db->prepare("
                         SELECT hanzi, jyutping_code, word, frequency
@@ -557,29 +571,34 @@ function handleJyutpingRoutes($method, $pathParts, $data, $authToken) {
 
                     // Debug: Log the result
                     if ($result) {
-                        error_log("Jyutping translate: Query returned: hanzi='{$result['hanzi']}', jyutping='{$result['jyutping_code']}', freq={$result['frequency']}");
+                        // debug: query returned a result
+                        // error_log("Jyutping translate: Query returned: hanzi='{$result['hanzi']}', jyutping='{$result['jyutping_code']}', freq={$result['frequency']}");
                     } else {
-                        error_log("Jyutping translate: Query returned null/empty result");
+                        // debug: query returned null/empty result
+                        // error_log("Jyutping translate: Query returned null/empty result");
 
                         // Debug: Try a broader query to see if the character exists at all
-                        $debugStmt = $db->prepare("SELECT COUNT(*) as count FROM jyutping_dictionary WHERE hanzi = ?");
-                        $debugStmt->execute([$char]);
-                        $countResult = $debugStmt->fetch(PDO::FETCH_ASSOC);
-                        error_log("Jyutping translate: Total entries for '$char': " . ($countResult['count'] ?? 0));
+                        $stmt = $db->prepare("SELECT COUNT(*) as count FROM jyutping_dictionary WHERE hanzi = ?");
+                        $stmt->execute([$char]);
+                        $countResult = $stmt->fetch(PDO::FETCH_ASSOC);
+                        // debug: total entries for char
+                        // error_log("Jyutping translate: Total entries for '$char': " . ($countResult['count'] ?? 0));
 
                         // Debug: Try without frequency filter
-                        $debugStmt2 = $db->prepare("SELECT hanzi, jyutping_code, frequency FROM jyutping_dictionary WHERE hanzi = ? ORDER BY frequency DESC LIMIT 1");
-                        $debugStmt2->execute([$char]);
-                        $debugResult = $debugStmt2->fetch(PDO::FETCH_ASSOC);
+                        $stmt2 = $db->prepare("SELECT hanzi, jyutping_code, frequency FROM jyutping_dictionary WHERE hanzi = ? ORDER BY frequency DESC LIMIT 1");
+                        $stmt2->execute([$char]);
+                        $debugResult = $stmt2->fetch(PDO::FETCH_ASSOC);
                         if ($debugResult) {
-                            error_log("Jyutping translate: Without frequency filter, found: hanzi='{$debugResult['hanzi']}', jyutping='{$debugResult['jyutping_code']}', freq={$debugResult['frequency']}");
+                            
                         } else {
-                            error_log("Jyutping translate: Character '$char' not found even without frequency filter");
+                            // debug: character not found even without frequency filter
+                            // error_log("Jyutping translate: Character '$char' not found even without frequency filter");
                         }
                     }
 
-                    if ($result) {
-                        error_log("Jyutping translate: Found '$char' -> '{$result['jyutping_code']}' (freq: {$result['frequency']})");
+                        if ($result) {
+                        // debug: found translation
+                        // error_log("Jyutping translate: Found '$char' -> '{$result['jyutping_code']}' (freq: {$result['frequency']})");
                         $jyutpingResults[] = [
                             'character' => $char,
                             'jyutping' => $result['jyutping_code'],
@@ -587,8 +606,9 @@ function handleJyutpingRoutes($method, $pathParts, $data, $authToken) {
                             'frequency' => (int)$result['frequency'],
                             'confidence' => min(1.0, $result['frequency'] / 1000)
                         ];
-                    } else {
-                        error_log("Jyutping translate: Character '$char' NOT FOUND in dictionary (threshold: $translationFrequencyThreshold)");
+                        } else {
+                        // debug: character not found in dictionary at threshold
+                        // error_log("Jyutping translate: Character '$char' NOT FOUND in dictionary (threshold: $translationFrequencyThreshold)");
 
                         // Try without frequency threshold as absolute fallback
                         $fallbackStmt = $db->prepare("
@@ -602,7 +622,8 @@ function handleJyutpingRoutes($method, $pathParts, $data, $authToken) {
                         $fallbackResult = $fallbackStmt->fetch(PDO::FETCH_ASSOC);
 
                         if ($fallbackResult) {
-                            error_log("Jyutping translate: Fallback found '$char' -> '{$fallbackResult['jyutping_code']}' (freq: {$fallbackResult['frequency']})");
+                            // debug: fallback found
+                            // error_log("Jyutping translate: Fallback found '$char' -> '{$fallbackResult['jyutping_code']}' (freq: {$fallbackResult['frequency']})");
                             $jyutpingResults[] = [
                                 'character' => $char,
                                 'jyutping' => $fallbackResult['jyutping_code'],
@@ -611,7 +632,8 @@ function handleJyutpingRoutes($method, $pathParts, $data, $authToken) {
                                 'confidence' => min(1.0, $fallbackResult['frequency'] / 1000)
                             ];
                         } else {
-                            error_log("Jyutping translate: Character '$char' NOT FOUND even with no frequency threshold");
+                            // debug: character not found even with no frequency threshold
+                            // error_log("Jyutping translate: Character '$char' NOT FOUND even with no frequency threshold");
                             // Character not found in dictionary
                             $jyutpingResults[] = [
                                 'character' => $char,
@@ -700,7 +722,8 @@ function handleJyutpingRoutes($method, $pathParts, $data, $authToken) {
         $checkStmt = $db->prepare($checkSql);
         $checkStmt->execute();
         $tableCount = $checkStmt->fetch(PDO::FETCH_ASSOC);
-        error_log("Jyutping dictionary table count: " . ($tableCount['count'] ?? 0));
+        // debug: jyutping dictionary table count
+        // error_log("Jyutping dictionary table count: " . ($tableCount['count'] ?? 0));
         
         // Search for suggestions based on input
         // Priority: exact match > starts with > contains > frequency
@@ -726,7 +749,8 @@ function handleJyutpingRoutes($method, $pathParts, $data, $authToken) {
         $exactPattern = $input;
         $startsPattern = $input . '%';
         
-        error_log("Jyutping suggestions search: input='$input', pattern='$searchPattern', limit=$limit, threshold=$frequencyThreshold");
+        // debug: suggestions search params
+        // error_log("Jyutping suggestions search: input='$input', pattern='$searchPattern', limit=$limit, threshold=$frequencyThreshold");
         
         $stmt = $db->prepare($sql);
         $stmt->execute([
@@ -742,7 +766,8 @@ function handleJyutpingRoutes($method, $pathParts, $data, $authToken) {
         ]);
         
         $suggestions = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        error_log("Jyutping suggestions found: " . count($suggestions));
+        // debug: suggestions count
+        // error_log("Jyutping suggestions found: " . count($suggestions));
         
         return successResponse([
             'input' => $input,
@@ -1146,13 +1171,15 @@ function handleJyutpingRoutes($method, $pathParts, $data, $authToken) {
             // Return results if we have at least 1 meaningful prediction
             // Prefer quality over quantity, but show at least 1 if available
             // If we have less than 1 result, return empty array
-            if (count($uniqueRelated) < 1) {
+                if (count($uniqueRelated) < 1) {
                 $uniqueRelated = [];
-                error_log("Related words: No results found for hanzi='$hanzi', jyutping='$jyutping', context='$fullContext' (threshold=$frequencyThreshold)");
+                // debug: no related words found
+                // error_log("Related words: No results found for hanzi='$hanzi', jyutping='$jyutping', context='$fullContext' (threshold=$frequencyThreshold)");
             } else {
                 // Limit to 15 results if we have enough
                 $uniqueRelated = array_slice($uniqueRelated, 0, 15);
-                error_log("Related words found: " . count($uniqueRelated) . " for hanzi='$hanzi', jyutping='$jyutping', context='$fullContext' (threshold=$frequencyThreshold)");
+                // debug: related words count
+                // error_log("Related words found: " . count($uniqueRelated) . " for hanzi='$hanzi', jyutping='$jyutping', context='$fullContext' (threshold=$frequencyThreshold)");
             }
             
             return successResponse([
@@ -1542,7 +1569,7 @@ function handleJyutpingRoutes($method, $pathParts, $data, $authToken) {
 
     // Jyutping Matching Rules API Routes
     // GET /api/jyutping-rules/matching/{userId} - Get matching rules for user
-    if ($method === 'GET' && count($pathParts) >= 3 && $pathParts[1] === 'rules' && $pathParts[2] === 'matching') {
+    if ($method === 'GET' && count($pathParts) >= 3 && isset($pathParts[3]) && $pathParts[1] === 'rules' && $pathParts[2] === 'matching') {
         try {
             $userId = (int)$pathParts[3];
             $profileId = isset($_GET['profile_id']) ? (int)$_GET['profile_id'] : null;
@@ -1569,17 +1596,17 @@ function handleJyutpingRoutes($method, $pathParts, $data, $authToken) {
     }
 
     // PUT /api/jyutping-rules/matching/{userId} - Update matching rules for user
-    if ($method === 'PUT' && count($pathParts) >= 3 && $pathParts[1] === 'rules' && $pathParts[2] === 'matching') {
+    if ($method === 'PUT' && count($pathParts) >= 3 && isset($pathParts[3]) && $pathParts[1] === 'rules' && $pathParts[2] === 'matching') {
         try {
             $userId = (int)$pathParts[3];
-            error_log("[DEBUG] PUT matching rules - userId: $userId");
+            
 
             // Require authentication and ownership
             $user = requireAuth($authToken);
-            error_log("[DEBUG] Authenticated user: " . $user['id'] . ", requested user: $userId");
+            
 
             if ($user['id'] != $userId && !in_array($user['role'], ['admin', 'teacher', 'therapist'])) {
-                error_log("[DEBUG] Access denied - user role: " . ($user['role'] ?? 'none'));
+                
                 return errorResponse('Access denied', 403);
             }
 
@@ -1587,18 +1614,18 @@ function handleJyutpingRoutes($method, $pathParts, $data, $authToken) {
             $requiredFields = ['enabled'];
             foreach ($requiredFields as $field) {
                 if (!isset($data[$field])) {
-                    error_log("[DEBUG] Missing required field: $field");
+                    
                     return errorResponse("Field '$field' is required", 400);
                 }
             }
 
             $profileId = $data['profile_id'] ?? null;
             $enabled = (bool)$data['enabled'];
-            error_log("[DEBUG] profileId: " . ($profileId ?? 'null') . ", enabled: " . ($enabled ? 'true' : 'false'));
+            
 
             // If rules are disabled, just return defaults
             if (!$enabled) {
-                error_log("[DEBUG] Rules disabled, returning defaults");
+                
                 $defaultRules = [
                     'enabled' => false,
                     'frequency_threshold' => 50,
@@ -1638,7 +1665,7 @@ function handleJyutpingRoutes($method, $pathParts, $data, $authToken) {
                 'allow_n_l_confusion' => isset($data['allow_n_l_confusion']) ? (bool)$data['allow_n_l_confusion'] : false
             ];
 
-            error_log("[DEBUG] Rule data built: " . json_encode($ruleData));
+            
 
             // Normalize boolean-like values to 0/1 for DB
             $ruleData['enabled'] = (int)!empty($ruleData['enabled']);
@@ -1661,7 +1688,7 @@ function handleJyutpingRoutes($method, $pathParts, $data, $authToken) {
             $checkStmt = $db->prepare($checkSql);
             $checkStmt->execute([$userId, $profileId, $profileId]);
             $existing = $checkStmt->fetch(PDO::FETCH_ASSOC);
-            error_log("[DEBUG] Existing rule check - found: " . ($existing ? 'yes' : 'no') . " (id: " . ($existing['id'] ?? 'null') . ")");
+            
 
             if ($existing) {
                 // Update existing rule
@@ -1676,12 +1703,12 @@ function handleJyutpingRoutes($method, $pathParts, $data, $authToken) {
                 $params[] = $existing['id'];
 
                 $updateSql = "UPDATE jyutping_matching_rules SET " . implode(', ', $updateFields) . ", updated_at = NOW() WHERE id = ?";
-                error_log("[DEBUG] Update SQL: $updateSql");
-                error_log("[DEBUG] Update params: " . json_encode($params));
+                
+                
 
                 $updateStmt = $db->prepare($updateSql);
                 $updateResult = $updateStmt->execute($params);
-                error_log("[DEBUG] Update result: " . ($updateResult ? 'success' : 'failed'));
+                
             } else {
                 // Insert new rule
                 $fields = array_keys($ruleData);
@@ -1691,12 +1718,12 @@ function handleJyutpingRoutes($method, $pathParts, $data, $authToken) {
                 $params = array_values($ruleData);
                 $params[] = $user['id']; // created_by
 
-                error_log("[DEBUG] Insert SQL: $insertSql");
-                error_log("[DEBUG] Insert params count: " . count($params) . ", fields count: " . (count($fields) + 1));
+                
+                
 
                 $insertStmt = $db->prepare($insertSql);
                 $insertResult = $insertStmt->execute($params);
-                error_log("[DEBUG] Insert result: " . ($insertResult ? 'success' : 'failed'));
+                
             }
 
             return successResponse([
@@ -1707,14 +1734,14 @@ function handleJyutpingRoutes($method, $pathParts, $data, $authToken) {
             ]);
 
         } catch (Exception $e) {
-            error_log("[DEBUG] Update jyutping matching rules exception: " . $e->getMessage());
-            error_log("[DEBUG] Exception trace: " . $e->getTraceAsString());
+            
+            
             return errorResponse('Failed to update matching rules', 500);
         }
     }
 
     // GET /api/jyutping-rules/exceptions/{userId} - Get exception rules for user
-    if ($method === 'GET' && count($pathParts) >= 3 && $pathParts[1] === 'rules' && $pathParts[2] === 'exceptions') {
+    if ($method === 'GET' && count($pathParts) >= 3 && isset($pathParts[3]) && $pathParts[1] === 'rules' && $pathParts[2] === 'exceptions') {
         try {
             $userId = (int)$pathParts[3];
             $profileId = isset($_GET['profile_id']) ? (int)$_GET['profile_id'] : null;
@@ -1771,7 +1798,7 @@ function handleJyutpingRoutes($method, $pathParts, $data, $authToken) {
     }
 
     // PUT /api/jyutping-rules/exceptions/{userId} - Update exception rules for user
-    if ($method === 'PUT' && count($pathParts) >= 3 && $pathParts[1] === 'rules' && $pathParts[2] === 'exceptions') {
+    if ($method === 'PUT' && count($pathParts) >= 3 && isset($pathParts[3]) && $pathParts[1] === 'rules' && $pathParts[2] === 'exceptions') {
         try {
             $userId = (int)$pathParts[3];
 

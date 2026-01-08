@@ -130,7 +130,7 @@ export class EyeTrackingContainer extends PureComponent {
         scanningSettings: data.accessibility?.scanning || {}
       });
     } catch (error) {
-      console.debug('Failed to load accessibility settings:', error);
+      
       this.safeSetState({
         accessibilitySettings: {},
         scanningSettings: {}
@@ -159,7 +159,7 @@ export class EyeTrackingContainer extends PureComponent {
             const event = new CustomEvent('cboard:eyeTrackingDisabled');
             window.dispatchEvent(event);
           } catch (e) {
-            console.debug('[EyeTracking] Failed to dispatch global disable event:', e);
+            
           }
         }
       } catch (e) {

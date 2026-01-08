@@ -7,7 +7,7 @@
 }
 
 .is-dark .SymbolOutput {
-  background: #7b7b7b;
+  background: #7b7b7b !important;
   color: #000;
 }
 

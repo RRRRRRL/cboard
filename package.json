@@ -99,6 +99,7 @@
     "@wojtekmaj/enzyme-adapter-react-17": "^0.6.0",
     "babel-plugin-transform-import-meta": "^2.2.1",
     "browserstack-node-sdk": "^1.36.5",
+    "cross-env": "^7.0.3",
     "decompress-zip": "^0.3.1",
     "enzyme": "^3.11.0",
     "enzyme-to-json": "3.3.5",
@@ -151,8 +152,8 @@
   },
   "scripts": {
     "analyze": "source-map-explorer build/static/js/**/*.js",
-    "start": "TSC_COMPILE_ON_ERROR=true DISABLE_ESLINT_PLUGIN=true craco start",
-    "build": "TSC_COMPILE_ON_ERROR=true DISABLE_ESLINT_PLUGIN=true craco build --verbose && sw-precache --config=sw-precache-config.js",
+    "start": "cross-env TSC_COMPILE_ON_ERROR=true DISABLE_ESLINT_PLUGIN=true craco start",
+    "build": "cross-env TSC_COMPILE_ON_ERROR=true DISABLE_ESLINT_PLUGIN=true craco build --verbose && sw-precache --config=sw-precache-config.js",
     "build-cordova-debug": "craco build --verbose --cordova-debug",
     "predeploy": "yarn build",
     "deploy": "gh-pages -d build",

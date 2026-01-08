@@ -29,8 +29,8 @@ $allowedOrigins = [
     'http://127.0.0.1:3001',
     'http://192.168.62.45',
     'http://192.168.62.45:3000',
-    'http://192.168.62.88',
-    'http://192.168.62.88:3000',
+    'http://192.168.62.103',
+    'http://192.168.62.103:3000',
     'https://aac.uplifor.org',
     'https://www.aac.uplifor.org'
 ];
@@ -91,12 +91,7 @@ if (strpos($requestPathClean, '/uploads/') === 0 || strpos($requestPathClean, '/
     // Security: prevent directory traversal
     $realPath = realpath($filePath);
     $realBase = realpath(__DIR__ . '/uploads');
-    
-    // Debug logging (can be removed in production)
-    if (!$realBase) {
-        error_log("Router: uploads base directory not found: " . __DIR__ . '/uploads');
-    }
-    
+
     if ($realPath && $realBase && strpos($realPath, $realBase) === 0 && file_exists($filePath)) {
         // Get MIME type
         $mimeType = mime_content_type($filePath);
@@ -115,8 +110,6 @@ if (strpos($requestPathClean, '/uploads/') === 0 || strpos($requestPathClean, '/
         readfile($filePath);
         exit;
     } else {
-        // File not found - log for debugging
-        error_log("Router: File not found - Request: $requestPathClean, FilePath: $filePath, RealPath: " . ($realPath ?: 'null') . ", RealBase: " . ($realBase ?: 'null'));
         http_response_code(404);
         header('Content-Type: application/json');
         echo json_encode(['error' => 'File not found', 'path' => $requestPathClean]);
@@ -141,4 +134,3 @@ if (strpos($requestPathClean, '/api') === 0) {
 
 // If we reach here, it's a static file request - let PHP server handle it
 return false;
-

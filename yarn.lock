@@ -6185,6 +6185,7 @@ __metadata:
     babel-plugin-transform-import-meta: "npm:^2.2.1"
     browser-image-resizer: "npm:^2.4.1"
     browserstack-node-sdk: "npm:^1.36.5"
+    cross-env: "npm:^7.0.3"
     decompress-zip: "npm:^0.3.1"
     dom-to-image: "npm:^2.6.0"
     dotenv: "npm:^16.5.0"
@@ -7068,6 +7069,18 @@ __metadata:
   languageName: node
   linkType: hard
 
+"cross-env@npm:^7.0.3":
+  version: 7.0.3
+  resolution: "cross-env@npm:7.0.3"
+  dependencies:
+    cross-spawn: "npm:^7.0.1"
+  bin:
+    cross-env: src/bin/cross-env.js
+    cross-env-shell: src/bin/cross-env-shell.js
+  checksum: 10c0/f3765c25746c69fcca369655c442c6c886e54ccf3ab8c16847d5ad0e91e2f337d36eedc6599c1227904bf2a228d721e690324446876115bc8e7b32a866735ecf
+  languageName: node
+  linkType: hard
+
 "cross-spawn@npm:^5.0.1":
   version: 5.1.0
   resolution: "cross-spawn@npm:5.1.0"
@@ -7100,6 +7113,17 @@ __metadata:
     shebang-command: "npm:^2.0.0"
     which: "npm:^2.0.1"
   checksum: 10c0/5738c312387081c98d69c98e105b6327b069197f864a60593245d64c8089c8a0a744e16349281210d56835bb9274130d825a78b2ad6853ca13cfbeffc0c31750
+  languageName: node
+  linkType: hard
+
+"cross-spawn@npm:^7.0.1":
+  version: 7.0.6
+  resolution: "cross-spawn@npm:7.0.6"
+  dependencies:
+    path-key: "npm:^3.1.0"
+    shebang-command: "npm:^2.0.0"
+    which: "npm:^2.0.1"
+  checksum: 10c0/053ea8b2135caff68a9e81470e845613e374e7309a47731e81639de3eaeb90c3d01af0e0b44d2ab9d50b43467223b88567dfeb3262db942dc063b9976718ffc1
   languageName: node
   linkType: hard
 

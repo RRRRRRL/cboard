@@ -4647,5 +4647,6 @@
   "cboard.components.TeacherDashboard.frequencyThreshold": "頻率閾值",
   "cboard.components.TeacherDashboard.fuzzyTonePairs": "模糊聲調對",
   "cboard.components.TeacherDashboard.keyboardLayout": "鍵盤佈局",
-  "cboard.components.TeacherDashboard.keyboardLayoutDescription": "選擇粵拼輸入的鍵盤佈局"
+  "cboard.components.TeacherDashboard.keyboardLayoutDescription": "選擇粵拼輸入的鍵盤佈局",
+  "cboard.components.TeacherDashboard.allowExactMatch": "允許精確匹配"
 }

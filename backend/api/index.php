@@ -129,8 +129,8 @@ $method = $_SERVER['REQUEST_METHOD'];
 $path = $_SERVER['REQUEST_URI'] ?? '/';
 $path = parse_url($path, PHP_URL_PATH) ?? '/';
 
-// Debug logging (can be removed in production)
-error_log("API Request: Method=$method, REQUEST_URI=" . ($_SERVER['REQUEST_URI'] ?? 'N/A') . ", Parsed Path=$path");
+// Skip uploads requests - these should be handled by router.php
+// If we reach here, it means router.php didn't catch it (server not started with router)
 
 // Skip uploads requests - these should be handled by router.php
 // If we reach here, it means router.php didn't catch it (server not started with router)
@@ -173,12 +173,6 @@ $path = preg_replace('#^/api/?#', '', $path);
 $path = trim($path, '/');
 $pathParts = array_filter(explode('/', $path), function($part) { return $part !== ''; }); // Filter empty parts
 $pathParts = array_values($pathParts); // Re-index array
-
-// Debug logging
-error_log("API Route: PathParts=" . json_encode($pathParts) . ", Method=$method");
-
-// Debug logging
-error_log("API Route: PathParts=" . json_encode($pathParts));
 
 // Apply rate limiting (skip for OPTIONS requests)
 if ($method !== 'OPTIONS') {
@@ -241,10 +235,7 @@ function routeRequest($method, $pathParts, $data, $authToken) {
     }
     
     $route = $pathParts[0];
-    
-    // Debug logging
-    error_log("Routing: method=$method, route=$route, pathParts=" . json_encode($pathParts));
-    
+
     // User routes
     if ($route === 'user') {
         return handleUserRoutes($method, $pathParts, $data, $authToken);

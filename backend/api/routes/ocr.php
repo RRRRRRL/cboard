@@ -63,6 +63,53 @@ function handleOCRRoutes($method, $pathParts, $data, $authToken) {
         // API is served from /api, and router exposes /uploads via /api/uploads
         return 'api/uploads/user_' . $userId . '/ocr/' . $filename;
     };
+
+    // Validate URLs to prevent SSRF: allow only http/https and public IPs
+    $isAllowedUrl = function ($url) {
+        if (empty($url) || !is_string($url)) return false;
+
+        $parts = parse_url($url);
+        if ($parts === false) return false;
+
+        $scheme = strtolower($parts['scheme'] ?? '');
+        if (!in_array($scheme, ['http', 'https'])) return false;
+
+        $host = $parts['host'] ?? null;
+        if (!$host) return false;
+
+        // Resolve DNS records (A and AAAA)
+        $records = @dns_get_record($host, DNS_A + DNS_AAAA);
+        $ips = [];
+        if ($records && is_array($records)) {
+            foreach ($records as $r) {
+                if (isset($r['type']) && $r['type'] === 'A' && !empty($r['ip'])) {
+                    $ips[] = $r['ip'];
+                }
+                if (isset($r['type']) && $r['type'] === 'AAAA' && !empty($r['ipv6'])) {
+                    $ips[] = $r['ipv6'];
+                }
+            }
+        }
+
+        // Fallback to simple resolver
+        if (empty($ips)) {
+            $resolved = @gethostbyname($host);
+            if ($resolved && $resolved !== $host) {
+                $ips[] = $resolved;
+            }
+        }
+
+        if (empty($ips)) return false;
+
+        // Ensure all resolved IPs are not private/reserved/localhost
+            foreach ($ips as $ip) {
+            if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false) {
+                return false;
+            }
+        }
+
+        return true;
+    };
     
     // POST /ocr/recognize - OCR image recognition
     if ($method === 'POST' && count($pathParts) === 2 && $pathParts[1] === 'recognize') {
@@ -75,28 +122,27 @@ function handleOCRRoutes($method, $pathParts, $data, $authToken) {
         }
 
         try {
-            error_log("[OCR ROUTE] Received OCR request from user ID: " . $user['id']);
-            error_log("[OCR ROUTE] Image data provided: " . ($imageData ? 'YES' : 'NO'));
-            error_log("[OCR ROUTE] Image URL provided: " . ($imageUrl ? 'YES' : 'NO'));
+            
 
             // Persist image for history first
             $storedImagePath = null;
             if ($imageData) {
                 $imageDataClean = preg_replace('/^data:image\/\w+;base64,/', '', $imageData);
                 $imageBinary = base64_decode($imageDataClean);
-                if ($imageBinary !== false) {
+                    if ($imageBinary !== false) {
                     $storedImagePath = $saveOcrImage($user['id'], $imageBinary, 'png');
-                    error_log("[OCR ROUTE] Saved image to: " . $storedImagePath);
                 } else {
-                    error_log("[OCR ROUTE] Failed to decode base64 image data");
                 }
             } elseif ($imageUrl) {
+                if (!$isAllowedUrl($imageUrl)) {
+                    return errorResponse('Image URL not allowed', 400);
+                }
+
+                // Safe to download now
                 $imageContent = @file_get_contents($imageUrl);
-                if ($imageContent !== false) {
+                    if ($imageContent !== false) {
                     $storedImagePath = $saveOcrImage($user['id'], $imageContent, 'png');
-                    error_log("[OCR ROUTE] Downloaded and saved image from URL to: " . $storedImagePath);
                 } else {
-                    error_log("[OCR ROUTE] Failed to download image from URL: " . $imageUrl);
                 }
             }
 
@@ -106,7 +152,7 @@ function handleOCRRoutes($method, $pathParts, $data, $authToken) {
             if ($imageData) {
                 // Remove data URL prefix if present and process with Photocen OCR
                 $imageDataClean = preg_replace('/^data:image\/\w+;base64,/', '', $imageData);
-                error_log("[OCR ROUTE] Starting OCR recognition with cleaned image data (length: " . strlen($imageDataClean) . ")");
+                
                 $ocrResult = recognizeText(null, $imageDataClean);
             }
 
@@ -136,12 +182,7 @@ function handleOCRRoutes($method, $pathParts, $data, $authToken) {
             $language = $ocrResult['language'] ?? 'zh';
             $provider = $ocrResult['provider'] ?? 'unknown';
 
-            error_log("[OCR ROUTE] OCR completed successfully");
-            error_log("[OCR ROUTE] Provider: " . $provider);
-            error_log("[OCR ROUTE] Original text: '" . substr($recognizedText, 0, 200) . "'" . (strlen($recognizedText) > 200 ? '...' : ''));
-            error_log("[OCR ROUTE] Corrected text: '" . substr($correctedText, 0, 200) . "'" . (strlen($correctedText) > 200 ? '...' : ''));
-            error_log("[OCR ROUTE] Confidence: " . $confidence);
-            error_log("[OCR ROUTE] Language: " . $language);
+            
 
             // Save result to history
             $stmt = $db->prepare("
@@ -156,7 +197,7 @@ function handleOCRRoutes($method, $pathParts, $data, $authToken) {
             ]);
             $ocrId = $db->lastInsertId();
 
-            error_log("[OCR ROUTE] Saved to history with ID: " . $ocrId);
+            
 
             return successResponse([
                 'id' => (int)$ocrId,

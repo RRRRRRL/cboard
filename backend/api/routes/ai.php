@@ -298,10 +298,10 @@ function handleAIRoutes($method, $pathParts, $data, $authToken) {
                 error_log("[AI SUGGESTION] User ID: " . ($user['id'] ?? 'N/A'));
                 
                 try {
-                    // Step 1: Translate context to English using Llama
-                    error_log("[AI SUGGESTION] Step 1: Translating context to English...");
+                    // Step 1: Get meaning/gloss in English (preserve idioms) using Llama
+                    error_log("[AI SUGGESTION] Step 1: Getting English gloss/meaning...");
                     $translationStartTime = microtime(true);
-                    $translationPrompt = "Translate the following text to English. Only return the English translation, nothing else:\n\n" . $context;
+                    $translationPrompt = "Provide a concise English meaning/gloss for the following text. Assume it may be Cantonese. If it is an idiom/proverb/歇後語/俚語/俗語/set phrase/proper noun, return the established English gloss (the meaning). If no common gloss exists, return the original text unchanged. Do NOT literalize component words and do NOT add explanations. Return only the meaning/gloss or the original text:\n\n" . $context;
                     $translationResult = callOllamaAI($translationPrompt, null, null, ['temperature' => 0.3]);
                     $translationDuration = round((microtime(true) - $translationStartTime) * 1000, 2);
                     
@@ -317,9 +317,16 @@ function handleAIRoutes($method, $pathParts, $data, $authToken) {
                     $englishContext = $context; // Fallback to original if translation fails
                     if ($translationResult['success'] && !empty($translationResult['content'])) {
                         $englishContext = trim($translationResult['content']);
-                        error_log("[AI SUGGESTION] ✓ Translated context: '{$context}' -> '{$englishContext}'");
+                        error_log("[AI SUGGESTION] ✓ English gloss: '{$context}' -> '{$englishContext}'");
                     } else {
-                        error_log("[AI SUGGESTION] ✗ Translation failed, using original context");
+                        error_log("[AI SUGGESTION] ✗ Gloss failed, using original context");
+                    }
+
+                    // Preserve original CJK text alongside gloss to help keyword generation
+                    $hasCjk = preg_match('/[\x{4e00}-\x{9fff}]/u', $context) === 1;
+                    if ($hasCjk && mb_strpos($englishContext, $context) === false) {
+                        $englishContext = trim($englishContext . ' / ' . $context);
+                        error_log("[AI SUGGESTION] Appended original CJK text to gloss for richer context");
                     }
                     
                     // Step 2: Generate 3 keywords using Llama
@@ -1319,7 +1326,7 @@ function handleAIRoutes($method, $pathParts, $data, $authToken) {
             }
             
             if ($isTraditionalChinese) {
-                $prompt .= "You are a Cantonese learning assistant.The user cannot understand english.Please write in Traditional Chinese.";
+                $prompt = "You are a Cantonese learning assistant.The user cannot understand english.Please write in Traditional Chinese.";
                 $prompt .= "你是一位專門教導粵語的學習助手。請根據以下學習者常犯的錯誤，請用繁體中文提供個人化的學習建議和練習方法。\n\n";
                 $prompt .= "學習者常見錯誤記錄：\n";
                 $prompt .= $mistakesText;
@@ -1441,6 +1448,62 @@ function handleAIRoutes($method, $pathParts, $data, $authToken) {
         } catch (Exception $e) {
             error_log("Learning suggestions error: " . $e->getMessage());
             return errorResponse('Failed to get learning suggestions: ' . $e->getMessage(), 500);
+        }
+    }
+    
+    // POST /ai/cleanup-suggestions - Clean up unaccepted AI suggestion images
+    if ($method === 'POST' && count($pathParts) === 2 && $pathParts[1] === 'cleanup-suggestions') {
+        $user = requireAuth($authToken);
+        $imagePaths = $data['image_paths'] ?? [];
+        
+        if (!is_array($imagePaths) || empty($imagePaths)) {
+            return successResponse(['deleted' => 0, 'message' => 'No images to clean up']);
+        }
+        
+        try {
+            $deleted = 0;
+            $userId = (int)$user['id'];
+            $uploadDir = __DIR__ . '/../../uploads/user_' . $userId . '/';
+            
+            foreach ($imagePaths as $imagePath) {
+                // Validate path is a Photocen AI image from this user
+                if (!preg_match('#^api/uploads/user_' . $userId . '/photocen_ai_[a-f0-9]+\.[a-z]+$#', $imagePath)) {
+                    error_log("[AI CLEANUP] Skipping invalid path: $imagePath");
+                    continue;
+                }
+                
+                // Extract filename and build full path
+                $filename = basename($imagePath);
+                $filePath = $uploadDir . $filename;
+                
+                // Check if file exists and delete it
+                if (file_exists($filePath)) {
+                    if (@unlink($filePath)) {
+                        $deleted++;
+                        error_log("[AI CLEANUP] Deleted file: $filePath");
+                        
+                        // Also delete from media table if exists
+                        try {
+                            $stmt = $db->prepare("DELETE FROM media WHERE user_id = ? AND filename = ? AND file_path = ?");
+                            $stmt->execute([$userId, $filename, $filePath]);
+                        } catch (Exception $e) {
+                            error_log("[AI CLEANUP] Failed to delete from media table: " . $e->getMessage());
+                        }
+                    } else {
+                        error_log("[AI CLEANUP] Failed to delete file: $filePath");
+                    }
+                }
+            }
+            
+            return successResponse([
+                'deleted' => $deleted,
+                'total' => count($imagePaths),
+                'message' => "Cleaned up $deleted unaccepted suggestion images"
+            ]);
+            
+        } catch (Exception $e) {
+            error_log("AI cleanup suggestions error: " . $e->getMessage());
+            return errorResponse('Failed to clean up suggestions: ' . $e->getMessage(), 500);
         }
     }
     
