@@ -12,6 +12,14 @@ Uplifor AAC is an augmentative and alternative communication (AAC) web applicati
 
 The app uses the browser's Speech Synthesis API to generate speech when a symbol is clicked. There are thousands of symbols from the most popular AAC symbol libraries to choose from when creating a board. Uplifor AAC (based on Cboard) is available in 40 languages (support varies by platform - Android, iOS, Windows).
 
+## Uplifor AAC features
+
+- Jyutping keyboard input for Cantonese to speed symbol search and speech.
+- OCR capture that converts printed text to speech and symbols in the board flow.
+- AI-powered card suggestions that propose likely symbols while composing messages.
+- Learning games that reinforce vocabulary and board navigation through practice.
+- Role-based dashboard for admins/therapists to manage access, boards, and progress.
+
 **We're using Discord to collaborate, join us at: https://discord.gg/TEH8uxh**
 
 ## How does it work?

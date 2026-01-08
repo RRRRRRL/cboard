@@ -44,7 +44,6 @@ CREATE TABLE IF NOT EXISTS `profiles` (
     `description` TEXT NULL,
     `layout_type` VARCHAR(50) NULL,
     `language` VARCHAR(10) NULL,
-    `root_board_id` VARCHAR(255) NULL,
     `is_default` TINYINT(1) DEFAULT 0,
     `is_public` TINYINT(1) DEFAULT 0,
     `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -54,30 +53,6 @@ CREATE TABLE IF NOT EXISTS `profiles` (
     INDEX `idx_user_id` (`user_id`),
     INDEX `idx_is_public` (`is_public`),
     INDEX `idx_language` (`language`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- Boards
-CREATE TABLE IF NOT EXISTS `boards` (
-    `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
-    `user_id` INT UNSIGNED NULL,
-    `profile_id` INT UNSIGNED NULL,
-    `board_id` VARCHAR(255) NOT NULL UNIQUE,
-    `name` VARCHAR(255) NOT NULL,
-    `description` TEXT NULL,
-    `board_data` JSON NULL,
-    `is_public` TINYINT(1) DEFAULT 0,
-    `is_fixed` TINYINT(1) DEFAULT 0,
-    `last_edited` DATETIME NULL,
-    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
-    `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    PRIMARY KEY (`id`),
-    FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE,
-    FOREIGN KEY (`profile_id`) REFERENCES `profiles`(`id`) ON DELETE SET NULL,
-    INDEX `idx_board_id` (`board_id`),
-    INDEX `idx_user_id` (`user_id`),
-    INDEX `idx_profile_id` (`profile_id`),
-    INDEX `idx_is_public` (`is_public`),
-    INDEX `idx_last_edited` (`last_edited`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Cards
@@ -321,15 +296,16 @@ CREATE TABLE IF NOT EXISTS `ai_cache` (
 CREATE TABLE IF NOT EXISTS `card_logs` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `user_id` INT UNSIGNED NULL,
-    `board_id` INT UNSIGNED NULL,
+    `profile_id` INT UNSIGNED NULL,
     `card_id` VARCHAR(255) NULL,
     `action` VARCHAR(50) NOT NULL,
     `log_data` JSON NULL,
     `timestamp` DATETIME DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
     FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE SET NULL,
-    FOREIGN KEY (`board_id`) REFERENCES `boards`(`id`) ON DELETE SET NULL,
+    FOREIGN KEY (`profile_id`) REFERENCES `profiles`(`id`) ON DELETE SET NULL,
     INDEX `idx_user_id` (`user_id`),
+    INDEX `idx_profile_id` (`profile_id`),
     INDEX `idx_timestamp` (`timestamp`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -619,7 +595,6 @@ CREATE TABLE IF NOT EXISTS `action_logs` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `user_id` INT UNSIGNED NULL,
     `profile_id` INT UNSIGNED NULL,
-    `board_id` INT UNSIGNED NULL,
     `card_id` INT UNSIGNED NULL,
     `action_type` VARCHAR(50) NOT NULL,
     `metadata` JSON NULL,
@@ -629,7 +604,6 @@ CREATE TABLE IF NOT EXISTS `action_logs` (
     PRIMARY KEY (`id`),
     FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE SET NULL,
     FOREIGN KEY (`profile_id`) REFERENCES `profiles`(`id`) ON DELETE SET NULL,
-    FOREIGN KEY (`board_id`) REFERENCES `boards`(`id`) ON DELETE SET NULL,
     FOREIGN KEY (`card_id`) REFERENCES `cards`(`id`) ON DELETE SET NULL,
     FOREIGN KEY (`organization_id`) REFERENCES `organizations`(`id`) ON DELETE SET NULL,
     FOREIGN KEY (`class_id`) REFERENCES `classes`(`id`) ON DELETE SET NULL,
